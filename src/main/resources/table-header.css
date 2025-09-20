@@ -1,0 +1,35 @@
+.table-view .column-header .label {
+    -fx-alignment: center-left;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: #39b9f7;
+}
+
+.table-row-cell:focused:selected {
+    -fx-background-color: #39b9f7;
+}
+.table-row-cell:filled .table-cell#testAction {
+    -fx-text-fill: #FFA500;
+}
+.table-row-cell:filled .table-cell#testElement {
+    -fx-text-fill: #87CEEB;
+}
+.table-row-cell:filled .table-cell#testData {
+    -fx-text-fill: #FF4040;
+}
+.table-row-cell:filled .table-cell#testDescription {
+    -fx-text-fill: #C8C8C8;
+}
+.table-row-cell:filled .table-cell#elementName {
+    -fx-text-fill: #FFD700;
+}
+.table-row-cell:filled .table-cell#automationId {
+    -fx-text-fill: #90EE90;
+}
+.table-row-cell:filled .table-cell#name {
+    -fx-text-fill: #ADD8E6;
+}
+.table-row-cell:filled .table-cell#xpath {
+    -fx-text-fill: #FF69B4;
+}

@@ -114,6 +114,9 @@ public class TestRunner extends Application {
         selectAllCheckBox = (CheckBox) ((HBox) tableBox.getChildren().get(0)).getChildren().get(0);
         tableView = (TableView<TestCase>) tableBox.getChildren().get(1);
 
+        // Enable editing for the TableView
+        tableView.setEditable(true);
+
         // Set up Select All checkbox action
         selectAllCheckBox.setOnAction(e -> {
             boolean selected = selectAllCheckBox.isSelected();
@@ -227,6 +230,7 @@ public class TestRunner extends Application {
         selectAllCheckBox.setDisable(disable || tableData.isEmpty());
         selectAllCheckBox.setTextFill(Color.web(disable || tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
         tableView.setDisable(disable);
+        tableView.setEditable(!disable); // Enable editing when tests are not running
     }
 
     private boolean isAnyTestSelected() {

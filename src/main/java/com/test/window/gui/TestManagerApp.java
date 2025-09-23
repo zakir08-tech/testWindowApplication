@@ -581,13 +581,25 @@ public class TestManagerApp extends Application {
 
         @Override
         public void commitEdit(String newValue) {
+            String oldValue = getItem() != null ? getItem() : "";
             super.commitEdit(newValue);
             setText(newValue != null ? newValue : "");
             setGraphic(null);
             if (getTableRow().getItem() instanceof TestStep) {
                 TestStep item = (TestStep) getTableRow().getItem();
                 if (item != null) {
-                    item.setTestAction(newValue);
+                    String columnId = getTableColumn() != null ? getTableColumn().getId() : "";
+                    switch (columnId) {
+                        case "testAction":
+                            item.setTestAction(newValue);
+                            break;
+                        case "testElement":
+                            item.setTestElement(newValue);
+                            break;
+                    }
+                    if (!newValue.equals(oldValue)) {
+                        isTableModified = true;
+                    }
                 }
             }
             getTableView().refresh();
@@ -606,17 +618,7 @@ public class TestManagerApp extends Application {
             } else {
                 setText(item);
                 setGraphic(null);
-                //if (getTableRow().getItem() instanceof TestStep) {
-                    //TestStep testStep = (TestStep) getTableRow().getItem();
-                    //if (testStep != null && testStep.hasBorder()) {
-                        setStyle("-fx-text-fill: #FFFFFF; -fx-border-color: " + DISABLED_COLOR + "; -fx-border-width: 0.5;");
-                    //} else {
-                        //setStyle("-fx-text-fill: #FFFFFF;");
-                    //}
-                //} else {
-                	//setStyle("-fx-text-fill: #FFFFFF; -fx-border-color: " + DISABLED_COLOR + "; -fx-border-width: 0.5;");
-                    //setStyle("-fx-text-fill: #FFFFFF;");
-                //}
+                setStyle("-fx-text-fill: #FFFFFF; -fx-border-color: " + DISABLED_COLOR + "; -fx-border-width: 0.5;");
             }
             System.out.println("updateItem in CustomComboBoxTableCell, column: " + 
                 (getTableColumn() != null ? getTableColumn().getId() : "unknown") + 
@@ -714,10 +716,6 @@ public class TestManagerApp extends Application {
             isTableModified = true;
             updateTestStepNumbers(testData);
             testTable.refresh();
-            Platform.runLater(() -> {
-                testTable.requestFocus();
-            });
-            System.out.println("Added new step, row: " + newRowIndex);
         });
 
         // Add Up button action
@@ -738,11 +736,6 @@ public class TestManagerApp extends Application {
             isTableModified = true;
             updateTestStepNumbers(testData);
             testTable.refresh();
-            Platform.runLater(() -> {
-                testTable.requestFocus();
-                System.out.println("TestTable focus restored after add up");
-            });
-            System.out.println("Added step above, at: " + selectedIndex);
         });
 
         // Add Down button action
@@ -763,11 +756,6 @@ public class TestManagerApp extends Application {
             isTableModified = true;
             updateTestStepNumbers(testData);
             testTable.refresh();
-            Platform.runLater(() -> {
-                testTable.requestFocus();
-                System.out.println("TestTable focus restored after add down");
-            });
-            System.out.println("Added step below, at: " + (selectedIndex + 1));
         });
 
         // Delete Step button action
@@ -798,7 +786,7 @@ public class TestManagerApp extends Application {
                     testTable.requestFocus();
                     System.out.println("TestTable focus restored after delete step");
                 });
-                System.out.println("Deleted step, index: " + index);
+                System.out.println("Deleted test step, index: " + index);
             }
         });
 
@@ -831,7 +819,7 @@ public class TestManagerApp extends Application {
             testTable.refresh();
             Platform.runLater(() -> {
                 testTable.requestFocus();
-                System.out.println("TestTable focus restored after move up");
+                System.out.println("TestTable focus restored after move up step");
             });
             System.out.println("Moved step up, from: " + selectedIndex + " to: " + (selectedIndex - 1));
         });
@@ -865,7 +853,7 @@ public class TestManagerApp extends Application {
             testTable.refresh();
             Platform.runLater(() -> {
                 testTable.requestFocus();
-                System.out.println("TestTable focus restored after move down");
+                System.out.println("TestTable focus restored after move down step");
             });
             System.out.println("Moved step down, from: " + selectedIndex + " to: " + (selectedIndex + 1));
         });
@@ -879,11 +867,6 @@ public class TestManagerApp extends Application {
             elementTable.scrollTo(newRowIndex);
             isTableModified = true;
             elementTable.refresh();
-            Platform.runLater(() -> {
-                elementTable.requestFocus();
-                System.out.println("ElementTable focus restored after add element");
-            });
-            System.out.println("Added new element, row: " + newRowIndex);
         });
 
         // Move Up Element button action
@@ -1285,91 +1268,26 @@ public class TestManagerApp extends Application {
 
     private static boolean saveFile(File file, ObservableList<TestStep> testData, ObservableList<Element> elementData) {
         try {
-            JSONArray rootArray = new JSONArray();
-            String currentTestId = "";
-            LinkedHashMap<String, Object> testCaseMap = null;
-            int stepCount = 1;
+            StringBuilder sb = new StringBuilder();
+            sb.append("[\n");
+            boolean hasTestCases = !testData.isEmpty();
+            boolean hasElements = !elementData.isEmpty();
 
-            for (int i = 0; i < testData.size(); i++) {
-                TestStep step = testData.get(i);
-                String testId = step.getTestId();
-                String testAction = step.getTestAction();
-                String testElement = step.getTestElement();
-                String testDataStr = step.getTestData();
-                String description = step.getTestDescription();
-
-                if (!testId.isEmpty() && !testId.equals("#")) {
-                    if (testCaseMap != null) {
-                        LinkedHashMap<String, Object> sortedTestCaseMap = new LinkedHashMap<>();
-                        sortedTestCaseMap.put("Test_Id", testCaseMap.get("Test_Id"));
-                        TreeSet<String> sortedKeys = new TreeSet<>((k1, k2) -> {
-                            if (!k1.startsWith("Test_Step ") || !k2.startsWith("Test_Step ")) {
-                                return k1.compareTo(k2);
-                            }
-                            int n1 = Integer.parseInt(k1.replace("Test_Step ", ""));
-                            int n2 = Integer.parseInt(k2.replace("Test_Step ", ""));
-                            return Integer.compare(n1, n2);
-                        });
-                        sortedKeys.addAll(testCaseMap.keySet());
-                        sortedKeys.remove("Test_Id");
-                        for (String key : sortedKeys) {
-                            sortedTestCaseMap.put(key, testCaseMap.get(key));
-                        }
-                        rootArray.put(new JSONObject(sortedTestCaseMap));
-                    }
-                    testCaseMap = new LinkedHashMap<>();
-                    testCaseMap.put("Test_Id", testId);
-                    currentTestId = testId;
-                    stepCount = 1;
-                }
-                JSONArray stepArray = new JSONArray();
-                stepArray.put(testAction);
-                stepArray.put(testElement);
-                stepArray.put(testDataStr);
-                stepArray.put(description);
-                if (testCaseMap != null) {
-                    testCaseMap.put("Test_Step " + stepCount, stepArray);
-                    stepCount++;
+            if (hasTestCases) {
+                appendTestCases(sb, testData);
+                if (hasElements) {
+                    sb.append(",\n");
                 }
             }
-            if (testCaseMap != null) {
-                LinkedHashMap<String, Object> sortedTestCaseMap = new LinkedHashMap<>();
-                sortedTestCaseMap.put("Test_Id", testCaseMap.get("Test_Id"));
-                TreeSet<String> sortedKeys = new TreeSet<>((k1, k2) -> {
-                    if (!k1.startsWith("Test_Step ") || !k2.startsWith("Test_Step ")) {
-                        return k1.compareTo(k2);
-                    }
-                    int n1 = Integer.parseInt(k1.replace("Test_Step ", ""));
-                    int n2 = Integer.parseInt(k2.replace("Test_Step ", ""));
-                    return Integer.compare(n1, n2);
-                });
-                sortedKeys.addAll(testCaseMap.keySet());
-                sortedKeys.remove("Test_Id");
-                for (String key : sortedKeys) {
-                    sortedTestCaseMap.put(key, testCaseMap.get(key));
-                }
-                rootArray.put(new JSONObject(sortedTestCaseMap));
+
+            if (hasElements) {
+                appendElementList(sb, elementData);
             }
 
-            if (!elementData.isEmpty()) {
-                LinkedHashMap<String, Object> elementMap = new LinkedHashMap<>();
-                JSONObject elementObject = new JSONObject();
-                for (Element element : elementData) {
-                    String elementName = element.getElementName();
-                    if (!elementName.isEmpty()) {
-                        JSONArray elementArray = new JSONArray();
-                        elementArray.put(element.getAutomationId());
-                        elementArray.put(element.getName());
-                        elementArray.put(element.getXpath());
-                        elementObject.put(elementName, elementArray);
-                    }
-                }
-                elementMap.put("Element_List", elementObject);
-                rootArray.put(new JSONObject(elementMap));
-            }
+            sb.append("]\n");
 
             try (FileWriter fileWriter = new FileWriter(file)) {
-                fileWriter.write(rootArray.toString(2));
+                fileWriter.write(sb.toString());
                 fileWriter.flush();
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
                 alert.setTitle("Save Successful");
@@ -1396,6 +1314,135 @@ public class TestManagerApp extends Application {
         }
     }
 
+    private static void appendTestCases(StringBuilder sb, ObservableList<TestStep> testData) {
+        sb.append("  {\n");
+        sb.append("    \"Test_Cases\": [\n");
+        
+        String currentTestId = "";
+        JSONArray stepsArray = null;
+        LinkedHashMap<String, Object> testCaseMap = null;
+        int currentTestCaseIndex = 0;
+        
+        // Count test cases to handle comma placement
+        int testCaseCount = 0;
+        for (TestStep step : testData) {
+            String testId = step.getTestId();
+            if (!testId.isEmpty() && !testId.equals("#")) {
+                testCaseCount++;
+            }
+        }
+
+        for (int i = 0; i < testData.size(); i++) {
+            TestStep step = testData.get(i);
+            String testId = step.getTestId();
+            String testStep = step.getTestStep();
+            String testAction = step.getTestAction();
+            String testElement = step.getTestElement();
+            String testDataStr = step.getTestData();
+            String testDescription = step.getTestDescription();
+
+            if (!testId.isEmpty() && !testId.equals("#")) {
+                if (testCaseMap != null) {
+                    testCaseMap.put("Steps", stepsArray);
+                    appendTestCase(sb, testCaseMap, currentTestCaseIndex < testCaseCount - 1);
+                    currentTestCaseIndex++;
+                }
+                testCaseMap = new LinkedHashMap<>();
+                testCaseMap.put("Test_Id", testId);
+                stepsArray = new JSONArray();
+                currentTestId = testId;
+            }
+
+            if (testCaseMap != null) {
+                JSONObject stepObject = new JSONObject();
+                stepObject.put("Test_Step", testStep);
+                stepObject.put("Test_Action", testAction);
+                stepObject.put("Test_Element", testElement);
+                stepObject.put("Test_Data", testDataStr);
+                stepObject.put("Test_Description", testDescription);
+                stepsArray.put(stepObject);
+            }
+
+            // Handle the last test case
+            if (i == testData.size() - 1 && testCaseMap != null) {
+                testCaseMap.put("Steps", stepsArray);
+                appendTestCase(sb, testCaseMap, false);
+            }
+        }
+
+        sb.append("    ]\n");
+        sb.append("  }");
+    }
+
+    private static void appendTestCase(StringBuilder sb, LinkedHashMap<String, Object> testCaseMap, boolean addComma) {
+        sb.append("      {\n");
+        sb.append("        \"Test_Id\": ").append(JSONObject.quote((String) testCaseMap.get("Test_Id"))).append(",\n");
+        sb.append("        \"Steps\": [\n");
+
+        JSONArray steps = (JSONArray) testCaseMap.get("Steps");
+        for (int i = 0; i < steps.length(); i++) {
+            JSONObject step = steps.getJSONObject(i);
+            sb.append("          {\n");
+            sb.append("            \"Test_Step\": ").append(JSONObject.quote(step.getString("Test_Step"))).append(",\n");
+            sb.append("            \"Test_Action\": ").append(JSONObject.quote(step.getString("Test_Action"))).append(",\n");
+            sb.append("            \"Test_Element\": ").append(JSONObject.quote(step.getString("Test_Element"))).append(",\n");
+            sb.append("            \"Test_Data\": ").append(JSONObject.quote(step.getString("Test_Data"))).append(",\n");
+            sb.append("            \"Test_Description\": ").append(JSONObject.quote(step.getString("Test_Description"))).append("\n");
+            sb.append("          }");
+            if (i < steps.length() - 1) {
+                sb.append(",\n");
+            } else {
+                sb.append("\n");
+            }
+        }
+
+        sb.append("        ]\n");
+        sb.append("      }");
+        if (addComma) {
+            sb.append(",");
+        }
+        sb.append("\n");
+    }
+
+    private static void appendElementList(StringBuilder sb, ObservableList<Element> elementData) {
+        TreeSet<String> sortedElementNames = new TreeSet<>();
+        LinkedHashMap<String, JSONArray> elementMap = new LinkedHashMap<>();
+        for (Element element : elementData) {
+            String elementName = element.getElementName();
+            if (!elementName.isEmpty()) {
+                sortedElementNames.add(elementName);
+                JSONArray elementArray = new JSONArray();
+                elementArray.put(element.getAutomationId());
+                elementArray.put(element.getName());
+                elementArray.put(element.getXpath());
+                elementMap.put(elementName, elementArray);
+            }
+        }
+
+        sb.append("  {\n");
+        sb.append("    \"Element_List\": {\n");
+        boolean first = true;
+        for (String name : sortedElementNames) {
+            if (!first) {
+                sb.append(",\n");
+            }
+            JSONArray arr = elementMap.get(name);
+            sb.append("      \"").append(name).append("\": [\n");
+            for (int j = 0; j < arr.length(); j++) {
+                sb.append("        ").append(JSONObject.quote(arr.getString(j)));
+                if (j < arr.length() - 1) {
+                    sb.append(",\n");
+                } else {
+                    sb.append("\n");
+                }
+            }
+            sb.append("      ]");
+            first = false;
+        }
+        sb.append("\n    }\n");
+        sb.append("  }");
+    }
+
     private static void loadFile(Stage stage, ObservableList<TestStep> testData, ObservableList<Element> elementData, TableView<TestStep> testTable, TableView<Element> elementTable) {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Load Table from JSON");
@@ -1412,6 +1459,8 @@ public class TestManagerApp extends Application {
                 JSONArray rootArray = new JSONArray(content.toString());
                 testData.clear();
                 elementData.clear();
+                
+                // Collect valid element names first
                 Set<String> validElementNames = new TreeSet<>();
                 for (int i = 0; i < rootArray.length(); i++) {
                     JSONObject obj = rootArray.getJSONObject(i);
@@ -1419,47 +1468,6 @@ public class TestManagerApp extends Application {
                         JSONObject elementList = obj.getJSONObject("Element_List");
                         for (String key : elementList.keySet()) {
                             validElementNames.add(key);
-                        }
-                    }
-                }
-                for (int i = 0; i < rootArray.length(); i++) {
-                    JSONObject obj = rootArray.getJSONObject(i);
-                    if (obj.has("Test_Id")) {
-                        String testId = obj.getString("Test_Id");
-                        Set<String> keys = new TreeSet<>((k1, k2) -> {
-                            if (!k1.startsWith("Test_Step ") || !k2.startsWith("Test_Step ")) {
-                                return k1.compareTo(k2);
-                            }
-                            int n1 = Integer.parseInt(k1.replace("Test_Step ", ""));
-                            int n2 = Integer.parseInt(k2.replace("Test_Step ", ""));
-                            return Integer.compare(n1, n2);
-                        });
-                        keys.addAll(obj.keySet());
-                        keys.remove("Test_Id");
-                        for (String key : keys) {
-                            if (key.startsWith("Test_Step ")) {
-                                JSONArray stepArray = obj.getJSONArray(key);
-                                String testStep = key.replace("Test_Step ", "");
-                                String testAction = stepArray.length() > 0 ? stepArray.getString(0) : "";
-                                String testElement = stepArray.length() > 1 ? stepArray.getString(1) : "";
-                                if (!testElement.isEmpty() && !validElementNames.contains(testElement)) {
-                                    testElement = "";
-                                }
-                                String testDataStr = stepArray.length() > 2 ? stepArray.getString(2) : "";
-                                String testDescription = stepArray.length() > 3 ? stepArray.getString(3) : "";
-                                boolean hasBorder = !testId.isEmpty() && !testId.equals("#") ||
-                                                    !testAction.isEmpty() ||
-                                                    !testElement.isEmpty() ||
-                                                    !testDataStr.isEmpty() ||
-                                                    !testDescription.isEmpty();
-                                TestStep newStep = new TestStep(testId, testStep, testAction, testElement, testDataStr, testDescription, hasBorder);
-                                testData.add(newStep);
-                                testId = "";
-                            }
-                        }
-                    } else if (obj.has("Element_List")) {
-                        JSONObject elementList = obj.getJSONObject("Element_List");
-                        for (String key : elementList.keySet()) {
                             JSONArray elementArray = elementList.getJSONArray(key);
                             String elementName = key;
                             String automationId = elementArray.length() > 0 ? elementArray.getString(0) : "";
@@ -1469,6 +1477,40 @@ public class TestManagerApp extends Application {
                         }
                     }
                 }
+
+                // Load test cases
+                for (int i = 0; i < rootArray.length(); i++) {
+                    JSONObject obj = rootArray.getJSONObject(i);
+                    if (obj.has("Test_Cases")) {
+                        JSONArray testCases = obj.getJSONArray("Test_Cases");
+                        for (int j = 0; j < testCases.length(); j++) {
+                            JSONObject testCase = testCases.getJSONObject(j);
+                            String testId = testCase.getString("Test_Id");
+                            JSONArray steps = testCase.getJSONArray("Steps");
+                            for (int k = 0; k < steps.length(); k++) {
+                                JSONObject step = steps.getJSONObject(k);
+                                String testStep = step.getString("Test_Step");
+                                String testAction = step.getString("Test_Action");
+                                String testElement = step.getString("Test_Element");
+                                if (!testElement.isEmpty() && !validElementNames.contains(testElement)) {
+                                    testElement = "";
+                                }
+                                String testDataStr = step.getString("Test_Data");
+                                String testDescription = step.getString("Test_Description");
+                                // Set Test_Id only for the first step of each test case
+                                String stepTestId = (k == 0) ? testId : "";
+                                boolean hasBorder = !stepTestId.isEmpty() && !stepTestId.equals("#") ||
+                                                    !testAction.isEmpty() ||
+                                                    !testElement.isEmpty() ||
+                                                    !testDataStr.isEmpty() ||
+                                                    !testDescription.isEmpty();
+                                TestStep newStep = new TestStep(stepTestId, testStep, testAction, testElement, testDataStr, testDescription, hasBorder);
+                                testData.add(newStep);
+                            }
+                        }
+                    }
+                }
+
                 updateTestStepNumbers(testData);
                 lastUsedFile = file;
                 isTableModified = false;

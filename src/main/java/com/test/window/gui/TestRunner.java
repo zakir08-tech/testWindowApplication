@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 import org.json.JSONArray;
@@ -28,6 +29,7 @@ import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -43,6 +45,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 /**
@@ -53,7 +56,7 @@ import javafx.stage.Stage;
  */
 public class TestRunner extends Application {
     // Maps to store test steps and elements
-    private static HashMap<String, List<List<String>>> testStepsMap = new HashMap<>();
+    private static HashMap<String, LinkedHashMap<String, Object>> testStepsMap = new HashMap<>();
     private static HashMap<String, List<String>> globalElementListMap = new HashMap<>();
     private static JSONArray loadedJsonArray = null;
     private static File lastLoadedFile = null;
@@ -69,6 +72,11 @@ public class TestRunner extends Application {
     private static final String DISABLED_COLOR = "#646464"; // Gray
     private static final String CHECKBOX_ENABLED_COLOR = "#C8C8C8"; // Light gray
     private static final String DEFAULT_FOREGROUND = "#C8C8C8"; // Light gray
+    // Static fields to retain state within JVM session
+    private static ObservableList<TestCase> savedTableData = null;
+    private static JSONArray savedJsonArray = null;
+    private static File savedLastLoadedFile = null;
+    private static HashMap<String, List<String>> savedElementListMap = null;
 
     // Data model for table rows
     public static class TestCase {
@@ -95,6 +103,19 @@ public class TestRunner extends Application {
         // Initialize table data
         tableData = FXCollections.observableArrayList();
 
+        // Restore previous state if available
+        if (savedTableData != null) {
+            tableData.addAll(savedTableData);
+            loadedJsonArray = savedJsonArray != null ? new JSONArray(savedJsonArray.toString()) : null;
+            lastLoadedFile = savedLastLoadedFile;
+            globalElementListMap.putAll(savedElementListMap != null ? new HashMap<>(savedElementListMap) : new HashMap<>());
+            // Select first row if table is not empty
+            if (!tableData.isEmpty()) {
+                tableData.get(0).runProperty().set(true);
+                Platform.runLater(() -> tableView.getSelectionModel().select(0));
+            }
+        }
+
         // Setup UI components
         BorderPane root = new BorderPane();
         root.setPadding(new Insets(10));
@@ -108,7 +129,7 @@ public class TestRunner extends Application {
         titleBox.setPadding(new Insets(10));
         titleBox.setStyle("-fx-background-color: #1E1E1E;");
 
-        // Create table using the factory (this handles columns, styling, checkbox, and VBox layout)
+        // Create table using the factory
         VBox tableBox = TestTableFactory.createTestTable(tableData);
         // Extract references for later use
         selectAllCheckBox = (CheckBox) ((HBox) tableBox.getChildren().get(0)).getChildren().get(0);
@@ -183,22 +204,44 @@ public class TestRunner extends Application {
 
         // Scene and stage
         Scene scene = new Scene(root, 600, 400);
-        // Optional: Load external CSS file (uncomment to use)
-        // scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
-        Image backgroundImage = new Image("file:"+UIConstants.UI_ICON);
+        Image backgroundImage = new Image("file:" + UIConstants.UI_ICON);
         primaryStage.getIcons().add(backgroundImage);
         primaryStage.setScene(scene);
         primaryStage.setTitle("Test Runner");
-        primaryStage.setMaximized(true);
+
+        // Set window size to 80% of screen size
+        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+        double width = screenBounds.getWidth() * 0.8;
+        double height = screenBounds.getHeight() * 0.8;
+        primaryStage.setWidth(width);
+        primaryStage.setHeight(height);
+        // Center the window on the screen
+        primaryStage.setX((screenBounds.getWidth() - width) / 2);
+        primaryStage.setY((screenBounds.getHeight() - height) / 2);
+
         primaryStage.setMinWidth(600);
         primaryStage.setMinHeight(400);
         primaryStage.setOnCloseRequest(e -> {
             if (isTestRunning) {
                 showAlert(Alert.AlertType.WARNING, "Close Error", "Tests are running. Please stop tests before closing.");
                 e.consume();
+            } else {
+                // Save state to static fields
+                savedTableData = FXCollections.observableArrayList(tableData);
+                savedJsonArray = loadedJsonArray != null ? new JSONArray(loadedJsonArray.toString()) : null;
+                savedLastLoadedFile = lastLoadedFile;
+                savedElementListMap = new HashMap<>(globalElementListMap);
             }
         });
         primaryStage.show();
+
+        // Update UI after state restoration
+        Platform.runLater(() -> {
+            selectAllCheckBox.setSelected(!tableData.isEmpty() && tableData.stream().allMatch(testCase -> testCase.runProperty().get()));
+            selectAllCheckBox.setDisable(tableData.isEmpty());
+            selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
+            updateButtonStates();
+        });
     }
 
     private Button createStyledButton(String text, String tooltip) {
@@ -230,7 +273,7 @@ public class TestRunner extends Application {
         selectAllCheckBox.setDisable(disable || tableData.isEmpty());
         selectAllCheckBox.setTextFill(Color.web(disable || tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
         tableView.setDisable(disable);
-        tableView.setEditable(!disable); // Enable editing when tests are not running
+        tableView.setEditable(!disable);
     }
 
     private boolean isAnyTestSelected() {
@@ -249,7 +292,6 @@ public class TestRunner extends Application {
             @Override
             protected Void call() {
                 try {
-                    testStepsMap.clear();
                     boolean anySelected = false;
 
                     for (TestCase testCase : tableData) {
@@ -265,42 +307,7 @@ public class TestRunner extends Application {
                         }
 
                         Platform.runLater(() -> testCase.statusProperty().set("Running"));
-                        boolean testFound = false;
-                        for (int i = 0; i < loadedJsonArray.length(); i++) {
-                            JSONObject obj = loadedJsonArray.getJSONObject(i);
-                            if (!obj.has("Test_Id") || !obj.getString("Test_Id").equals(testId)) continue;
-                            testFound = true;
-                            List<List<String>> testSteps = new ArrayList<>();
-                            Iterator<String> keys = obj.keys();
-                            while (keys.hasNext()) {
-                                String key = keys.next();
-                                if (key.startsWith("Test_Step")) {
-                                    try {
-                                        JSONArray stepArray = obj.getJSONArray(key);
-                                        List<String> stepData = new ArrayList<>();
-                                        for (int j = 0; j < stepArray.length(); j++) {
-                                            stepData.add(stepArray.get(j).toString());
-                                        }
-                                        if (stepData.size() >= 4) {
-                                            testSteps.add(stepData);
-                                        }
-                                    } catch (JSONException ex) {
-                                        System.err.println("Skipping malformed test step " + key + " for Test ID " + testId + ": " + ex.getMessage());
-                                    }
-                                }
-                            }
-                            testStepsMap.put(testId, testSteps);
-                        }
-
-                        if (!testFound) {
-                            Platform.runLater(() -> {
-                                testCase.statusProperty().set("Failed");
-                                showAlert(Alert.AlertType.ERROR, "Run Error", "Test ID " + testId + " not found in JSON");
-                            });
-                            continue;
-                        }
-
-                        List<List<String>> steps = testStepsMap.get(testId);
+                        LinkedHashMap<String, Object> steps = testStepsMap.get(testId);
                         if (steps == null || steps.isEmpty()) {
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Failed");
@@ -310,13 +317,22 @@ public class TestRunner extends Application {
                         }
 
                         boolean testPassed = true;
-                        for (int i = 0; i < steps.size() && !stopRequested; i++) {
-                            List<String> step = steps.get(i);
+                        int stepNumber = 1;
+                        for (String stepKey : steps.keySet()) {
+                            if (stopRequested) break;
+                            @SuppressWarnings("unchecked")
+                            LinkedHashMap<String, String> step = (LinkedHashMap<String, String>) steps.get(stepKey);
+                            if (step == null) continue;
                             try {
-                                executeTheStep(step);
+                                List<String> stepData = new ArrayList<>();
+                                stepData.add(step.get("Test_Action"));
+                                stepData.add(step.get("Test_Element"));
+                                stepData.add(step.get("Test_Data"));
+                                stepData.add(step.get("Test_Description"));
+                                executeTheStep(stepData);
                             } catch (Exception ex) {
                                 testPassed = false;
-                                final String errorMessage = "Test ID " + testId + ", Step " + (i + 1) + " failed: " + ex.getMessage();
+                                final String errorMessage = "Test ID " + testId + ", Step " + stepNumber + " failed: " + ex.getMessage();
                                 System.err.println(errorMessage);
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Failed");
@@ -324,9 +340,12 @@ public class TestRunner extends Application {
                                 });
                                 break;
                             }
+                            stepNumber++;
                         }
-                        if (testPassed) {
+                        if (testPassed && !stopRequested) {
                             Platform.runLater(() -> testCase.statusProperty().set("Passed"));
+                        } else if (stopRequested) {
+                            Platform.runLater(() -> testCase.statusProperty().set("Stopped"));
                         }
                     }
 
@@ -402,9 +421,12 @@ public class TestRunner extends Application {
                 }
                 tableData.clear();
                 globalElementListMap.clear();
+                testStepsMap.clear();
 
                 for (int i = 0; i < loadedJsonArray.length(); i++) {
                     JSONObject obj = loadedJsonArray.getJSONObject(i);
+
+                    // Process Element_List
                     if (obj.has("Element_List")) {
                         try {
                             JSONObject elementListObj = obj.getJSONObject("Element_List");
@@ -420,35 +442,51 @@ public class TestRunner extends Application {
                                     globalElementListMap.put(elementKey, elementList);
                                     System.out.println("Added Element_List with key: " + elementKey);
                                 } catch (JSONException ex) {
-                                    System.err.println("Skipping malformed element array for key " + elementKey + " at index " + i + ": " + ex.getMessage());
+                                    System.err.println("Skipping malformed element array for key " + elementKey + ": " + ex.getMessage());
                                 }
                             }
                         } catch (JSONException ex) {
-                            System.err.println("Skipping malformed Element_List at index " + i + ": " + ex.getMessage());
+                            System.err.println("Skipping malformed Element_List: " + ex.getMessage());
                         }
                     }
 
-                    if (!obj.has("Test_Id")) {
-                        System.err.println("Skipping JSON object at index " + i + ": Missing Test_Id");
-                        continue;
-                    }
-                    String testId = obj.getString("Test_Id");
-                    if (testId == null || testId.trim().isEmpty()) {
-                        System.err.println("Skipping JSON object at index " + i + ": Test_Id is empty");
-                        continue;
-                    }
-                    String testDescription = "";
-                    try {
-                        if (obj.has("Test_Step 1")) {
-                            JSONArray testStep1 = obj.getJSONArray("Test_Step 1");
-                            if (testStep1.length() >= 4) {
-                                testDescription = testStep1.getString(3);
+                    // Process Test_Cases
+                    if (obj.has("Test_Cases")) {
+                        JSONArray testCases = obj.getJSONArray("Test_Cases");
+                        for (int j = 0; j < testCases.length(); j++) {
+                            JSONObject testCase = testCases.getJSONObject(j);
+                            if (!testCase.has("Test_Id")) {
+                                System.err.println("Skipping JSON object at index " + j + ": Missing Test_Id");
+                                continue;
                             }
+                            String testId = testCase.getString("Test_Id");
+                            if (testId == null || testId.trim().isEmpty()) {
+                                System.err.println("Skipping JSON object at index " + j + ": Test_Id is empty");
+                                continue;
+                            }
+                            String testDescription = "";
+                            LinkedHashMap<String, Object> stepsMap = new LinkedHashMap<>();
+                            if (testCase.has("Steps")) {
+                                JSONArray stepsArray = testCase.getJSONArray("Steps");
+                                for (int k = 0; k < stepsArray.length(); k++) {
+                                    JSONObject stepObj = stepsArray.getJSONObject(k);
+                                    LinkedHashMap<String, String> stepData = new LinkedHashMap<>();
+                                    stepData.put("Test_Step", stepObj.optString("Test_Step", ""));
+                                    stepData.put("Test_Action", stepObj.optString("Test_Action", ""));
+                                    stepData.put("Test_Element", stepObj.optString("Test_Element", ""));
+                                    stepData.put("Test_Data", stepObj.optString("Test_Data", ""));
+                                    stepData.put("Test_Description", stepObj.optString("Test_Description", ""));
+                                    String stepKey = "Test_Step " + stepObj.getString("Test_Step");
+                                    stepsMap.put(stepKey, stepData);
+                                    if (k == 0) {
+                                        testDescription = stepObj.optString("Test_Description", "");
+                                    }
+                                }
+                            }
+                            testStepsMap.put(testId, stepsMap);
+                            tableData.add(new TestCase(true, testId, testDescription, "Not Run"));
                         }
-                    } catch (JSONException ex) {
-                        System.err.println("Skipping malformed Test_Step 1 for Test ID " + testId + ": " + ex.getMessage());
                     }
-                    tableData.add(new TestCase(true, testId, testDescription, "Not Run"));
                 }
                 if (tableData.isEmpty() && globalElementListMap.isEmpty()) {
                     throw new JSONException("No valid test cases or element lists found in JSON file");
@@ -457,8 +495,13 @@ public class TestRunner extends Application {
                     selectAllCheckBox.setSelected(!tableData.isEmpty());
                     selectAllCheckBox.setDisable(tableData.isEmpty());
                     selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
+                    if (!tableData.isEmpty()) {
+                        tableData.get(0).runProperty().set(true);
+                        tableView.getSelectionModel().select(0);
+                    }
                     updateButtonStates();
                     System.out.println("globalElementListMap contents: " + globalElementListMap);
+                    System.out.println("testStepsMap contents: " + testStepsMap);
                     showAlert(Alert.AlertType.INFORMATION, "Load Successful", "JSON loaded successfully from " + file.getAbsolutePath());
                 });
             } catch (JSONException ex) {
@@ -494,11 +537,11 @@ public class TestRunner extends Application {
         String testData = step.get(2).trim();
 
         switch (testAction) {
-            case "APP_ID":
+            case "OPEN_WINDOW":
                 try {
                     String[] parts = testData.split("\\|");
                     if (parts.length != 2 || parts[0].trim().isEmpty() || parts[1].trim().isEmpty()) {
-                        throw new IllegalArgumentException("Invalid APP_ID format: expected 'appId|appTitle'");
+                        throw new IllegalArgumentException("Invalid OPEN_WINDOW format: expected 'appId|appTitle'");
                     }
                     String appId = parts[0].trim();
                     String appTitle = parts[1].trim();
@@ -507,7 +550,7 @@ public class TestRunner extends Application {
                 } catch (IllegalArgumentException e) {
                     throw e;
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to execute APP_ID step: " + e.getMessage(), e);
+                    throw new RuntimeException("Failed to execute OPEN_WINDOW step: " + e.getMessage(), e);
                 }
             case "CLICK":
                 try {
@@ -515,7 +558,7 @@ public class TestRunner extends Application {
                         throw new IllegalArgumentException("Element key not found in globalElementListMap: " + testElement);
                     }
                     List<String> elementData = globalElementListMap.get(testElement);
-                    GlueCode.clickElement(testElement, testAction, elementData.toString());
+                    GlueCode.clickElement(elementData.get(0), elementData.get(1), elementData.get(2));
                     return true;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute CLICK step: " + e.getMessage(), e);
@@ -526,8 +569,7 @@ public class TestRunner extends Application {
                         throw new IllegalArgumentException("Element key not found in globalElementListMap: " + testElement);
                     }
                     List<String> elementData = globalElementListMap.get(testElement);
-                    // TODO: Uncomment and implement GlueCode.setValueToElement when available
-                    // GlueCode.setValueToElement(testElement, testData, testAction, elementData.toString());
+                    GlueCode.setValueToElement(testElement, testData, testAction, elementData.toString());
                     return true;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute SET step: " + e.getMessage(), e);
@@ -540,6 +582,7 @@ public class TestRunner extends Application {
                 }
             case "CLOSE_WINDOW":
                 try {
+                	GlueCode.closeApplication(testData);
                     return true;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute CLOSE_WINDOW step: " + e.getMessage(), e);
@@ -548,7 +591,7 @@ public class TestRunner extends Application {
                 throw new UnsupportedOperationException("Unsupported test action: " + testAction);
         }
     }
-     
+
     public static void main(String[] args) {
         launch(args);
     }

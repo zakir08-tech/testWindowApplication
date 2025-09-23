@@ -19,7 +19,7 @@ import javafx.scene.layout.VBox;
 public class TestTableFactory {
     // Color constants (duplicated from TestRunner_Template for independence)
     private static final String TABLE_BACKGROUND = "#323232"; // Dark gray
-    private static final String RUNNING_HIGHLIGHT = "#6495ED"; // Light blue
+    private static final String RUNNING_HIGHLIGHT = "#0788b3"; // Light blue
     private static final String STATUS_PASSED = "#00FF00"; // Green
     private static final String STATUS_FAILED = "#FF6666"; // Rose
     private static final String DEFAULT_FOREGROUND = "#C8C8C8"; // Light gray
@@ -61,7 +61,7 @@ public class TestTableFactory {
         statusCol.setMaxWidth(80);
         statusCol.setPrefWidth(80);
 
-        // Custom cell factory for status coloring, preserving grid lines
+        // Custom cell factory for status coloring, preserving grid lines and highlighting selected cells
         statusCol.setCellFactory(column -> new TableCell<TestRunner.TestCase, String>() {
             @Override
             protected void updateItem(String status, boolean empty) {
@@ -70,27 +70,33 @@ public class TestTableFactory {
                 setStyle("-fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
                 if (empty || status == null) {
                     setText(null);
-                    setStyle("-fx-background-color: " + TABLE_BACKGROUND + "; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
+                    setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
+                             "; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
                 } else {
                     setText(status);
                     if ("Running".equals(status)) {
-                        setStyle("-fx-background-color: " + RUNNING_HIGHLIGHT + "; -fx-text-fill: black; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
+                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : RUNNING_HIGHLIGHT) + 
+                                 "; -fx-text-fill: black; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
                     } else if ("Passed".equals(status)) {
-                        setStyle("-fx-background-color: " + TABLE_BACKGROUND + "; -fx-text-fill: " + STATUS_PASSED + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
+                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
+                                 "; -fx-text-fill: " + STATUS_PASSED + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
                     } else if ("Failed".equals(status)) {
-                        setStyle("-fx-background-color: " + TABLE_BACKGROUND + "; -fx-text-fill: " + STATUS_FAILED + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
+                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
+                                 "; -fx-text-fill: " + STATUS_FAILED + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
                     } else {
-                        setStyle("-fx-background-color: " + TABLE_BACKGROUND + "; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
+                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
+                                 "; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
                     }
                 }
             }
         });
 
         tableView.getColumns().addAll(runCol, idCol, descCol, statusCol);
-        // Enhanced TableView styling to ensure grid lines are visible
+        // Enhanced TableView styling to ensure grid lines are visible and row selector color is uniform blue
         tableView.setStyle("-fx-background-color: " + TABLE_BACKGROUND + "; -fx-control-inner-background: " + 
                 TABLE_BACKGROUND + "; -fx-table-cell-border-color: " + DISABLED_COLOR + 
-                "; -fx-horizontal-grid-lines-visible: true; -fx-vertical-grid-lines-visible: true;");
+                "; -fx-horizontal-grid-lines-visible: true; -fx-vertical-grid-lines-visible: true; " +
+                "-fx-selection-bar: " + RUNNING_HIGHLIGHT + "; -fx-selection-bar-non-focused: " + RUNNING_HIGHLIGHT + ";");
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         // Select All checkbox (without event handler, as it's handled in the main class)

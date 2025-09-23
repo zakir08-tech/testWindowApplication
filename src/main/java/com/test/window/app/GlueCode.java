@@ -93,8 +93,7 @@ public final class GlueCode {
      * @throws RuntimeException         If interaction with the element fails.
      */
     public static void clickElement(String automationId, String name, String xpath) {
-        validateElementIdentifiers(automationId, name, xpath);
-
+    	validateElementIdentifiers(automationId, name, xpath);
         try {
             WebElement element = findElement(automationId, name, xpath);
             element.click();

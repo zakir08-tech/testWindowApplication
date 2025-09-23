@@ -6,6 +6,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.CheckBoxTableCell;
 import javafx.scene.layout.HBox;
@@ -17,7 +18,7 @@ import javafx.scene.layout.VBox;
  * This encapsulates the table creation, columns, and styling logic.
  */
 public class TestTableFactory {
-    // Color constants (duplicated from TestRunner_Template for independence)
+    // Color constants
     private static final String TABLE_BACKGROUND = "#323232"; // Dark gray
     private static final String RUNNING_HIGHLIGHT = "#0788b3"; // Light blue
     private static final String STATUS_PASSED = "#00FF00"; // Green
@@ -26,6 +27,7 @@ public class TestTableFactory {
     private static final String CHECKBOX_ENABLED_COLOR = "#C8C8C8"; // Light gray
     private static final String DISABLED_COLOR = "#646464";
     private static final String HOVER_COLOR = "#288A48";
+    private static final String BORDER_COLOR = DISABLED_COLOR; // Use DISABLED_COLOR for borders
     
     /**
      * Creates a configured TableView for TestCases, including columns, styling, and Select All checkbox.
@@ -43,63 +45,119 @@ public class TestTableFactory {
         runCol.setMinWidth(40);
         runCol.setMaxWidth(40);
         runCol.setPrefWidth(40);
+        // Add border to Run column cells with reduced thickness
+        runCol.setCellFactory(column -> new CheckBoxTableCell<TestRunner.TestCase, Boolean>() {
+            @Override
+            public void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setStyle("-fx-background-color: transparent; -fx-alignment: CENTER;");
+                } else {
+                    setStyle("-fx-background-color: transparent; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0.5; -fx-alignment: CENTER;");
+                }
+            }
+        });
 
         TableColumn<TestRunner.TestCase, String> idCol = new TableColumn<>("Test Id");
         idCol.setCellValueFactory(cellData -> cellData.getValue().testIdProperty());
         idCol.setMinWidth(80);
         idCol.setMaxWidth(80);
         idCol.setPrefWidth(80);
+        // Add border to Test Id column cells with reduced thickness
+        idCol.setCellFactory(column -> new TableCell<TestRunner.TestCase, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("-fx-background-color: transparent; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-alignment: CENTER;");
+                } else {
+                    setText(item);
+                    setStyle("-fx-background-color: transparent; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0.5; -fx-alignment: CENTER;");
+                }
+            }
+        });
 
         TableColumn<TestRunner.TestCase, String> descCol = new TableColumn<>("Test Description");
         descCol.setCellValueFactory(cellData -> cellData.getValue().descriptionProperty());
         descCol.setMinWidth(150);
         descCol.setPrefWidth(300);
+        // Add border to Test Description column cells with reduced thickness
+        descCol.setCellFactory(column -> new TableCell<TestRunner.TestCase, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("-fx-background-color: transparent; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-alignment: CENTER_LEFT;");
+                } else {
+                    setText(item);
+                    setStyle("-fx-background-color: transparent; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0.5; -fx-alignment: CENTER_LEFT;");
+                }
+            }
+        });
 
         TableColumn<TestRunner.TestCase, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusCol.setMinWidth(80);
         statusCol.setMaxWidth(80);
         statusCol.setPrefWidth(80);
-
-        // Custom cell factory for status coloring, preserving grid lines and highlighting selected cells
+        // Add border to Status column cells with reduced thickness
         statusCol.setCellFactory(column -> new TableCell<TestRunner.TestCase, String>() {
             @Override
             protected void updateItem(String status, boolean empty) {
                 super.updateItem(status, empty);
-                // Reset style to ensure grid lines are not overridden
-                setStyle("-fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
                 if (empty || status == null) {
                     setText(null);
-                    setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
-                             "; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
+                    setStyle("-fx-background-color: transparent; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-alignment: CENTER;");
                 } else {
                     setText(status);
-                    if ("Running".equals(status)) {
-                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : RUNNING_HIGHLIGHT) + 
-                                 "; -fx-text-fill: black; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
-                    } else if ("Passed".equals(status)) {
-                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
-                                 "; -fx-text-fill: " + STATUS_PASSED + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
-                    } else if ("Failed".equals(status)) {
-                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
-                                 "; -fx-text-fill: " + STATUS_FAILED + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
-                    } else {
-                        setStyle("-fx-background-color: " + (isSelected() ? RUNNING_HIGHLIGHT : TABLE_BACKGROUND) + 
-                                 "; -fx-text-fill: " + DEFAULT_FOREGROUND + "; -fx-border-color: #646464; -fx-border-width: 0 1 1 0;");
+                    String textColor = switch (status) {
+                        case "Running" -> "black";
+                        case "Passed" -> STATUS_PASSED;
+                        case "Failed" -> STATUS_FAILED;
+                        default -> DEFAULT_FOREGROUND;
+                    };
+                    setStyle("-fx-background-color: transparent; -fx-text-fill: " + textColor + " !important; -fx-border-color: " + BORDER_COLOR + "; -fx-border-width: 0.5; -fx-alignment: CENTER;");
+                }
+            }
+        });
+
+        // Custom row factory to highlight the currently executing row, manually selected row, or first row by default
+        tableView.setRowFactory(tv -> new TableRow<TestRunner.TestCase>() {
+            @Override
+            protected void updateItem(TestRunner.TestCase item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setStyle("-fx-background-color: " + TABLE_BACKGROUND + ";");
+                } else {
+                    String backgroundColor = TABLE_BACKGROUND;
+                    // Prioritize the currently executing test
+                    if (item == TestRunner.getCurrentlyExecutingTest()) {
+                        backgroundColor = RUNNING_HIGHLIGHT;
+                    } else if (TestRunner.getCurrentlyExecutingTest() == null) {
+                        // Highlight manually selected row or first row if no selection
+                        if (isSelected()) {
+                            backgroundColor = RUNNING_HIGHLIGHT;
+                        } else if (getIndex() == 0 && !tableData.isEmpty() && 
+                                   tableView.getSelectionModel().getSelectedIndices().isEmpty()) {
+                            backgroundColor = RUNNING_HIGHLIGHT;
+                        }
                     }
+                    setStyle("-fx-background-color: " + backgroundColor + " !important;");
                 }
             }
         });
 
         tableView.getColumns().addAll(runCol, idCol, descCol, statusCol);
-        // Enhanced TableView styling to ensure grid lines are visible and row selector color is uniform blue
+        // Enhanced TableView styling, no grid lines
         tableView.setStyle("-fx-background-color: " + TABLE_BACKGROUND + "; -fx-control-inner-background: " + 
-                TABLE_BACKGROUND + "; -fx-table-cell-border-color: " + DISABLED_COLOR + 
-                "; -fx-horizontal-grid-lines-visible: true; -fx-vertical-grid-lines-visible: true; " +
-                "-fx-selection-bar: " + RUNNING_HIGHLIGHT + "; -fx-selection-bar-non-focused: " + RUNNING_HIGHLIGHT + ";");
+                           TABLE_BACKGROUND + "; -fx-table-cell-border-color: transparent; " +
+                           "-fx-horizontal-grid-lines-visible: false; -fx-vertical-grid-lines-visible: false; " +
+                           "-fx-selection-bar: " + RUNNING_HIGHLIGHT + "; -fx-selection-bar-non-focused: " + RUNNING_HIGHLIGHT + ";");
         tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        // Select All checkbox (without event handler, as it's handled in the main class)
+        // Select All checkbox
         CheckBox selectAllCheckBox = new CheckBox("Select All");
         selectAllCheckBox.setFont(javafx.scene.text.Font.font("Arial", javafx.scene.text.FontWeight.BOLD, 12));
         selectAllCheckBox.setTextFill(javafx.scene.paint.Color.web(CHECKBOX_ENABLED_COLOR));
@@ -109,7 +167,7 @@ public class TestTableFactory {
         checkBoxBox.setAlignment(Pos.CENTER_LEFT);
         checkBoxBox.setPadding(new Insets(0, 0, 5, 8));
 
-        // Layout: VBox with checkbox and table
+        // Layout
         VBox tableBox = new VBox(checkBoxBox, tableView);
         tableBox.setSpacing(5);
         VBox.setVgrow(tableView, Priority.ALWAYS);

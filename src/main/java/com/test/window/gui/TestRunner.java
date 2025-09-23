@@ -62,7 +62,10 @@ public class TestRunner extends Application {
     private static File lastLoadedFile = null;
     private static volatile boolean isTestRunning = false;
     private static volatile boolean stopRequested = false;
-    private static Button runButton, loadTestButton, refreshButton, stopButton;
+    private static Button runButton;
+    private static Button loadTestButton;
+    private static Button refreshButton;
+    private static Button stopButton;
     private static CheckBox selectAllCheckBox;
     private static TableView<TestCase> tableView;
     private static ObservableList<TestCase> tableData;
@@ -72,11 +75,25 @@ public class TestRunner extends Application {
     private static final String DISABLED_COLOR = "#646464"; // Gray
     private static final String CHECKBOX_ENABLED_COLOR = "#C8C8C8"; // Light gray
     private static final String DEFAULT_FOREGROUND = "#C8C8C8"; // Light gray
+    private static final String RUNNING_HIGHLIGHT = "#0788b3"; // Light blue
     // Static fields to retain state within JVM session
     private static ObservableList<TestCase> savedTableData = null;
     private static JSONArray savedJsonArray = null;
     private static File savedLastLoadedFile = null;
     private static HashMap<String, List<String>> savedElementListMap = null;
+    
+    // Add this field to track the currently executing test
+    private static volatile TestCase currentlyExecutingTest = null;
+
+    // Method to get the currently executing test (for external access)
+    public static TestCase getCurrentlyExecutingTest() {
+        return currentlyExecutingTest;
+    }
+
+    // Method to set the currently executing test
+    public static void setCurrentlyExecutingTest(TestCase testCase) {
+        currentlyExecutingTest = testCase;
+    }
 
     // Data model for table rows
     public static class TestCase {
@@ -109,10 +126,13 @@ public class TestRunner extends Application {
             loadedJsonArray = savedJsonArray != null ? new JSONArray(savedJsonArray.toString()) : null;
             lastLoadedFile = savedLastLoadedFile;
             globalElementListMap.putAll(savedElementListMap != null ? new HashMap<>(savedElementListMap) : new HashMap<>());
-            // Select first row if table is not empty
+            // Select and highlight first row if table is not empty
             if (!tableData.isEmpty()) {
                 tableData.get(0).runProperty().set(true);
-                Platform.runLater(() -> tableView.getSelectionModel().select(0));
+                Platform.runLater(() -> {
+                    tableView.getSelectionModel().select(0);
+                    tableView.refresh();
+                });
             }
         }
 
@@ -146,15 +166,25 @@ public class TestRunner extends Application {
         });
 
         // Buttons
-        runButton = createStyledButton("Run", "Run the selected tests");
-        loadTestButton = createStyledButton("Load Test", "Upload and load a test JSON file");
-        refreshButton = createStyledButton("Refresh", "Reload the last loaded test JSON file");
-        stopButton = createStyledButton("Stop", "Stop the running tests");
+        runButton = new Button("Run");
+        runButton.setTooltip(new Tooltip("Run the selected tests"));
+        loadTestButton = new Button("Load Test");
+        loadTestButton.setTooltip(new Tooltip("Upload and load a test JSON file"));
+        refreshButton = new Button("Refresh");
+        refreshButton.setTooltip(new Tooltip("Reload the last loaded test JSON file"));
+        stopButton = new Button("Stop");
+        stopButton.setTooltip(new Tooltip("Stop the running tests"));
 
         HBox buttonBox = new HBox(10, runButton, stopButton, refreshButton, loadTestButton);
         buttonBox.setPadding(new Insets(10));
         buttonBox.setAlignment(Pos.CENTER_LEFT);
         buttonBox.setStyle("-fx-background-color: #1E1E1E;");
+
+        // Initialize button styles
+        initializeButton(runButton);
+        initializeButton(loadTestButton);
+        initializeButton(refreshButton);
+        initializeButton(stopButton);
 
         // Listen for changes in tableData and individual TestCase run properties
         tableData.addListener((ListChangeListener<TestCase>) c -> {
@@ -164,6 +194,13 @@ public class TestRunner extends Application {
                         testCase.runProperty().addListener((obs, oldValue, newValue) -> updateButtonStates());
                     }
                 }
+            }
+            // Highlight first row after table data changes
+            if (!tableData.isEmpty() && !isTestRunning) {
+                Platform.runLater(() -> {
+                    tableView.getSelectionModel().select(0);
+                    tableView.refresh();
+                });
             }
             updateButtonStates();
         });
@@ -187,14 +224,28 @@ public class TestRunner extends Application {
         stopButton.setOnAction(e -> {
             if (isTestRunning) {
                 stopRequested = true;
-                showAlert(Alert.AlertType.INFORMATION, "Stop", "Stopping tests...");
+                Platform.runLater(() -> {
+                    // Immediately update UI to reflect stopping
+                    if (currentlyExecutingTest != null) {
+                        currentlyExecutingTest.statusProperty().set("Stopped");
+                        currentlyExecutingTest = null;
+                    }
+                    isTestRunning = false;
+                    disableUI(false);
+                    // Highlight first row or selected row
+                    if (!tableData.isEmpty()) {
+                        tableView.getSelectionModel().select(0);
+                        tableView.refresh();
+                    }
+                    showAlert(Alert.AlertType.INFORMATION, "Stop", "Test execution stopped.");
+                });
             } else {
                 showAlert(Alert.AlertType.WARNING, "Stop", "No tests are running.");
             }
         });
 
-        loadTestButton.setOnAction(e -> loadJsonFile(false));
-        refreshButton.setOnAction(e -> loadJsonFile(true));
+        loadTestButton.setOnAction(e -> loadJsonFile(false, primaryStage));
+        refreshButton.setOnAction(e -> loadJsonFile(true, primaryStage));
 
         // Layout
         root.setTop(titleBox);
@@ -241,39 +292,44 @@ public class TestRunner extends Application {
             selectAllCheckBox.setDisable(tableData.isEmpty());
             selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
             updateButtonStates();
+            // Highlight first row after initialization
+            if (!tableData.isEmpty() && !isTestRunning) {
+                tableView.getSelectionModel().select(0);
+                tableView.refresh();
+            }
         });
     }
 
-    private Button createStyledButton(String text, String tooltip) {
-        Button button = new Button(text);
+    private void initializeButton(Button button) {
         button.setFont(Font.font("Arial", FontWeight.BOLD, 12));
         button.setPrefSize(100, 25);
         button.setMinSize(100, 25);
         button.setMaxSize(100, 25);
-        button.setStyle("-fx-background-color: " + (text.equals("Run") ? DISABLED_COLOR : ENABLED_COLOR) + "; -fx-text-fill: black;");
+        updateButtonStyle(button, button == runButton && !isAnyTestSelected());
         button.setOnMouseEntered(e -> {
-            if (button.isDisabled()) return;
-            button.setStyle("-fx-background-color: #288A48; -fx-text-fill: black;");
+            if (!button.isDisabled()) {
+                button.setStyle("-fx-background-color: " + HOVER_COLOR + "; -fx-text-fill: black;");
+            }
         });
-        button.setOnMouseExited(e -> {
-            if (button.isDisabled()) return;
-            button.setStyle("-fx-background-color: " + (button == runButton && !isAnyTestSelected() ? DISABLED_COLOR : ENABLED_COLOR) + "; -fx-text-fill: black;");
-        });
-        button.setTooltip(new Tooltip(tooltip));
-        return button;
+        button.setOnMouseExited(e -> updateButtonStyle(button, button.isDisabled()));
+    }
+
+    private void updateButtonStyle(Button button, boolean isDisabled) {
+        String color = isDisabled ? DISABLED_COLOR : 
+                      (button == runButton && isTestRunning ? RUNNING_HIGHLIGHT : ENABLED_COLOR);
+        button.setStyle("-fx-background-color: " + color + "; -fx-text-fill: black;");
     }
 
     private void disableUI(boolean disable) {
         runButton.setDisable(disable || !isAnyTestSelected());
-        runButton.setStyle("-fx-background-color: " + (disable || !isAnyTestSelected() ? DISABLED_COLOR : ENABLED_COLOR) + "; -fx-text-fill: black;");
+        runButton.setStyle("-fx-background-color: " + (disable || !isAnyTestSelected() ? DISABLED_COLOR : isTestRunning ? RUNNING_HIGHLIGHT : ENABLED_COLOR) + "; -fx-text-fill: black;");
         loadTestButton.setDisable(disable);
         loadTestButton.setStyle("-fx-background-color: " + (disable ? DISABLED_COLOR : ENABLED_COLOR) + "; -fx-text-fill: black;");
         refreshButton.setDisable(disable);
         refreshButton.setStyle("-fx-background-color: " + (disable ? DISABLED_COLOR : ENABLED_COLOR) + "; -fx-text-fill: black;");
-        selectAllCheckBox.setDisable(disable || tableData.isEmpty());
-        selectAllCheckBox.setTextFill(Color.web(disable || tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
-        tableView.setDisable(disable);
-        tableView.setEditable(!disable);
+        selectAllCheckBox.setDisable(tableData.isEmpty());
+        selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
+        tableView.setEditable(true);
     }
 
     private boolean isAnyTestSelected() {
@@ -283,8 +339,15 @@ public class TestRunner extends Application {
     private void updateButtonStates() {
         boolean anySelected = isAnyTestSelected();
         runButton.setDisable(!anySelected || isTestRunning);
-        runButton.setStyle("-fx-background-color: " + (anySelected && !isTestRunning ? ENABLED_COLOR : DISABLED_COLOR) + "; -fx-text-fill: black;");
+        runButton.setStyle("-fx-background-color: " + (anySelected && !isTestRunning ? ENABLED_COLOR : isTestRunning ? RUNNING_HIGHLIGHT : DISABLED_COLOR) + "; -fx-text-fill: black;");
         selectAllCheckBox.setSelected(tableData.stream().allMatch(testCase -> testCase.runProperty().get()));
+        // Highlight first row if no tests are running
+        if (!tableData.isEmpty() && !isTestRunning) {
+            Platform.runLater(() -> {
+                tableView.getSelectionModel().select(0);
+                tableView.refresh();
+            });
+        }
     }
 
     private void runTests() {
@@ -292,11 +355,18 @@ public class TestRunner extends Application {
             @Override
             protected Void call() {
                 try {
-                    boolean anySelected = false;
-
+                    // Snapshot the selected tests to avoid interference from UI changes
+                    List<TestCase> testsToRun = new ArrayList<>();
                     for (TestCase testCase : tableData) {
-                        if (!testCase.runProperty().get() || stopRequested) continue;
-                        anySelected = true;
+                        if (testCase.runProperty().get()) {
+                            testsToRun.add(testCase);
+                        }
+                    }
+
+                    boolean anySelected = !testsToRun.isEmpty();
+
+                    for (TestCase testCase : testsToRun) {
+                        if (stopRequested) break;
                         String testId = testCase.testIdProperty().get();
                         if (testId == null || testId.trim().isEmpty()) {
                             Platform.runLater(() -> {
@@ -306,12 +376,19 @@ public class TestRunner extends Application {
                             continue;
                         }
 
-                        Platform.runLater(() -> testCase.statusProperty().set("Running"));
+                        // Set the currently executing test and update UI
+                        currentlyExecutingTest = testCase;
+                        Platform.runLater(() -> {
+                            testCase.statusProperty().set("Running");
+                            tableView.refresh(); // Force UI update
+                        });
+
                         LinkedHashMap<String, Object> steps = testStepsMap.get(testId);
                         if (steps == null || steps.isEmpty()) {
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Failed");
                                 showAlert(Alert.AlertType.ERROR, "Run Error", "No valid steps for Test ID " + testId);
+                                currentlyExecutingTest = null; // Clear executing test on failure
                             });
                             continue;
                         }
@@ -319,9 +396,24 @@ public class TestRunner extends Application {
                         boolean testPassed = true;
                         int stepNumber = 1;
                         for (String stepKey : steps.keySet()) {
-                            if (stopRequested) break;
-                            @SuppressWarnings("unchecked")
-                            LinkedHashMap<String, String> step = (LinkedHashMap<String, String>) steps.get(stepKey);
+                            if (stopRequested) {
+                                Platform.runLater(() -> {
+                                    testCase.statusProperty().set("Stopped");
+                                    currentlyExecutingTest = null;
+                                    tableView.refresh();
+                                });
+                                break;
+                            }
+                            Object stepObj = steps.get(stepKey);
+                            if (!(stepObj instanceof LinkedHashMap)) {
+                                Platform.runLater(() -> {
+                                    testCase.statusProperty().set("Failed");
+                                    showAlert(Alert.AlertType.ERROR, "Run Error", "Invalid step data for Test ID " + testId + ", step " + stepKey);
+                                    currentlyExecutingTest = null; // Clear executing test on failure
+                                });
+                                break;
+                            }
+                            LinkedHashMap<String, String> step = (LinkedHashMap<String, String>) stepObj;
                             if (step == null) continue;
                             try {
                                 List<String> stepData = new ArrayList<>();
@@ -330,6 +422,15 @@ public class TestRunner extends Application {
                                 stepData.add(step.get("Test_Data"));
                                 stepData.add(step.get("Test_Description"));
                                 executeTheStep(stepData);
+                                // Check stopRequested after each step
+                                if (stopRequested) {
+                                    Platform.runLater(() -> {
+                                        testCase.statusProperty().set("Stopped");
+                                        currentlyExecutingTest = null;
+                                        tableView.refresh();
+                                    });
+                                    break;
+                                }
                             } catch (Exception ex) {
                                 testPassed = false;
                                 final String errorMessage = "Test ID " + testId + ", Step " + stepNumber + " failed: " + ex.getMessage();
@@ -337,15 +438,18 @@ public class TestRunner extends Application {
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Failed");
                                     showAlert(Alert.AlertType.ERROR, "Run Error", errorMessage);
+                                    currentlyExecutingTest = null; // Clear executing test on failure
                                 });
                                 break;
                             }
                             stepNumber++;
                         }
                         if (testPassed && !stopRequested) {
-                            Platform.runLater(() -> testCase.statusProperty().set("Passed"));
-                        } else if (stopRequested) {
-                            Platform.runLater(() -> testCase.statusProperty().set("Stopped"));
+                            Platform.runLater(() -> {
+                                testCase.statusProperty().set("Passed");
+                                currentlyExecutingTest = null;
+                                tableView.refresh();
+                            });
                         }
                     }
 
@@ -353,6 +457,11 @@ public class TestRunner extends Application {
                         Platform.runLater(() -> {
                             showAlert(Alert.AlertType.ERROR, "Run Error", "No tests selected to run.");
                             isTestRunning = false;
+                            // Highlight first row after no tests are run
+                            if (!tableData.isEmpty()) {
+                                tableView.getSelectionModel().select(0);
+                                tableView.refresh();
+                            }
                         });
                     }
                     return null;
@@ -361,6 +470,11 @@ public class TestRunner extends Application {
                     Platform.runLater(() -> {
                         showAlert(Alert.AlertType.ERROR, "Run Error", "Unexpected error: " + ex.getMessage());
                         isTestRunning = false;
+                        // Highlight first row after error
+                        if (!tableData.isEmpty()) {
+                            tableView.getSelectionModel().select(0);
+                            tableView.refresh();
+                        }
                     });
                     return null;
                 }
@@ -368,26 +482,50 @@ public class TestRunner extends Application {
 
             @Override
             protected void succeeded() {
-                isTestRunning = false;
                 Platform.runLater(() -> {
+                    isTestRunning = false;
                     disableUI(false);
                     showAlert(Alert.AlertType.INFORMATION, "Run", "Selected tests processed");
+                    // Highlight first row after execution completes
+                    if (!tableData.isEmpty()) {
+                        tableView.getSelectionModel().select(0);
+                        tableView.refresh();
+                    }
                 });
             }
 
             @Override
             protected void failed() {
-                isTestRunning = false;
                 Platform.runLater(() -> {
+                    isTestRunning = false;
                     disableUI(false);
                     showAlert(Alert.AlertType.ERROR, "Run Error", "Test execution failed: " + getException().getMessage());
+                    // Highlight first row after failure
+                    if (!tableData.isEmpty()) {
+                        tableView.getSelectionModel().select(0);
+                        tableView.refresh();
+                    }
+                });
+            }
+
+            @Override
+            protected void cancelled() {
+                Platform.runLater(() -> {
+                    isTestRunning = false;
+                    disableUI(false);
+                    showAlert(Alert.AlertType.INFORMATION, "Stop", "Test execution stopped.");
+                    // Highlight first row after cancellation
+                    if (!tableData.isEmpty()) {
+                        tableView.getSelectionModel().select(0);
+                        tableView.refresh();
+                    }
                 });
             }
         };
         new Thread(task).start();
     }
-
-    private void loadJsonFile(boolean isRefresh) {
+    
+    private void loadJsonFile(boolean isRefresh, Stage ownerStage) {
         File file;
         if (isRefresh) {
             if (lastLoadedFile == null) {
@@ -400,7 +538,7 @@ public class TestRunner extends Application {
             fileChooser.setTitle("Load Test JSON File");
             fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
             fileChooser.setInitialDirectory(Commons.getDocumentsDirectory());
-            file = fileChooser.showOpenDialog(tableView.getScene().getWindow());
+            file = fileChooser.showOpenDialog(ownerStage);
             if (file == null) return;
             lastLoadedFile = file;
         }
@@ -498,6 +636,7 @@ public class TestRunner extends Application {
                     if (!tableData.isEmpty()) {
                         tableData.get(0).runProperty().set(true);
                         tableView.getSelectionModel().select(0);
+                        tableView.refresh();
                     }
                     updateButtonStates();
                     System.out.println("globalElementListMap contents: " + globalElementListMap);
@@ -582,7 +721,7 @@ public class TestRunner extends Application {
                 }
             case "CLOSE_WINDOW":
                 try {
-                	GlueCode.closeApplication(testData);
+                    GlueCode.closeApplicationByProcess(testData);
                     return true;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute CLOSE_WINDOW step: " + e.getMessage(), e);

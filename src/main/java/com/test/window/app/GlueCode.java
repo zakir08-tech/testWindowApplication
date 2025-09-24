@@ -57,6 +57,7 @@ public final class GlueCode {
         validateInputParameters(appFamilyName, windowTitle);
 
         try {
+            // Initialize new driver session without closing existing one
             LaunchApplication.launchApp(appFamilyName);
             LaunchApplication.findHWNDByWindowTitle(windowTitle);
             LaunchApplication.hwndToHex();
@@ -67,7 +68,7 @@ public final class GlueCode {
             if (driver == null) {
                 throw new IllegalStateException("WindowsDriver instance is null after attachment.");
             }
-            System.out.println("DEBUG: Driver initialized: " + driver.getClass().getName());
+            System.out.println("DEBUG: Driver initialized for appFamilyName: " + appFamilyName + ", windowTitle: " + windowTitle);
             System.out.println("Successfully invoked application and attached driver for: " + appFamilyName);
         } catch (IllegalStateException e) {
             String errorMsg = String.format("Failed to initialize application '%s' or attach driver: %s",
@@ -93,7 +94,7 @@ public final class GlueCode {
      * @throws RuntimeException         If interaction with the element fails.
      */
     public static void clickElement(String automationId, String name, String xpath) {
-    	validateElementIdentifiers(automationId, name, xpath);
+        validateElementIdentifiers(automationId, name, xpath);
         try {
             WebElement element = findElement(automationId, name, xpath);
             element.click();
@@ -314,8 +315,7 @@ public final class GlueCode {
 
     /**
      * Closes the active WindowsDriver session and the application process.
-     * Calls closeApplicationByProcess to terminate the application process and
-     * LaunchApplication.closeDriver to close the driver session.
+     * Attempts to close the window via WinAppDriver, then terminates the process and driver session.
      *
      * @param appFamilyName The family name of the UWP app to close (e.g., "Microsoft.LinkedIn_8wekyb3d8bbwe").
      * @throws IllegalArgumentException If appFamilyName is null or empty.
@@ -327,27 +327,43 @@ public final class GlueCode {
         }
 
         try {
+            // Attempt to close the window via WinAppDriver
+            if (driver != null) {
+                try {
+                    driver.close();
+                    System.out.println("DEBUG: Window closed via WinAppDriver for appFamilyName: " + appFamilyName);
+                } catch (Exception e) {
+                    System.err.println("WARNING: Failed to close window via WinAppDriver for appFamilyName: " + appFamilyName + ": " + e.getMessage());
+                }
+            } else {
+                System.out.println("DEBUG: No active WinAppDriver session to close window for appFamilyName: " + appFamilyName);
+            }
+
             // Close the application process
             closeApplicationByProcess(appFamilyName);
 
             // Close the driver session
             if (driver != null) {
-                LaunchApplication.closeDriver();
-                System.out.println("Application driver closed successfully.");
+                try {
+                    LaunchApplication.closeDriver();
+                    System.out.println("DEBUG: Application driver closed successfully for appFamilyName: " + appFamilyName);
+                } catch (Exception e) {
+                    System.err.println("WARNING: Failed to close driver session for appFamilyName: " + appFamilyName + ": " + e.getMessage());
+                }
             } else {
-                System.out.println("No active driver session to close.");
+                System.out.println("DEBUG: No active driver session to close for appFamilyName: " + appFamilyName);
             }
         } catch (Exception e) {
             String errorMsg = String.format("Failed to close application '%s' or driver: %s", appFamilyName, e.getMessage());
             System.err.println(errorMsg);
             throw new RuntimeException(errorMsg, e);
         } finally {
-            driver = null; // Ensure driver is nullified even if exception occurs
+            driver = null; // Ensure driver is nullified to prevent reuse
         }
     }
 
     /**
-     * Terminates the application process launched via Runtime.getRuntime().exec() using the taskkill command.
+     * Terminates the application process using the taskkill command.
      *
      * @param appFamilyName The family name of the UWP app to close (e.g., "Microsoft.LinkedIn_8wekyb3d8bbwe").
      * @throws IllegalArgumentException If appFamilyName is null or empty.
@@ -359,9 +375,9 @@ public final class GlueCode {
         }
 
         try {
-            // Derive the executable name from the appFamilyName (e.g., "Microsoft.LinkedIn_8wekyb3d8bbwe" -> "LinkedIn.exe")
+            // Derive the executable name from the appFamilyName
             String processName = deriveProcessName(appFamilyName);
-            System.out.println("DEBUG: Attempting to terminate process: " + processName);
+            System.out.println("DEBUG: Attempting to terminate process: " + processName + " for appFamilyName: " + appFamilyName);
 
             // Execute taskkill command to terminate the process
             ProcessBuilder processBuilder = new ProcessBuilder("taskkill", "/IM", processName, "/F");
@@ -370,10 +386,13 @@ public final class GlueCode {
             // Wait for the taskkill command to complete and check exit code
             int exitCode = process.waitFor();
             if (exitCode == 0) {
-                System.out.println("Successfully terminated process for application: " + appFamilyName);
+                System.out.println("DEBUG: Successfully terminated process: " + processName + " for appFamilyName: " + appFamilyName);
             } else if (exitCode == 128) {
-                System.out.println("No process found for application: " + appFamilyName);
+                System.out.println("DEBUG: No process found for application: " + appFamilyName);
+                // Skip fallback to avoid closing unrelated windows
             } else {
+                System.err.println("WARNING: taskkill command failed with exit code: " + exitCode + " for process: " + processName);
+                // Avoid fallback to ApplicationFrameHost.exe to prevent closing other windows
                 throw new IOException("taskkill command failed with exit code: " + exitCode);
             }
         } catch (IOException | InterruptedException e) {
@@ -389,11 +408,16 @@ public final class GlueCode {
      * This is a simplified approach; actual process names may vary depending on the UWP app.
      *
      * @param appFamilyName The family name of the UWP app.
-     * @return The derived process name (e.g., "LinkedIn.exe").
+     * @return The derived process name (e.g., "Calculator.exe").
      */
     private static String deriveProcessName(String appFamilyName) {
-        // Simplified derivation: extract the app name before the underscore
-        // Example: "Microsoft.LinkedIn_8wekyb3d8bbwe" -> "LinkedIn.exe"
+        // Map known appFamilyNames to process names
+        if (appFamilyName.contains("Microsoft.WindowsCalculator")) {
+            return "Calculator.exe";
+        } else if (appFamilyName.contains("Microsoft.WindowsNotepad")) {
+            return "Notepad.exe";
+        }
+        // Fallback: extract app name before the underscore
         String[] parts = appFamilyName.split("_");
         String appName = parts[0].contains(".") ? parts[0].substring(parts[0].lastIndexOf(".") + 1) : parts[0];
         return appName + ".exe";

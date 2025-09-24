@@ -20,9 +20,12 @@ import com.test.window.app.Commons;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.StringProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -52,7 +55,6 @@ import javafx.stage.Stage;
  * TestRunnerFX is a JavaFX-based GUI application for loading and executing automated tests from JSON files.
  * It displays tests in a table with columns for selection, test ID, description, and status.
  * Features include selecting tests to run, highlighting running tests, and displaying pass/fail results.
- * The application supports loading JSON files, refreshing the last loaded file, and stopping tests.
  */
 public class TestRunner extends Application {
     // Maps to store test steps and elements
@@ -72,6 +74,7 @@ public class TestRunner extends Application {
     // Color constants
     private static final String ENABLED_COLOR = "#32A852"; // Green
     private static final String HOVER_COLOR = "#288A48"; // Darker green
+    private static final String PINK_RED = "#FF4040"; // Pink-red for Stop button
     private static final String DISABLED_COLOR = "#646464"; // Gray
     private static final String CHECKBOX_ENABLED_COLOR = "#C8C8C8"; // Light gray
     private static final String DEFAULT_FOREGROUND = "#C8C8C8"; // Light gray
@@ -82,17 +85,23 @@ public class TestRunner extends Application {
     private static File savedLastLoadedFile = null;
     private static HashMap<String, List<String>> savedElementListMap = null;
     
-    // Add this field to track the currently executing test
-    private static volatile TestCase currentlyExecutingTest = null;
+    // Property to track the currently executing test
+    private static final ObjectProperty<TestCase> currentlyExecutingTest = new SimpleObjectProperty<>(null);
 
-    // Method to get the currently executing test (for external access)
+    // Method to get the currently executing test
     public static TestCase getCurrentlyExecutingTest() {
-        return currentlyExecutingTest;
+        return currentlyExecutingTest.get();
     }
 
     // Method to set the currently executing test
     public static void setCurrentlyExecutingTest(TestCase testCase) {
-        currentlyExecutingTest = testCase;
+        currentlyExecutingTest.set(testCase);
+        System.out.println("DEBUG: Set currentlyExecutingTest to: " + (testCase != null ? testCase.testIdProperty().get() : "null"));
+    }
+
+    // Method to add a listener for currently executing test changes
+    public static void addCurrentlyExecutingTestListener(ChangeListener<TestCase> listener) {
+        currentlyExecutingTest.addListener(listener);
     }
 
     // Data model for table rows
@@ -126,14 +135,6 @@ public class TestRunner extends Application {
             loadedJsonArray = savedJsonArray != null ? new JSONArray(savedJsonArray.toString()) : null;
             lastLoadedFile = savedLastLoadedFile;
             globalElementListMap.putAll(savedElementListMap != null ? new HashMap<>(savedElementListMap) : new HashMap<>());
-            // Select and highlight first row if table is not empty
-            if (!tableData.isEmpty()) {
-                tableData.get(0).runProperty().set(true);
-                Platform.runLater(() -> {
-                    tableView.getSelectionModel().select(0);
-                    tableView.refresh();
-                });
-            }
         }
 
         // Setup UI components
@@ -195,13 +196,6 @@ public class TestRunner extends Application {
                     }
                 }
             }
-            // Highlight first row after table data changes
-            if (!tableData.isEmpty() && !isTestRunning) {
-                Platform.runLater(() -> {
-                    tableView.getSelectionModel().select(0);
-                    tableView.refresh();
-                });
-            }
             updateButtonStates();
         });
 
@@ -225,18 +219,13 @@ public class TestRunner extends Application {
             if (isTestRunning) {
                 stopRequested = true;
                 Platform.runLater(() -> {
-                    // Immediately update UI to reflect stopping
-                    if (currentlyExecutingTest != null) {
-                        currentlyExecutingTest.statusProperty().set("Stopped");
-                        currentlyExecutingTest = null;
+                    if (currentlyExecutingTest.get() != null) {
+                        currentlyExecutingTest.get().statusProperty().set("Stopped");
+                        setCurrentlyExecutingTest(null);
+                        tableView.refresh();
                     }
                     isTestRunning = false;
                     disableUI(false);
-                    // Highlight first row or selected row
-                    if (!tableData.isEmpty()) {
-                        tableView.getSelectionModel().select(0);
-                        tableView.refresh();
-                    }
                     showAlert(Alert.AlertType.INFORMATION, "Stop", "Test execution stopped.");
                 });
             } else {
@@ -266,7 +255,6 @@ public class TestRunner extends Application {
         double height = screenBounds.getHeight() * 0.8;
         primaryStage.setWidth(width);
         primaryStage.setHeight(height);
-        // Center the window on the screen
         primaryStage.setX((screenBounds.getWidth() - width) / 2);
         primaryStage.setY((screenBounds.getHeight() - height) / 2);
 
@@ -277,7 +265,6 @@ public class TestRunner extends Application {
                 showAlert(Alert.AlertType.WARNING, "Close Error", "Tests are running. Please stop tests before closing.");
                 e.consume();
             } else {
-                // Save state to static fields
                 savedTableData = FXCollections.observableArrayList(tableData);
                 savedJsonArray = loadedJsonArray != null ? new JSONArray(loadedJsonArray.toString()) : null;
                 savedLastLoadedFile = lastLoadedFile;
@@ -292,11 +279,6 @@ public class TestRunner extends Application {
             selectAllCheckBox.setDisable(tableData.isEmpty());
             selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
             updateButtonStates();
-            // Highlight first row after initialization
-            if (!tableData.isEmpty() && !isTestRunning) {
-                tableView.getSelectionModel().select(0);
-                tableView.refresh();
-            }
         });
     }
 
@@ -308,15 +290,21 @@ public class TestRunner extends Application {
         updateButtonStyle(button, button == runButton && !isAnyTestSelected());
         button.setOnMouseEntered(e -> {
             if (!button.isDisabled()) {
-                button.setStyle("-fx-background-color: " + HOVER_COLOR + "; -fx-text-fill: black;");
+                String hoverColor = (button == stopButton) ? PINK_RED : HOVER_COLOR;
+                button.setStyle("-fx-background-color: " + hoverColor + "; -fx-text-fill: black;");
             }
         });
         button.setOnMouseExited(e -> updateButtonStyle(button, button.isDisabled()));
     }
 
     private void updateButtonStyle(Button button, boolean isDisabled) {
-        String color = isDisabled ? DISABLED_COLOR : 
-                      (button == runButton && isTestRunning ? RUNNING_HIGHLIGHT : ENABLED_COLOR);
+        String color;
+        if (button == stopButton) {
+            color = isDisabled ? DISABLED_COLOR : PINK_RED;
+        } else {
+            color = isDisabled ? DISABLED_COLOR : 
+                    (button == runButton && isTestRunning ? RUNNING_HIGHLIGHT : ENABLED_COLOR);
+        }
         button.setStyle("-fx-background-color: " + color + "; -fx-text-fill: black;");
     }
 
@@ -327,6 +315,8 @@ public class TestRunner extends Application {
         loadTestButton.setStyle("-fx-background-color: " + (disable ? DISABLED_COLOR : ENABLED_COLOR) + "; -fx-text-fill: black;");
         refreshButton.setDisable(disable);
         refreshButton.setStyle("-fx-background-color: " + (disable ? DISABLED_COLOR : ENABLED_COLOR) + "; -fx-text-fill: black;");
+        stopButton.setDisable(disable && !isTestRunning); // Stop button enabled only during test execution
+        stopButton.setStyle("-fx-background-color: " + ((disable && !isTestRunning) ? DISABLED_COLOR : PINK_RED) + "; -fx-text-fill: black;");
         selectAllCheckBox.setDisable(tableData.isEmpty());
         selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
         tableView.setEditable(true);
@@ -341,13 +331,6 @@ public class TestRunner extends Application {
         runButton.setDisable(!anySelected || isTestRunning);
         runButton.setStyle("-fx-background-color: " + (anySelected && !isTestRunning ? ENABLED_COLOR : isTestRunning ? RUNNING_HIGHLIGHT : DISABLED_COLOR) + "; -fx-text-fill: black;");
         selectAllCheckBox.setSelected(tableData.stream().allMatch(testCase -> testCase.runProperty().get()));
-        // Highlight first row if no tests are running
-        if (!tableData.isEmpty() && !isTestRunning) {
-            Platform.runLater(() -> {
-                tableView.getSelectionModel().select(0);
-                tableView.refresh();
-            });
-        }
     }
 
     private void runTests() {
@@ -355,7 +338,6 @@ public class TestRunner extends Application {
             @Override
             protected Void call() {
                 try {
-                    // Snapshot the selected tests to avoid interference from UI changes
                     List<TestCase> testsToRun = new ArrayList<>();
                     for (TestCase testCase : tableData) {
                         if (testCase.runProperty().get()) {
@@ -371,35 +353,52 @@ public class TestRunner extends Application {
                         if (testId == null || testId.trim().isEmpty()) {
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Failed");
+                                setCurrentlyExecutingTest(null);
+                                tableView.refresh();
                                 showAlert(Alert.AlertType.ERROR, "Run Error", "Invalid Test ID for " + testId);
                             });
                             continue;
                         }
 
-                        // Set the currently executing test and update UI
-                        currentlyExecutingTest = testCase;
+                        // Set the currently executing test and ensure UI updates
                         Platform.runLater(() -> {
+                            setCurrentlyExecutingTest(testCase);
                             testCase.statusProperty().set("Running");
-                            tableView.refresh(); // Force UI update
+                            tableView.refresh();
+                            System.out.println("DEBUG: Started test: " + testId);
                         });
+
+                        // Wait briefly to ensure UI update is processed
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
 
                         LinkedHashMap<String, Object> steps = testStepsMap.get(testId);
                         if (steps == null || steps.isEmpty()) {
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Failed");
+                                setCurrentlyExecutingTest(null);
+                                tableView.refresh();
                                 showAlert(Alert.AlertType.ERROR, "Run Error", "No valid steps for Test ID " + testId);
-                                currentlyExecutingTest = null; // Clear executing test on failure
                             });
                             continue;
                         }
 
                         boolean testPassed = true;
                         int stepNumber = 1;
+                        String lastAppFamilyName = null;
+                        boolean hasCloseWindowStep = false;
                         for (String stepKey : steps.keySet()) {
+                            if ("Test_Step CLOSE_WINDOW".equals(stepKey)) {
+                                hasCloseWindowStep = true;
+                            }
                             if (stopRequested) {
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Stopped");
-                                    currentlyExecutingTest = null;
+                                    setCurrentlyExecutingTest(null);
                                     tableView.refresh();
                                 });
                                 break;
@@ -408,8 +407,9 @@ public class TestRunner extends Application {
                             if (!(stepObj instanceof LinkedHashMap)) {
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Failed");
+                                    setCurrentlyExecutingTest(null);
+                                    tableView.refresh();
                                     showAlert(Alert.AlertType.ERROR, "Run Error", "Invalid step data for Test ID " + testId + ", step " + stepKey);
-                                    currentlyExecutingTest = null; // Clear executing test on failure
                                 });
                                 break;
                             }
@@ -421,12 +421,19 @@ public class TestRunner extends Application {
                                 stepData.add(step.get("Test_Element"));
                                 stepData.add(step.get("Test_Data"));
                                 stepData.add(step.get("Test_Description"));
-                                executeTheStep(stepData);
-                                // Check stopRequested after each step
+                                System.out.println("DEBUG: Executing step for Test ID '" + testId + "', Step " + stepNumber + ": " + stepData);
+                                if ("OPEN_WINDOW".equals(step.get("Test_Action"))) {
+                                    String testData = step.get("Test_Data");
+                                    if (testData != null && testData.contains("|")) {
+                                        lastAppFamilyName = testData.split("\\|")[0].trim();
+                                        System.out.println("DEBUG: Stored appFamilyName for Test ID '" + testId + "': " + lastAppFamilyName);
+                                    }
+                                }
+                                executeTheStep(stepData, lastAppFamilyName);
                                 if (stopRequested) {
                                     Platform.runLater(() -> {
                                         testCase.statusProperty().set("Stopped");
-                                        currentlyExecutingTest = null;
+                                        setCurrentlyExecutingTest(null);
                                         tableView.refresh();
                                     });
                                     break;
@@ -434,47 +441,44 @@ public class TestRunner extends Application {
                             } catch (Exception ex) {
                                 testPassed = false;
                                 final String errorMessage = "Test ID " + testId + ", Step " + stepNumber + " failed: " + ex.getMessage();
-                                System.err.println(errorMessage);
+                                System.err.println("ERROR: " + errorMessage);
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Failed");
+                                    setCurrentlyExecutingTest(null);
+                                    tableView.refresh();
                                     showAlert(Alert.AlertType.ERROR, "Run Error", errorMessage);
-                                    currentlyExecutingTest = null; // Clear executing test on failure
                                 });
                                 break;
                             }
                             stepNumber++;
                         }
+                        System.out.println("DEBUG: Test ID '" + testId + "' " + (hasCloseWindowStep ? "included" : "did not include") + " a CLOSE_WINDOW step");
                         if (testPassed && !stopRequested) {
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Passed");
-                                currentlyExecutingTest = null;
+                                setCurrentlyExecutingTest(null);
                                 tableView.refresh();
+                                System.out.println("DEBUG: Test ID '" + testId + "' completed successfully");
                             });
                         }
                     }
 
                     if (!anySelected) {
                         Platform.runLater(() -> {
+                            setCurrentlyExecutingTest(null);
+                            tableView.refresh();
                             showAlert(Alert.AlertType.ERROR, "Run Error", "No tests selected to run.");
                             isTestRunning = false;
-                            // Highlight first row after no tests are run
-                            if (!tableData.isEmpty()) {
-                                tableView.getSelectionModel().select(0);
-                                tableView.refresh();
-                            }
                         });
                     }
                     return null;
                 } catch (Exception ex) {
                     System.err.println("Unexpected error during test execution: " + ex.getMessage());
                     Platform.runLater(() -> {
+                        setCurrentlyExecutingTest(null);
+                        tableView.refresh();
                         showAlert(Alert.AlertType.ERROR, "Run Error", "Unexpected error: " + ex.getMessage());
                         isTestRunning = false;
-                        // Highlight first row after error
-                        if (!tableData.isEmpty()) {
-                            tableView.getSelectionModel().select(0);
-                            tableView.refresh();
-                        }
                     });
                     return null;
                 }
@@ -484,13 +488,10 @@ public class TestRunner extends Application {
             protected void succeeded() {
                 Platform.runLater(() -> {
                     isTestRunning = false;
+                    setCurrentlyExecutingTest(null);
+                    tableView.refresh();
                     disableUI(false);
                     showAlert(Alert.AlertType.INFORMATION, "Run", "Selected tests processed");
-                    // Highlight first row after execution completes
-                    if (!tableData.isEmpty()) {
-                        tableView.getSelectionModel().select(0);
-                        tableView.refresh();
-                    }
                 });
             }
 
@@ -498,13 +499,10 @@ public class TestRunner extends Application {
             protected void failed() {
                 Platform.runLater(() -> {
                     isTestRunning = false;
+                    setCurrentlyExecutingTest(null);
+                    tableView.refresh();
                     disableUI(false);
                     showAlert(Alert.AlertType.ERROR, "Run Error", "Test execution failed: " + getException().getMessage());
-                    // Highlight first row after failure
-                    if (!tableData.isEmpty()) {
-                        tableView.getSelectionModel().select(0);
-                        tableView.refresh();
-                    }
                 });
             }
 
@@ -512,13 +510,10 @@ public class TestRunner extends Application {
             protected void cancelled() {
                 Platform.runLater(() -> {
                     isTestRunning = false;
+                    setCurrentlyExecutingTest(null);
+                    tableView.refresh();
                     disableUI(false);
                     showAlert(Alert.AlertType.INFORMATION, "Stop", "Test execution stopped.");
-                    // Highlight first row after cancellation
-                    if (!tableData.isEmpty()) {
-                        tableView.getSelectionModel().select(0);
-                        tableView.refresh();
-                    }
                 });
             }
         };
@@ -564,7 +559,6 @@ public class TestRunner extends Application {
                 for (int i = 0; i < loadedJsonArray.length(); i++) {
                     JSONObject obj = loadedJsonArray.getJSONObject(i);
 
-                    // Process Element_List
                     if (obj.has("Element_List")) {
                         try {
                             JSONObject elementListObj = obj.getJSONObject("Element_List");
@@ -578,42 +572,47 @@ public class TestRunner extends Application {
                                         elementList.add(elementArray.getString(j));
                                     }
                                     globalElementListMap.put(elementKey, elementList);
-                                    System.out.println("Added Element_List with key: " + elementKey);
+                                    System.out.println("DEBUG: Added Element_List with key: " + elementKey);
                                 } catch (JSONException ex) {
-                                    System.err.println("Skipping malformed element array for key " + elementKey + ": " + ex.getMessage());
+                                    System.err.println("WARNING: Skipping malformed element array for key " + elementKey + ": " + ex.getMessage());
                                 }
                             }
                         } catch (JSONException ex) {
-                            System.err.println("Skipping malformed Element_List: " + ex.getMessage());
+                            System.err.println("WARNING: Skipping malformed Element_List: " + ex.getMessage());
                         }
                     }
 
-                    // Process Test_Cases
                     if (obj.has("Test_Cases")) {
                         JSONArray testCases = obj.getJSONArray("Test_Cases");
                         for (int j = 0; j < testCases.length(); j++) {
                             JSONObject testCase = testCases.getJSONObject(j);
                             if (!testCase.has("Test_Id")) {
-                                System.err.println("Skipping JSON object at index " + j + ": Missing Test_Id");
+                                System.err.println("WARNING: Skipping JSON object at index " + j + ": Missing Test_Id");
                                 continue;
                             }
                             String testId = testCase.getString("Test_Id");
                             if (testId == null || testId.trim().isEmpty()) {
-                                System.err.println("Skipping JSON object at index " + j + ": Test_Id is empty");
+                                System.err.println("WARNING: Skipping JSON object at index " + j + ": Test_Id is empty");
                                 continue;
                             }
                             String testDescription = "";
                             LinkedHashMap<String, Object> stepsMap = new LinkedHashMap<>();
                             if (testCase.has("Steps")) {
                                 JSONArray stepsArray = testCase.getJSONArray("Steps");
+                                System.out.println("DEBUG: Loading steps for Test ID '" + testId + "': " + stepsArray.toString(2));
                                 for (int k = 0; k < stepsArray.length(); k++) {
                                     JSONObject stepObj = stepsArray.getJSONObject(k);
                                     LinkedHashMap<String, String> stepData = new LinkedHashMap<>();
+                                    String testAction = stepObj.optString("Test_Action", "");
                                     stepData.put("Test_Step", stepObj.optString("Test_Step", ""));
-                                    stepData.put("Test_Action", stepObj.optString("Test_Action", ""));
+                                    stepData.put("Test_Action", testAction);
                                     stepData.put("Test_Element", stepObj.optString("Test_Element", ""));
-                                    stepData.put("Test_Data", stepObj.optString("Test_Data", ""));
+                                    String testData = stepObj.optString("Test_Data", "");
+                                    stepData.put("Test_Data", testData);
                                     stepData.put("Test_Description", stepObj.optString("Test_Description", ""));
+                                    if ("CLOSE_WINDOW".equals(testAction) && (testData == null || testData.trim().isEmpty())) {
+                                        System.err.println("WARNING: Empty or null Test_Data for CLOSE_WINDOW in Test ID '" + testId + "', Step " + stepObj.optString("Test_Step", "unknown"));
+                                    }
                                     String stepKey = "Test_Step " + stepObj.getString("Test_Step");
                                     stepsMap.put(stepKey, stepData);
                                     if (k == 0) {
@@ -633,22 +632,19 @@ public class TestRunner extends Application {
                     selectAllCheckBox.setSelected(!tableData.isEmpty());
                     selectAllCheckBox.setDisable(tableData.isEmpty());
                     selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
-                    if (!tableData.isEmpty()) {
-                        tableData.get(0).runProperty().set(true);
-                        tableView.getSelectionModel().select(0);
-                        tableView.refresh();
-                    }
+                    setCurrentlyExecutingTest(null);
+                    tableView.refresh();
                     updateButtonStates();
-                    System.out.println("globalElementListMap contents: " + globalElementListMap);
-                    System.out.println("testStepsMap contents: " + testStepsMap);
+                    System.out.println("DEBUG: globalElementListMap contents: " + globalElementListMap);
+                    System.out.println("DEBUG: testStepsMap contents: " + testStepsMap);
                     showAlert(Alert.AlertType.INFORMATION, "Load Successful", "JSON loaded successfully from " + file.getAbsolutePath());
                 });
             } catch (JSONException ex) {
-                System.err.println("Error parsing JSON: " + ex.getMessage());
+                System.err.println("ERROR: Error parsing JSON: " + ex.getMessage());
                 showAlert(Alert.AlertType.ERROR, "Load Error", "Error parsing JSON: " + ex.getMessage());
             }
         } catch (IOException ex) {
-            System.err.println("Error reading JSON file: " + ex.getMessage());
+            System.err.println("ERROR: Error reading JSON file: " + ex.getMessage());
             showAlert(Alert.AlertType.ERROR, "Load Error", "Error reading file: " + ex.getMessage());
         }
     }
@@ -661,7 +657,7 @@ public class TestRunner extends Application {
         alert.showAndWait();
     }
 
-    public static boolean executeTheStep(List<String> step) {
+    public static boolean executeTheStep(List<String> step, String lastAppFamilyName) {
         if (step == null || step.size() < 4) {
             throw new IllegalArgumentException("Invalid step: must contain at least 4 elements (action, element, data, description)");
         }
@@ -708,7 +704,7 @@ public class TestRunner extends Application {
                         throw new IllegalArgumentException("Element key not found in globalElementListMap: " + testElement);
                     }
                     List<String> elementData = globalElementListMap.get(testElement);
-                    GlueCode.setValueToElement(testElement, testData, testAction, elementData.toString());
+                    GlueCode.setValueToElement(elementData.get(0), elementData.get(1), elementData.get(2), testData);
                     return true;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute SET step: " + e.getMessage(), e);
@@ -721,7 +717,46 @@ public class TestRunner extends Application {
                 }
             case "CLOSE_WINDOW":
                 try {
-                    GlueCode.closeApplicationByProcess(testData);
+                    String effectiveAppFamilyName = testData;
+                    if (testData == null || testData.isEmpty()) {
+                        if (lastAppFamilyName != null && !lastAppFamilyName.isEmpty()) {
+                            System.out.println("DEBUG: Using OPEN_WINDOW appFamilyName '" + lastAppFamilyName + "' for CLOSE_WINDOW due to empty Test_Data");
+                            effectiveAppFamilyName = lastAppFamilyName;
+                        } else {
+                            System.err.println("WARNING: Skipping CLOSE_WINDOW step due to empty Test_Data and no OPEN_WINDOW appFamilyName available");
+                            return true;
+                        }
+                    }
+                    System.out.println("DEBUG: Attempting to close window with appFamilyName: " + effectiveAppFamilyName);
+                    try {
+                        GlueCode.closeApplication(effectiveAppFamilyName);
+                        System.out.println("DEBUG: Successfully closed application with appFamilyName: " + effectiveAppFamilyName);
+                        try {
+                            if (GlueCode.getDriver() != null) {
+                                GlueCode.getDriver().quit();
+                                System.out.println("DEBUG: WinAppDriver session closed for appFamilyName: " + effectiveAppFamilyName);
+                            } else {
+                                System.out.println("DEBUG: No active WinAppDriver session to close for appFamilyName: " + effectiveAppFamilyName);
+                            }
+                        } catch (Exception driverEx) {
+                            System.err.println("WARNING: Failed to quit WinAppDriver session: " + driverEx.getMessage());
+                        }
+                    } catch (Exception e) {
+                        System.err.println("WARNING: GlueCode.closeApplication failed for appFamilyName: " + effectiveAppFamilyName + ". Attempting fallback closure: " + e.getMessage());
+                        try {
+                            ProcessBuilder pb = new ProcessBuilder("taskkill", "/IM", "ApplicationFrameHost.exe", "/F");
+                            Process process = pb.start();
+                            int exitCode = process.waitFor();
+                            if (exitCode == 0) {
+                                System.out.println("DEBUG: Fallback closure succeeded: Terminated ApplicationFrameHost.exe");
+                            } else {
+                                System.err.println("ERROR: Fallback closure failed with exit code: " + exitCode);
+                                throw new RuntimeException("Fallback closure failed for ApplicationFrameHost.exe. Exit code: " + exitCode);
+                            }
+                        } catch (Exception fallbackEx) {
+                            throw new RuntimeException("Failed to execute CLOSE_WINDOW step after fallback attempt: " + fallbackEx.getMessage(), fallbackEx);
+                        }
+                    }
                     return true;
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute CLOSE_WINDOW step: " + e.getMessage(), e);

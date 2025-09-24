@@ -1,5 +1,6 @@
 package com.test.window.gui;
 
+import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -33,6 +34,7 @@ public class TestTableFactory {
      * Creates a configured TableView for TestCases, including columns, styling, and Select All checkbox.
      * @param tableData The ObservableList of TestCase data.
      * @return A VBox containing the Select All checkbox and the TableView.
+     * @since 1.0
      */
     public static VBox createTestTable(ObservableList<TestRunner.TestCase> tableData) {
         TableView<TestRunner.TestCase> tableView = new TableView<>(tableData);
@@ -45,7 +47,6 @@ public class TestTableFactory {
         runCol.setMinWidth(40);
         runCol.setMaxWidth(40);
         runCol.setPrefWidth(40);
-        // Add border to Run column cells with reduced thickness
         runCol.setCellFactory(column -> new CheckBoxTableCell<TestRunner.TestCase, Boolean>() {
             @Override
             public void updateItem(Boolean item, boolean empty) {
@@ -63,7 +64,6 @@ public class TestTableFactory {
         idCol.setMinWidth(80);
         idCol.setMaxWidth(80);
         idCol.setPrefWidth(80);
-        // Add border to Test Id column cells with reduced thickness
         idCol.setCellFactory(column -> new TableCell<TestRunner.TestCase, String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -82,7 +82,6 @@ public class TestTableFactory {
         descCol.setCellValueFactory(cellData -> cellData.getValue().descriptionProperty());
         descCol.setMinWidth(150);
         descCol.setPrefWidth(300);
-        // Add border to Test Description column cells with reduced thickness
         descCol.setCellFactory(column -> new TableCell<TestRunner.TestCase, String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -102,7 +101,6 @@ public class TestTableFactory {
         statusCol.setMinWidth(80);
         statusCol.setMaxWidth(80);
         statusCol.setPrefWidth(80);
-        // Add border to Status column cells with reduced thickness
         statusCol.setCellFactory(column -> new TableCell<TestRunner.TestCase, String>() {
             @Override
             protected void updateItem(String status, boolean empty) {
@@ -123,34 +121,35 @@ public class TestTableFactory {
             }
         });
 
-        // Custom row factory to highlight the currently executing row, manually selected row, or first row by default
+        // Custom row factory to highlight the currently executing row or manually selected row
         tableView.setRowFactory(tv -> new TableRow<TestRunner.TestCase>() {
             @Override
             protected void updateItem(TestRunner.TestCase item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setStyle("-fx-background-color: " + TABLE_BACKGROUND + ";");
-                } else {
-                    String backgroundColor = TABLE_BACKGROUND;
-                    // Prioritize the currently executing test
+                String backgroundColor = TABLE_BACKGROUND;
+                if (!empty && item != null) {
                     if (item == TestRunner.getCurrentlyExecutingTest()) {
-                        backgroundColor = RUNNING_HIGHLIGHT;
-                    } else if (TestRunner.getCurrentlyExecutingTest() == null) {
-                        // Highlight manually selected row or first row if no selection
-                        if (isSelected()) {
-                            backgroundColor = RUNNING_HIGHLIGHT;
-                        } else if (getIndex() == 0 && !tableData.isEmpty() && 
-                                   tableView.getSelectionModel().getSelectedIndices().isEmpty()) {
-                            backgroundColor = RUNNING_HIGHLIGHT;
-                        }
+                        backgroundColor = RUNNING_HIGHLIGHT; // Highlight executing test
+                        System.out.println("DEBUG: Highlighting executing test row: " + item.testIdProperty().get());
+                    } else if (isSelected()) {
+                        backgroundColor = RUNNING_HIGHLIGHT; // Highlight manually selected row
+                        System.out.println("DEBUG: Highlighting selected row: " + item.testIdProperty().get());
                     }
-                    setStyle("-fx-background-color: " + backgroundColor + " !important;");
                 }
+                setStyle("-fx-background-color: " + backgroundColor + ";");
             }
         });
 
+        // Listener for currently executing test changes
+        TestRunner.addCurrentlyExecutingTestListener((obs, oldTest, newTest) -> {
+            Platform.runLater(() -> {
+                tableView.refresh(); // Force refresh to update highlight
+                System.out.println("DEBUG: Table refreshed for currentlyExecutingTest change: " + 
+                                  (newTest != null ? newTest.testIdProperty().get() : "null"));
+            });
+        });
+
         tableView.getColumns().addAll(runCol, idCol, descCol, statusCol);
-        // Enhanced TableView styling, no grid lines
         tableView.setStyle("-fx-background-color: " + TABLE_BACKGROUND + "; -fx-control-inner-background: " + 
                            TABLE_BACKGROUND + "; -fx-table-cell-border-color: transparent; " +
                            "-fx-horizontal-grid-lines-visible: false; -fx-vertical-grid-lines-visible: false; " +

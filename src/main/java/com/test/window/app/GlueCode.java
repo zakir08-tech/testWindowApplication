@@ -588,4 +588,25 @@ public final class GlueCode {
         System.out.println("DEBUG: Element found by XPath: " + element.getClass().getName());
         return element;
     }
+    
+    /**
+     * Captures a screenshot of the current application window and returns it as a byte array.
+     * 
+     * @return byte[] containing the screenshot in PNG format, or an empty array if capture fails.
+     */
+    public static byte[] takeScreenshotAsBytes() {
+        try {
+            if (driver instanceof TakesScreenshot) {
+                byte[] screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
+                System.out.println("DEBUG: Successfully captured screenshot (" + screenshot.length + " bytes)");
+                return screenshot;
+            } else {
+                System.err.println("ERROR: WebDriver does not support TakesScreenshot");
+                return new byte[0];
+            }
+        } catch (Exception e) {
+            System.err.println("ERROR: Failed to capture screenshot: " + e.getMessage());
+            return new byte[0]; // Return empty array on failure
+        }
+    }
 }

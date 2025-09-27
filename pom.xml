@@ -18,6 +18,11 @@
   </properties>
 
   <dependencies>
+	<dependency>
+	    <groupId>com.fasterxml.jackson.core</groupId>
+	    <artifactId>jackson-databind</artifactId>
+	    <version>2.17.2</version>
+	</dependency>
   	<dependency>
         <groupId>org.openjfx</groupId>
         <artifactId>javafx-controls</artifactId>
@@ -81,7 +86,7 @@
                 <version>0.0.8</version>
                 <configuration>
                     <!--<mainClass>com.test.window.gui.TestManagerApp_Template</mainClass>-->
-                    <mainClass>com.test.window.gui.LaunchScreen</mainClass>
+                    <mainClass>com.test.window.gui.TableWithJsonWindow</mainClass>
                     <options>
                     	<option>--add-modules</option>
                     	<option>javafx.controls,javafx.base</option>

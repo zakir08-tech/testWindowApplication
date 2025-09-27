@@ -3,11 +3,14 @@ package com.test.window.gui;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -54,7 +57,8 @@ import javafx.stage.Stage;
 /**
  * TestRunnerFX is a JavaFX-based GUI application for loading and executing automated tests from JSON files.
  * It displays tests in a table with columns for selection, test ID, description, and status.
- * Features include selecting tests to run, highlighting running tests, and displaying pass/fail results.
+ * Features include selecting tests to run, highlighting running tests, displaying pass/fail results,
+ * and generating an HTML test report.
  */
 public class TestRunner extends Application {
     // Maps to store test steps and elements
@@ -202,7 +206,7 @@ public class TestRunner extends Application {
         // Button actions
         runButton.setOnAction(e -> {
             if (loadedJsonArray == null) {
-                showAlert(Alert.AlertType.ERROR, "Run Error", "No JSON data loaded. Please load a test file first.");
+                showAlert(Alert.AlertType.ERROR, "Run Error", "No test(s) loaded. Please load a test file first.");
                 return;
             }
             if (isTestRunning) {
@@ -319,7 +323,7 @@ public class TestRunner extends Application {
         stopButton.setStyle("-fx-background-color: " + ((disable && !isTestRunning) ? DISABLED_COLOR : PINK_RED) + "; -fx-text-fill: black;");
         selectAllCheckBox.setDisable(tableData.isEmpty());
         selectAllCheckBox.setTextFill(Color.web(tableData.isEmpty() ? DISABLED_COLOR : CHECKBOX_ENABLED_COLOR));
-        tableView.setEditable(true);
+        tableView.setEditable(!disable); // Prevent table edits during test run
     }
 
     private boolean isAnyTestSelected() {
@@ -334,6 +338,7 @@ public class TestRunner extends Application {
     }
 
     private void runTests() {
+        List<HtmlReportGenerator.TestReportEntry> reportEntries = new ArrayList<>();
         Task<Void> task = new Task<Void>() {
             @Override
             protected Void call() {
@@ -346,6 +351,8 @@ public class TestRunner extends Application {
                     }
 
                     boolean anySelected = !testsToRun.isEmpty();
+                    long totalRunStart = System.currentTimeMillis();
+                    String lastAppFamilyName = null;
 
                     for (TestCase testCase : testsToRun) {
                         if (stopRequested) break;
@@ -360,6 +367,13 @@ public class TestRunner extends Application {
                             continue;
                         }
 
+                        HtmlReportGenerator.TestReportEntry entry = new HtmlReportGenerator.TestReportEntry();
+                        entry.testId = testId;
+                        entry.description = testCase.descriptionProperty().get();
+                        entry.steps = new ArrayList<>();
+                        long testStart = System.currentTimeMillis();
+                        boolean testPassed = true;
+
                         // Set the currently executing test and ensure UI updates
                         Platform.runLater(() -> {
                             setCurrentlyExecutingTest(testCase);
@@ -368,120 +382,120 @@ public class TestRunner extends Application {
                             System.out.println("DEBUG: Started test: " + testId);
                         });
 
-                        // Wait briefly to ensure UI update is processed
-                        try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-
                         LinkedHashMap<String, Object> steps = testStepsMap.get(testId);
                         if (steps == null || steps.isEmpty()) {
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Failed");
                                 setCurrentlyExecutingTest(null);
                                 tableView.refresh();
-                                showAlert(Alert.AlertType.ERROR, "Run Error", "No valid steps for Test ID " + testId);
+                                showAlert(Alert.AlertType.ERROR, "Run Error", "No steps found for Test ID " + testId);
                             });
-                            continue;
-                        }
-
-                        boolean testPassed = true;
-                        int stepNumber = 1;
-                        String lastAppFamilyName = null;
-                        boolean hasCloseWindowStep = false;
-                        for (String stepKey : steps.keySet()) {
-                            if ("Test_Step CLOSE_WINDOW".equals(stepKey)) {
-                                hasCloseWindowStep = true;
-                            }
-                            if (stopRequested) {
-                                Platform.runLater(() -> {
-                                    testCase.statusProperty().set("Stopped");
-                                    setCurrentlyExecutingTest(null);
-                                    tableView.refresh();
-                                });
-                                break;
-                            }
-                            Object stepObj = steps.get(stepKey);
-                            if (!(stepObj instanceof LinkedHashMap)) {
-                                Platform.runLater(() -> {
-                                    testCase.statusProperty().set("Failed");
-                                    setCurrentlyExecutingTest(null);
-                                    tableView.refresh();
-                                    showAlert(Alert.AlertType.ERROR, "Run Error", "Invalid step data for Test ID " + testId + ", step " + stepKey);
-                                });
-                                break;
-                            }
-                            LinkedHashMap<String, String> step = (LinkedHashMap<String, String>) stepObj;
-                            if (step == null) continue;
-                            try {
-                                List<String> stepData = new ArrayList<>();
-                                stepData.add(step.get("Test_Action"));
-                                stepData.add(step.get("Test_Element"));
-                                stepData.add(step.get("Test_Data"));
-                                stepData.add(step.get("Test_Description"));
-                                System.out.println("DEBUG: Executing step for Test ID '" + testId + "', Step " + stepNumber + ": " + stepData);
-                                if ("OPEN_WINDOW".equals(step.get("Test_Action"))) {
-                                    String testData = step.get("Test_Data");
-                                    if (testData != null && testData.contains("|")) {
-                                        lastAppFamilyName = testData.split("\\|")[0].trim();
-                                        System.out.println("DEBUG: Stored appFamilyName for Test ID '" + testId + "': " + lastAppFamilyName);
-                                    }
-                                }
-                                executeTheStep(stepData, lastAppFamilyName);
+                            testPassed = false;
+                        } else {
+                            int stepNo = 1;
+                            for (Map.Entry<String, Object> stepEntry : steps.entrySet()) {
                                 if (stopRequested) {
+                                    testPassed = false;
+                                    break;
+                                }
+                                LinkedHashMap<String, String> stepData = (LinkedHashMap<String, String>) stepEntry.getValue();
+                                String testAction = stepData.get("Test_Action");
+                                String testElement = stepData.get("Test_Element");
+                                String testData = stepData.get("Test_Data");
+                                String stepDesc = stepData.get("Test_Description");
+
+                                HtmlReportGenerator.StepReport stepReport = new HtmlReportGenerator.StepReport();
+                                stepReport.stepNo = stepNo++;
+                                stepReport.testStep = constructTestStepString(testAction, testElement, testData);
+                                stepReport.stepDesc = stepDesc != null ? stepDesc : "";
+                                long stepStart = System.currentTimeMillis();
+
+                                try {
+                                    List<String> stepList = new ArrayList<>();
+                                    stepList.add(testAction != null ? testAction : "");
+                                    stepList.add(testElement != null ? testElement : "");
+                                    stepList.add(testData != null ? testData : "");
+                                    stepList.add(stepDesc != null ? stepDesc : "");
+
+                                    if ("OPEN_WINDOW".equals(testAction)) {
+                                        lastAppFamilyName = testData != null ? testData.split("\\|")[0] : null;
+                                    } else if ("TAKE_SCREENSHOT".equals(testAction)) {
+                                        stepReport.screenshotBytes = GlueCode.takeScreenshotAsBytes();
+                                    }
+
+                                    executeTheStep(stepList, lastAppFamilyName);
+                                    stepReport.durationMs = System.currentTimeMillis() - stepStart;
+                                    entry.steps.add(stepReport);
+                                } catch (Exception ex) {
+                                    stepReport.error = ex.toString();
+                                    stepReport.durationMs = System.currentTimeMillis() - stepStart;
+                                    // Capture screenshot on failure with debugging
+                                    byte[] screenshotBytes = GlueCode.takeScreenshotAsBytes();
+                                    if (screenshotBytes != null && screenshotBytes.length > 0) {
+                                        System.out.println("DEBUG: Screenshot captured successfully for failed step: " + stepReport.testStep + ", size: " + screenshotBytes.length + " bytes");
+                                        stepReport.screenshotBytes = screenshotBytes;
+                                    } else {
+                                        System.err.println("DEBUG: Failed to capture screenshot for step: " + stepReport.testStep + ". Bytes are null or empty.");
+                                    }
+                                    entry.steps.add(stepReport);
+                                    testPassed = false;
                                     Platform.runLater(() -> {
-                                        testCase.statusProperty().set("Stopped");
+                                        testCase.statusProperty().set("Failed");
                                         setCurrentlyExecutingTest(null);
                                         tableView.refresh();
+                                        //showAlert(Alert.AlertType.ERROR, "Step Error", "Test ID " + testId + " failed at step " + stepReport.testStep + ": " + ex.getMessage());
                                     });
                                     break;
                                 }
-                            } catch (Exception ex) {
-                                testPassed = false;
-                                final String errorMessage = "Test ID " + testId + ", Step " + stepNumber + " failed: " + ex.getMessage();
-                                System.err.println("ERROR: " + errorMessage);
-                                Platform.runLater(() -> {
-                                    testCase.statusProperty().set("Failed");
-                                    setCurrentlyExecutingTest(null);
-                                    tableView.refresh();
-                                    showAlert(Alert.AlertType.ERROR, "Run Error", errorMessage);
-                                });
-                                break;
                             }
-                            stepNumber++;
                         }
-                        System.out.println("DEBUG: Test ID '" + testId + "' " + (hasCloseWindowStep ? "included" : "did not include") + " a CLOSE_WINDOW step");
-                        if (testPassed && !stopRequested) {
-                            Platform.runLater(() -> {
-                                testCase.statusProperty().set("Passed");
-                                setCurrentlyExecutingTest(null);
-                                tableView.refresh();
-                                System.out.println("DEBUG: Test ID '" + testId + "' completed successfully");
-                            });
-                        }
-                    }
 
-                    if (!anySelected) {
+                        entry.status = testPassed ? "Passed" : "Failed";
+                        entry.totalDuration = System.currentTimeMillis() - testStart;
+                        reportEntries.add(entry);
+
+                        // Capture testPassed state for use in Platform.runLater
+                        final boolean finalTestPassed = testPassed;
                         Platform.runLater(() -> {
+                            testCase.statusProperty().set(finalTestPassed ? "Passed" : "Failed");
                             setCurrentlyExecutingTest(null);
                             tableView.refresh();
-                            showAlert(Alert.AlertType.ERROR, "Run Error", "No tests selected to run.");
-                            isTestRunning = false;
                         });
                     }
-                    return null;
-                } catch (Exception ex) {
-                    System.err.println("Unexpected error during test execution: " + ex.getMessage());
+
+                    // Generate HTML report
+                    int passedCount = (int) reportEntries.stream().filter(e -> "Passed".equals(e.status)).count();
+                    int failedCount = reportEntries.size() - passedCount;
+                    long totalRunTimeMs = System.currentTimeMillis() - totalRunStart;
+                    File reportFile = new File("reports/TestReport_" + new SimpleDateFormat("ddMMyyHHmmss").format(new Date()) + ".html");
+                    try {
+                        HtmlReportGenerator.generateReport(reportFile, reportEntries, totalRunTimeMs, lastLoadedFile, passedCount, failedCount, 0);
+                        //Platform.runLater(() -> showAlert(Alert.AlertType.INFORMATION, "Report Generated", "Test report saved to " + reportFile.getAbsolutePath()));
+                    } catch (IOException ex) {
+                        //Platform.runLater(() -> showAlert(Alert.AlertType.ERROR, "Report Error", "Failed to generate report: " + ex.getMessage()));
+                    }
+                } finally {
+                    // Always generate and open report, even on exception or stop
                     Platform.runLater(() -> {
+                        isTestRunning = false;
                         setCurrentlyExecutingTest(null);
                         tableView.refresh();
-                        showAlert(Alert.AlertType.ERROR, "Run Error", "Unexpected error: " + ex.getMessage());
-                        isTestRunning = false;
+                        disableUI(false);
+                        File reportFile = new File("reports/TestReport_" + new SimpleDateFormat("ddMMyyHHmmss").format(new Date()) + ".html");
+                        try {
+                            int passedCount = (int) reportEntries.stream().filter(e -> "Passed".equals(e.status)).count();
+                            int failedCount = reportEntries.size() - passedCount;
+                            long totalRunTimeMs = reportEntries.stream().mapToLong(e -> e.totalDuration).sum();
+                            HtmlReportGenerator.generateReport(reportFile, reportEntries, totalRunTimeMs, lastLoadedFile, passedCount, failedCount, 0);
+                            HtmlReportGenerator.openReportAutomatically(reportFile);
+                            //showAlert(Alert.AlertType.INFORMATION, "Report Generated", "Test report saved and opened at " + reportFile.getAbsolutePath());
+                        } catch (IOException ex) {
+                            //showAlert(Alert.AlertType.ERROR, "Report Error", "Failed to generate or open report: " + ex.getMessage());
+                        }
                     });
-                    return null;
                 }
+
+                return null;
             }
 
             @Override
@@ -491,7 +505,7 @@ public class TestRunner extends Application {
                     setCurrentlyExecutingTest(null);
                     tableView.refresh();
                     disableUI(false);
-                    showAlert(Alert.AlertType.INFORMATION, "Run", "Selected tests processed");
+                    //showAlert(Alert.AlertType.INFORMATION, "Run", "Selected tests processed");
                 });
             }
 
@@ -502,7 +516,7 @@ public class TestRunner extends Application {
                     setCurrentlyExecutingTest(null);
                     tableView.refresh();
                     disableUI(false);
-                    showAlert(Alert.AlertType.ERROR, "Run Error", "Test execution failed: " + getException().getMessage());
+                    //showAlert(Alert.AlertType.ERROR, "Run Error", "Test execution failed: " + getException().getMessage());
                 });
             }
 
@@ -519,12 +533,30 @@ public class TestRunner extends Application {
         };
         new Thread(task).start();
     }
-    
+
+    private String constructTestStepString(String testAction, String testElement, String testData) {
+        if (testAction == null) return "";
+        switch (testAction) {
+            case "OPEN_WINDOW":
+                return "Launch URL \"" + (testData != null ? testData : "") + "\"";
+            case "CLICK":
+                return "Click \"" + (testElement != null ? testElement : "") + "\"";
+            case "SET":
+                return "Set value \"" + (testData != null ? testData : "") + "\" to \"" + (testElement != null ? testElement : "") + "\"";
+            case "TAKE_SCREENSHOT":
+                return "Take screen-shot";
+            case "CLOSE_WINDOW":
+                return "Close window \"" + (testData != null ? testData : "") + "\"";
+            default:
+                return testAction + (testElement != null ? " on \"" + testElement + "\"" : "") + (testData != null ? " with \"" + testData + "\"" : "");
+        }
+    }
+
     private void loadJsonFile(boolean isRefresh, Stage ownerStage) {
         File file;
         if (isRefresh) {
             if (lastLoadedFile == null) {
-                showAlert(Alert.AlertType.ERROR, "Refresh Error", "No JSON file has been loaded yet. Please use Load Test first.");
+                showAlert(Alert.AlertType.ERROR, "Refresh Error", "No Test file has been loaded yet. Please use Load Test first.");
                 return;
             }
             file = lastLoadedFile;
@@ -626,7 +658,7 @@ public class TestRunner extends Application {
                     }
                 }
                 if (tableData.isEmpty() && globalElementListMap.isEmpty()) {
-                    throw new JSONException("No valid test cases or element lists found in JSON file");
+                    throw new JSONException("No valid test cases or element lists found in Test file");
                 }
                 Platform.runLater(() -> {
                     selectAllCheckBox.setSelected(!tableData.isEmpty());
@@ -637,15 +669,15 @@ public class TestRunner extends Application {
                     updateButtonStates();
                     System.out.println("DEBUG: globalElementListMap contents: " + globalElementListMap);
                     System.out.println("DEBUG: testStepsMap contents: " + testStepsMap);
-                    showAlert(Alert.AlertType.INFORMATION, "Load Successful", "JSON loaded successfully from " + file.getAbsolutePath());
+                    //showAlert(Alert.AlertType.INFORMATION, "Load Successful", "Test loaded successfully from " + file.getAbsolutePath());
                 });
             } catch (JSONException ex) {
                 System.err.println("ERROR: Error parsing JSON: " + ex.getMessage());
-                showAlert(Alert.AlertType.ERROR, "Load Error", "Error parsing JSON: " + ex.getMessage());
+                //showAlert(Alert.AlertType.ERROR, "Load Error", "Error parsing file: " + ex.getMessage());
             }
         } catch (IOException ex) {
             System.err.println("ERROR: Error reading JSON file: " + ex.getMessage());
-            showAlert(Alert.AlertType.ERROR, "Load Error", "Error reading file: " + ex.getMessage());
+            //showAlert(Alert.AlertType.ERROR, "Load Error", "Error reading file: " + ex.getMessage());
         }
     }
 

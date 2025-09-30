@@ -471,7 +471,7 @@ public class UIBuilder {
             endpointField.setStyle(newVal ? Constants.FIELD_STYLE_FOCUSED : Constants.FIELD_STYLE_UNFOCUSED);
         });
         endpointField.setDisable(true);
-        endpointField.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.35)); // Increased to use freed space
+        endpointField.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.35));
         endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
         endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
 
@@ -483,7 +483,7 @@ public class UIBuilder {
             authComboBox.setStyle(newVal ? Constants.FIELD_STYLE_FOCUSED : Constants.FIELD_STYLE_UNFOCUSED);
         });
         authComboBox.setDisable(true);
-        authComboBox.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.15).subtract(50)); // Reduced by 50 pixels
+        authComboBox.setPrefWidth(135);
         authComboBox.maxWidthProperty().bind(authComboBox.prefWidthProperty());
         authComboBox.minWidthProperty().bind(authComboBox.prefWidthProperty());
 
@@ -494,7 +494,7 @@ public class UIBuilder {
             authField1.setStyle(newVal ? Constants.FIELD_STYLE_FOCUSED : Constants.FIELD_STYLE_UNFOCUSED);
         });
         authField1.setDisable(true);
-        authField1.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.2).subtract(50)); // Reduced by 50 pixels
+        authField1.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.14).subtract(50)); // Reduced from 0.2 to 0.14 (30% less)
         authField1.maxWidthProperty().bind(authField1.prefWidthProperty());
         authField1.minWidthProperty().bind(authField1.prefWidthProperty());
 
@@ -505,7 +505,7 @@ public class UIBuilder {
             authField2.setStyle(newVal ? Constants.FIELD_STYLE_FOCUSED : Constants.FIELD_STYLE_UNFOCUSED);
         });
         authField2.setDisable(true);
-        authField2.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.2).subtract(50)); // Reduced by 50 pixels
+        authField2.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.14).subtract(50)); // Reduced from 0.2 to 0.14 (30% less)
         authField2.maxWidthProperty().bind(authField2.prefWidthProperty());
         authField2.minWidthProperty().bind(authField2.prefWidthProperty());
 
@@ -540,6 +540,30 @@ public class UIBuilder {
             }
         });
 
+        // Update authComboBox and auth fields when table row selection changes
+        table.getSelectionModel().selectedIndexProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = newVal.intValue();
+            if (selectedIndex >= 0 && selectedIndex < table.getItems().size()) {
+                String[] selectedRow = table.getItems().get(selectedIndex);
+                String authValue = selectedRow[13] != null ? selectedRow[13] : "";
+                authComboBox.setValue(authValue);
+                updateAuthFields(authValue, authField1, authField2);
+                authField1.setText(selectedRow[14] != null ? selectedRow[14] : "");
+                authField2.setText(selectedRow[15] != null ? selectedRow[15] : "");
+                endpointField.setText(selectedRow[2] != null ? selectedRow[2] : "");
+                authComboBox.setDisable(false);
+            } else {
+                authComboBox.setValue("");
+                authComboBox.setDisable(true);
+                authField1.setText("");
+                authField1.setDisable(true);
+                authField2.setText("");
+                authField2.setDisable(true);
+                endpointField.setText("");
+                endpointField.setDisable(true);
+            }
+        });
+
         HBox textFieldsBox = new HBox(10, endpointField, authComboBox, authField1, authField2, tableManager.getStatusLabel());
         textFieldsBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         HBox.setHgrow(endpointField, Priority.NEVER);
@@ -549,7 +573,7 @@ public class UIBuilder {
         HBox.setHgrow(tableManager.getStatusLabel(), Priority.ALWAYS);
         return textFieldsBox;
     }
-
+    
     private void updateAuthFields(String authType, TextField authField1, TextField authField2) {
         if ("Basic Auth".equals(authType)) {
             authField1.setPromptText("Username");

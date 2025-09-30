@@ -3,6 +3,7 @@ package com.test.window.gui.com;
 import com.test.window.gui.com.CustomTableCells.CustomComboBoxTableCell;
 import com.test.window.gui.com.CustomTableCells.CustomTextFieldTableCell;
 
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
@@ -31,7 +32,6 @@ public class TableViewManager {
         return statusLabel;
     }
 
-    // Added getter for tableConfig
     public TableConfig getTableConfig() {
         return tableConfig;
     }
@@ -90,10 +90,7 @@ public class TableViewManager {
                     setStyle("");
                 } else {
                     int index = getIndex();
-                    String currentStyle = getStyle();
-                    if (currentStyle.contains("4A90E2")) {
-                        return;
-                    }
+                    // CHANGE: Removed currentStyle.contains("4A90E2") check to ensure fresh styling
                     if (index == table.getSelectionModel().getSelectedIndex()) {
                         setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-table-cell-border-color: #3C3F41; -fx-table-cell-border-width: 1px;");
                     } else {
@@ -107,6 +104,14 @@ public class TableViewManager {
             if (!table.getItems().isEmpty() && table.getSelectionModel().getSelectedIndex() < 0) {
                 table.getSelectionModel().select(0);
             }
+        });
+
+        // CHANGE: Added selection listener to ensure refresh on selection change
+        table.getSelectionModel().selectedIndexProperty().addListener((obs, oldVal, newVal) -> {
+            System.out.println("Selection changed: old=" + oldVal + ", new=" + newVal); // Debug logging, remove after verification
+            Platform.runLater(() -> {
+                table.refresh(); // Force refresh to clear stale styles
+            });
         });
 
         return table;

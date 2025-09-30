@@ -119,6 +119,26 @@ public class Constants {
             -fx-text-fill: #888888;
             -fx-opacity: 1.0;
         }
+        .combo-box-base .list-cell {
+            -fx-background-color: #2E2E2E;
+            -fx-text-fill: white;
+        }
+        .combo-box-base .combo-box-button {
+            -fx-background-color: #2E2E2E;
+            -fx-text-fill: white;
+        }
+        .combo-box-base .combo-box-popup .list-view .list-cell {
+            -fx-background-color: #2E2E2E;
+            -fx-text-fill: white;
+        }
+        .combo-box-base .combo-box-popup .list-view .list-cell:hover {
+            -fx-background-color: #4A90E2;
+            -fx-text-fill: white;
+        }
+        .combo-box-base .combo-box-popup .list-view .list-cell:selected {
+            -fx-background-color: #4A90E2;
+            -fx-text-fill: white;
+        }
         """;
 
     public static final double TEXT_FIELD_HEIGHT = 30.0;

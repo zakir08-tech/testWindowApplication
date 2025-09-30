@@ -172,14 +172,11 @@ public class CustomTableCells {
         }
 
         private void clearDuplicateHighlights() {
-            table.getItems().forEach((row) -> {
-                int index = table.getItems().indexOf(row);
-                TableRow<String[]> tableRow = (TableRow<String[]>) table.lookup(".table-row-cell[index=" + index + "]");
-                if (tableRow != null && index != table.getSelectionModel().getSelectedIndex()) {
-                    tableRow.setStyle("-fx-table-cell-border-color: #3C3F41; -fx-table-cell-border-width: 1px;");
-                }
-            });
             statusLabel.setText("");
+            // CHANGE: Use table.refresh() instead of manual style clearing
+            Platform.runLater(() -> {
+                table.refresh(); // Rely on row factory for consistent styling
+            });
         }
 
         @Override
@@ -233,8 +230,10 @@ public class CustomTableCells {
                 textField.setOnKeyPressed(e -> {
                     if (e.getCode() == KeyCode.TAB) {
                         String text = textField.getText() != null ? textField.getText() : "";
+                        int rowIndex = getTableRow().getIndex();
+                        // CHANGE: Ensure single selection
+                        table.getSelectionModel().clearAndSelect(rowIndex);
                         if (columnIndex == 0) {
-                            int rowIndex = getTableRow().getIndex();
                             if (!tableConfig.isValidTestId(text, testIds, originalValue, rowIndex, table)) {
                                 @SuppressWarnings("unchecked")
                                 TableColumn<String[], String> column = (TableColumn<String[], String>) table.getColumns().get(columnIndex);
@@ -242,11 +241,12 @@ public class CustomTableCells {
                                 cancelEdit();
                                 setText(getItem() != null ? getItem() : "");
                                 setGraphic(null);
-                                table.refresh();
                                 Platform.runLater(() -> {
+                                    table.refresh();
                                     int newColumn = (columnIndex + 1) % table.getColumns().size();
                                     table.getFocusModel().focus(rowIndex, table.getColumns().get(newColumn));
-                                    table.getSelectionModel().select(rowIndex);
+                                    // CHANGE: Reinforce single selection
+                                    table.getSelectionModel().clearAndSelect(rowIndex);
                                     table.edit(rowIndex, table.getColumns().get(newColumn));
                                     if (newColumn == 1) {
                                         TableCell<String[], String> nextCell = (TableCell<String[], String>) table.lookup(".table-cell[column=" + newColumn + "][index=" + rowIndex + "]");
@@ -268,6 +268,8 @@ public class CustomTableCells {
                         TablePosition<String[], ?> pos = table.getFocusModel().getFocusedCell();
                         int newColumn = (pos.getColumn() + 1) % table.getColumns().size();
                         int newRow = pos.getRow();
+                        // CHANGE: Ensure single selection
+                        table.getSelectionModel().clearAndSelect(newRow);
                         table.getFocusModel().focus(newRow, table.getColumns().get(newColumn));
                         table.edit(newRow, table.getColumns().get(newColumn));
                         if (newColumn == 1) {
@@ -286,8 +288,10 @@ public class CustomTableCells {
                         e.consume();
                     } else if (e.getCode() == KeyCode.ENTER) {
                         String text = textField.getText() != null ? textField.getText() : "";
+                        int rowIndex = getTableRow().getIndex();
+                        // CHANGE: Ensure single selection
+                        table.getSelectionModel().clearAndSelect(rowIndex);
                         if (columnIndex == 0) {
-                            int rowIndex = getTableRow().getIndex();
                             if (!tableConfig.isValidTestId(text, testIds, originalValue, rowIndex, table)) {
                                 showError("Cannot commit duplicate/invalid Test ID: " + text);
                                 return;
@@ -325,8 +329,7 @@ public class CustomTableCells {
                 }
                 table.refresh();
                 int currentIndex = getTableRow().getIndex();
-                table.getSelectionModel().clearSelection();
-                table.getSelectionModel().select(currentIndex);
+                table.getSelectionModel().clearAndSelect(currentIndex);
             }
         }
 

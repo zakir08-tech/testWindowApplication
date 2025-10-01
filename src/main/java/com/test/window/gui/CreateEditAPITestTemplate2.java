@@ -13,6 +13,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
@@ -24,9 +25,9 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.Tooltip;
-import javafx.scene.control.cell.ComboBoxTableCell;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -51,7 +52,19 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 
-public class CreateEditAPITest extends Application {
+public class CreateEditAPITestTemplate2 extends Application {
+
+    private enum ColumnIndex {
+        TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
+        PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
+        MODIFY_PAYLOAD_KEY(9), MODIFY_PAYLOAD_VALUE(10), RESPONSE_KEY_NAME(11),
+        CAPTURE_VALUE(12), AUTHORIZATION(13), SSL_VALIDATION(16), EXPECTED_STATUS(17),
+        VERIFY_RESPONSE(18), TEST_DESCRIPTION(19);
+
+        private final int index;
+        ColumnIndex(int index) { this.index = index; }
+        public int getIndex() { return index; }
+    }
 
     private static final String[] COLUMN_NAMES = {
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
@@ -168,6 +181,21 @@ public class CreateEditAPITest extends Application {
             -fx-text-fill: #888888;
             -fx-opacity: 1.0;
         }
+        .combo-box {
+            -fx-background-color: #2E2E2E;
+            -fx-text-fill: white;
+            -fx-border-color: #3C3F41;
+            -fx-border-width: 1px;
+            -fx-border-radius: 5px;
+        }
+        .combo-box:focused {
+            -fx-border-color: #4A90E2;
+            -fx-border-width: 2px;
+        }
+        .combo-box .list-cell {
+            -fx-background-color: #2E2E2E;
+            -fx-text-fill: white;
+        }
         """;
 
     private static final double TEXT_FIELD_HEIGHT = 30.0;
@@ -182,6 +210,8 @@ public class CreateEditAPITest extends Application {
     private boolean isModified;
     private TextArea payloadField;
     private TextArea verifyResponseField;
+    private Button addAboveButton, addBelowButton, moveUpButton, moveDownButton, 
+                   deleteStepButton, deleteTestCaseButton, saveTestButton, createNewTestButton;
 
     private String formatJson(String input) {
         if (input == null || input.trim().isEmpty()) {
@@ -191,7 +221,7 @@ public class CreateEditAPITest extends Application {
             Object parsedJson = objectMapper.readValue(input, LinkedHashMap.class);
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsedJson);
         } catch (Exception e) {
-            System.err.println("JSON formatting error: " + e.getMessage());
+            Platform.runLater(() -> statusLabel.setText("Invalid JSON: " + e.getMessage()));
             return input;
         }
     }
@@ -273,6 +303,15 @@ public class CreateEditAPITest extends Application {
             }
             try (FileOutputStream fileOut = new FileOutputStream(file)) {
                 workbook.write(fileOut);
+            } catch (IOException ex) {
+                String message = "Failed to save file: " + ex.getMessage();
+                if (ex instanceof java.nio.file.AccessDeniedException) {
+                    message = "Permission denied while saving file: " + file.getAbsolutePath();
+                } else if (ex instanceof java.nio.file.NoSuchFileException) {
+                    message = "Invalid file path: " + file.getAbsolutePath();
+                }
+                showError(message);
+                return false;
             }
             isModified = false;
             loadedFile = file;
@@ -378,7 +417,7 @@ public class CreateEditAPITest extends Application {
                     int selectedIndex = table.getSelectionModel().getSelectedIndex();
                     if (selectedIndex >= 0) {
                         String rawText = payloadField.getText();
-                        table.getItems().get(selectedIndex)[7] = rawText;
+                        table.getItems().get(selectedIndex)[ColumnIndex.PAYLOAD.getIndex()] = rawText;
                         isModified = true;
                         table.refresh();
                         String formattedText = formatJson(rawText);
@@ -415,7 +454,7 @@ public class CreateEditAPITest extends Application {
                     int selectedIndex = table.getSelectionModel().getSelectedIndex();
                     if (selectedIndex >= 0) {
                         String rawText = verifyResponseField.getText();
-                        table.getItems().get(selectedIndex)[18] = rawText;
+                        table.getItems().get(selectedIndex)[ColumnIndex.VERIFY_RESPONSE.getIndex()] = rawText;
                         isModified = true;
                         table.refresh();
                         String formattedText = formatJson(rawText);
@@ -464,27 +503,62 @@ public class CreateEditAPITest extends Application {
                 paramFieldsVBox.getChildren().clear();
                 responseCaptureVBox.getChildren().clear();
                 TextField endpointField = (TextField) textFieldsBox.getChildren().get(0);
+                ComboBox<String> authComboBox = (ComboBox<String>) textFieldsBox.getChildren().get(1);
+                TextField authField1 = (TextField) textFieldsBox.getChildren().get(2);
+                TextField authField2 = (TextField) textFieldsBox.getChildren().get(3);
                 if (newItem != null) {
                     int selectedIndex = table.getSelectionModel().getSelectedIndex();
-                    String testId = newItem[0];
+                    String testId = newItem[ColumnIndex.TEST_ID.getIndex()];
                     Set<String> testIds = new HashSet<>();
                     for (String[] row : table.getItems()) {
-                        if (row[0] != null && !row[0].isEmpty()) {
-                            testIds.add(row[0]);
+                        if (row[ColumnIndex.TEST_ID.getIndex()] != null && !row[ColumnIndex.TEST_ID.getIndex()].isEmpty()) {
+                            testIds.add(row[ColumnIndex.TEST_ID.getIndex()]);
                         }
                     }
                     boolean isValid = isValidTestId(testId, testIds, testId, selectedIndex, table);
                     endpointField.setDisable(!isValid);
+                    authComboBox.setDisable(!isValid);
+                    authField1.setDisable(!isValid);
+                    authField2.setDisable(!isValid);
                     if (!isValid) {
                         payloadField.clear();
                         verifyResponseField.clear();
                         endpointField.clear();
+                        authComboBox.getSelectionModel().clearSelection();
+                        authField1.clear();
+                        authField2.clear();
                         return;
                     }
 
-                    endpointField.setText(newItem[2] != null ? newItem[2] : "");
+                    endpointField.setText(newItem[ColumnIndex.END_POINT.getIndex()] != null ? newItem[ColumnIndex.END_POINT.getIndex()] : "");
+                    String authData = newItem[ColumnIndex.AUTHORIZATION.getIndex()] != null ? newItem[ColumnIndex.AUTHORIZATION.getIndex()] : "";
+                    if (authData.startsWith("Basic:")) {
+                        authComboBox.setValue("Basic Auth");
+                        String[] parts = authData.split(":", 3);
+                        authField1.setText(parts.length > 1 ? parts[1] : "");
+                        authField2.setText(parts.length > 2 ? parts[2] : "");
+                        authField1.setPromptText("Username");
+                        authField2.setPromptText("Password");
+                        authField2.setDisable(false);
+                    } else if (authData.startsWith("Bearer:")) {
+                        authComboBox.setValue("Bearer Token");
+                        String[] parts = authData.split(":", 2);
+                        authField1.setText(parts.length > 1 ? parts[1] : "");
+                        authField2.setText("");
+                        authField1.setPromptText("Token");
+                        authField2.setPromptText("");
+                        authField2.setDisable(true);
+                    } else {
+                        authComboBox.setValue("");
+                        authField1.setText("");
+                        authField2.setText("");
+                        authField1.setPromptText("Username");
+                        authField2.setPromptText("Password");
+                        authField2.setDisable(false);
+                    }
+
                     int start = selectedIndex;
-                    while (start >= 0 && (table.getItems().get(start)[0] == null || table.getItems().get(start)[0].isEmpty())) {
+                    while (start >= 0 && (table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()] == null || table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
                         start--;
                     }
                     if (start < 0) start = 0;
@@ -492,13 +566,13 @@ public class CreateEditAPITest extends Application {
                     List<Integer> rowIndices = new ArrayList<>();
                     for (int i = start; i < table.getItems().size(); i++) {
                         String[] r = table.getItems().get(i);
-                        if (i > start && r[0] != null && !r[0].isEmpty()) break;
+                        if (i > start && r[ColumnIndex.TEST_ID.getIndex()] != null && !r[ColumnIndex.TEST_ID.getIndex()].isEmpty()) break;
                         rowIndices.add(i);
                     }
 
                     for (Integer rowIndex : rowIndices) {
                         String[] row = table.getItems().get(rowIndex);
-                        TextField headerKeyField = new TextField(row[3] != null ? row[3] : "");
+                        TextField headerKeyField = new TextField(row[ColumnIndex.HEADER_KEY.getIndex()] != null ? row[ColumnIndex.HEADER_KEY.getIndex()] : "");
                         headerKeyField.setPromptText("Header Key");
                         headerKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
                         headerKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -506,7 +580,7 @@ public class CreateEditAPITest extends Application {
                             headerKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                         });
 
-                        TextField headerValueField = new TextField(row[4] != null ? row[4] : "");
+                        TextField headerValueField = new TextField(row[ColumnIndex.HEADER_VALUE.getIndex()] != null ? row[ColumnIndex.HEADER_VALUE.getIndex()] : "");
                         headerValueField.setPromptText("Header Value");
                         headerValueField.setStyle(FIELD_STYLE_UNFOCUSED);
                         headerValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -524,20 +598,20 @@ public class CreateEditAPITest extends Application {
                         headerValueField.minWidthProperty().bind(headerValueField.prefWidthProperty());
 
                         headerKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[3] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.HEADER_KEY.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
 
                         headerValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[4] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.HEADER_VALUE.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
 
                         headerFieldsVBox.getChildren().add(headerPair);
 
-                        TextField modifyKeyField = new TextField(row[9] != null ? row[9] : "");
+                        TextField modifyKeyField = new TextField(row[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] != null ? row[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] : "");
                         modifyKeyField.setPromptText("Modify Payload Key");
                         modifyKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
                         modifyKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -545,7 +619,7 @@ public class CreateEditAPITest extends Application {
                             modifyKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                         });
 
-                        TextField modifyValueField = new TextField(row[10] != null ? row[10] : "");
+                        TextField modifyValueField = new TextField(row[ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex()] != null ? row[ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex()] : "");
                         modifyValueField.setPromptText("Modify Payload Value");
                         modifyValueField.setStyle(FIELD_STYLE_UNFOCUSED);
                         modifyValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -563,20 +637,20 @@ public class CreateEditAPITest extends Application {
                         modifyValueField.minWidthProperty().bind(modifyValueField.prefWidthProperty());
 
                         modifyKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[9] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
 
                         modifyValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[10] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
 
                         modifyPayloadVBox.getChildren().add(modifyPair);
 
-                        TextField paramKeyField = new TextField(row[5] != null ? row[5] : "");
+                        TextField paramKeyField = new TextField(row[ColumnIndex.PARAM_KEY.getIndex()] != null ? row[ColumnIndex.PARAM_KEY.getIndex()] : "");
                         paramKeyField.setPromptText("Parameter Key");
                         paramKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
                         paramKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -584,7 +658,7 @@ public class CreateEditAPITest extends Application {
                             paramKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                         });
 
-                        TextField paramValueField = new TextField(row[6] != null ? row[6] : "");
+                        TextField paramValueField = new TextField(row[ColumnIndex.PARAM_VALUE.getIndex()] != null ? row[ColumnIndex.PARAM_VALUE.getIndex()] : "");
                         paramValueField.setPromptText("Parameter Value");
                         paramValueField.setStyle(FIELD_STYLE_UNFOCUSED);
                         paramValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -602,20 +676,20 @@ public class CreateEditAPITest extends Application {
                         paramValueField.minWidthProperty().bind(paramValueField.prefWidthProperty());
 
                         paramKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[5] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.PARAM_KEY.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
 
                         paramValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[6] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.PARAM_VALUE.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
 
                         paramFieldsVBox.getChildren().add(paramPair);
 
-                        TextField responseKeyField = new TextField(row[11] != null ? row[11] : "");
+                        TextField responseKeyField = new TextField(row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] != null ? row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] : "");
                         responseKeyField.setPromptText("Response Key Name");
                         responseKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
                         responseKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -623,7 +697,7 @@ public class CreateEditAPITest extends Application {
                             responseKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                         });
 
-                        TextField captureValueField = new TextField(row[12] != null ? row[12] : "");
+                        TextField captureValueField = new TextField(row[ColumnIndex.CAPTURE_VALUE.getIndex()] != null ? row[ColumnIndex.CAPTURE_VALUE.getIndex()] : "");
                         captureValueField.setPromptText("Capture Value (env var)");
                         captureValueField.setStyle(FIELD_STYLE_UNFOCUSED);
                         captureValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -641,13 +715,13 @@ public class CreateEditAPITest extends Application {
                         captureValueField.minWidthProperty().bind(captureValueField.prefWidthProperty());
 
                         responseKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[11] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
 
                         captureValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                            table.getItems().get(rowIndex)[12] = newVal2.trim();
+                            table.getItems().get(rowIndex)[ColumnIndex.CAPTURE_VALUE.getIndex()] = newVal2.trim();
                             isModified = true;
                             table.refresh();
                         });
@@ -655,22 +729,28 @@ public class CreateEditAPITest extends Application {
                         responseCaptureVBox.getChildren().add(responsePair);
                     }
 
-                    String payload = newItem[7] != null ? newItem[7] : "";
+                    String payload = newItem[ColumnIndex.PAYLOAD.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD.getIndex()] : "";
                     payloadField.setText(formatJson(payload));
-                    String verify = newItem[18] != null ? newItem[18] : "";
+                    String verify = newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] != null ? newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] : "";
                     verifyResponseField.setText(formatJson(verify));
                 } else {
                     payloadField.clear();
                     verifyResponseField.clear();
                     endpointField.clear();
+                    authComboBox.getSelectionModel().clearSelection();
+                    authField1.clear();
+                    authField2.clear();
                     endpointField.setDisable(true);
+                    authComboBox.setDisable(true);
+                    authField1.setDisable(true);
+                    authField2.setDisable(true);
                 }
             });
 
             payloadField.textProperty().addListener((obs, oldVal, newVal) -> {
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0) {
-                    table.getItems().get(selectedIndex)[7] = newVal;
+                    table.getItems().get(selectedIndex)[ColumnIndex.PAYLOAD.getIndex()] = newVal;
                     isModified = true;
                     table.refresh();
                     String formattedText = formatJson(newVal);
@@ -683,7 +763,7 @@ public class CreateEditAPITest extends Application {
             verifyResponseField.textProperty().addListener((obs, oldVal, newVal) -> {
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0) {
-                    table.getItems().get(selectedIndex)[18] = newVal;
+                    table.getItems().get(selectedIndex)[ColumnIndex.VERIFY_RESPONSE.getIndex()] = newVal;
                     isModified = true;
                     table.refresh();
                     String formattedText = formatJson(newVal);
@@ -702,7 +782,6 @@ public class CreateEditAPITest extends Application {
             mainLayout.setAlignment(Pos.TOP_CENTER);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
-            // Update button states after mainLayout is initialized
             updateButtonStates(table);
 
             Scene scene = new Scene(mainLayout);
@@ -714,7 +793,6 @@ public class CreateEditAPITest extends Application {
             primaryStage.setTitle("Table with JSON Viewer");
             primaryStage.show();
 
-            // Fallback CSS loading if inline fails
             scene.getStylesheets().addListener((javafx.collections.ListChangeListener<String>) change -> {
                 if (scene.getStylesheets().isEmpty()) {
                     System.err.println("CSS loading failed, falling back to default style.");
@@ -744,60 +822,65 @@ public class CreateEditAPITest extends Application {
             final int index = i;
             TableColumn<String[], String> column = new TableColumn<>(COLUMN_NAMES[i]);
             column.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue()[index]));
-            if (index == 1) {
-                column.setCellFactory(col -> new CustomComboBoxTableCell(table, REQUEST_OPTIONS));
-            } else if (index == 8) {
-                column.setCellFactory(col -> new CustomComboBoxTableCell(table, PAYLOAD_TYPE_OPTIONS));
-            } else if (index == 13) {
-                column.setCellFactory(col -> new CustomComboBoxTableCell(table, AUTH_OPTIONS));
+            if (index == ColumnIndex.REQUEST.getIndex()) {
+                column.setCellFactory(col -> new CustomComboBoxTableCell(table, index, REQUEST_OPTIONS));
+                column.setGraphic(new Label(COLUMN_NAMES[i]) {{
+                    setTooltip(new Tooltip("Double-click to select a request type"));
+                }});
             } else {
                 column.setCellFactory(col -> new CustomTextFieldTableCell(table, index, statusLabel));
             }
             double charWidth = 7.0;
             double minWidth = COLUMN_NAMES[i].length() * charWidth + 20;
             column.setMinWidth(minWidth);
-            column.setPrefWidth(index == 0 ? 24 : 90);
+            column.setPrefWidth(index == ColumnIndex.TEST_ID.getIndex() ? 50 : 100);
             column.setStyle("-fx-text-fill: white;");
             column.setOnEditCommit(event -> {
                 String newValue = event.getNewValue();
                 int colIndex = event.getTablePosition().getColumn();
                 int rowIndex = event.getTablePosition().getRow();
-                if (colIndex == 17 && !newValue.matches("\\d+|^$")) {
+                if (colIndex == ColumnIndex.EXPECTED_STATUS.getIndex() && !newValue.matches("\\d+|^$")) {
                     statusLabel.setText("Status must be a number");
                     return;
                 }
                 statusLabel.setText("");
                 event.getTableView().getItems().get(rowIndex)[colIndex] = newValue;
                 isModified = true;
-                if (colIndex == 7 && rowIndex == table.getSelectionModel().getSelectedIndex()) {
+                if (colIndex == ColumnIndex.PAYLOAD.getIndex() && rowIndex == table.getSelectionModel().getSelectedIndex()) {
                     if (payloadField != null) {
                         payloadField.setText(formatJson(newValue));
                     }
                     table.refresh();
                 }
-                if (colIndex == 18 && rowIndex == table.getSelectionModel().getSelectedIndex()) {
+                if (colIndex == ColumnIndex.VERIFY_RESPONSE.getIndex() && rowIndex == table.getSelectionModel().getSelectedIndex()) {
                     if (verifyResponseField != null) {
                         verifyResponseField.setText(formatJson(newValue));
                     }
                     table.refresh();
                 }
-                if (colIndex == 0 && rowIndex == table.getSelectionModel().getSelectedIndex()) {
+                if (colIndex == ColumnIndex.TEST_ID.getIndex() && rowIndex == table.getSelectionModel().getSelectedIndex()) {
                     HBox textFieldsBox = (HBox) mainLayout.getChildren().get(1);
                     TextField endpointField = (TextField) textFieldsBox.getChildren().get(0);
+                    ComboBox<String> authComboBox = (ComboBox<String>) textFieldsBox.getChildren().get(1);
+                    TextField authField1 = (TextField) textFieldsBox.getChildren().get(2);
+                    TextField authField2 = (TextField) textFieldsBox.getChildren().get(3);
                     Set<String> testIds = new HashSet<>();
                     for (String[] row : table.getItems()) {
-                        if (row[0] != null && !row[0].isEmpty()) {
-                            testIds.add(row[0]);
+                        if (row[ColumnIndex.TEST_ID.getIndex()] != null && !row[ColumnIndex.TEST_ID.getIndex()].isEmpty()) {
+                            testIds.add(row[ColumnIndex.TEST_ID.getIndex()]);
                         }
                     }
                     boolean isValid = isValidTestId(newValue, testIds, newValue, rowIndex, table);
                     endpointField.setDisable(!isValid);
+                    authComboBox.setDisable(!isValid);
+                    authField1.setDisable(!isValid);
+                    authField2.setDisable(!isValid);
                 }
             });
             table.getColumns().add(column);
         }
 
-        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         table.setRowFactory(tv -> new TableRow<String[]>() {
             @Override
@@ -833,6 +916,16 @@ public class CreateEditAPITest extends Application {
             updateButtonStates(table);
         });
 
+        table.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2 && event.getButton() == MouseButton.PRIMARY && !table.getSelectionModel().isEmpty()) {
+                TablePosition<String[], ?> pos = table.getFocusModel().getFocusedCell();
+                if (pos != null && pos.getColumn() == ColumnIndex.REQUEST.getIndex() && table.getColumns().get(ColumnIndex.REQUEST.getIndex()).isEditable()) {
+                    table.edit(pos.getRow(), table.getColumns().get(ColumnIndex.REQUEST.getIndex()));
+                    event.consume();
+                }
+            }
+        });
+
         return table;
     }
 
@@ -850,13 +943,19 @@ public class CreateEditAPITest extends Application {
             table.refresh();
             HBox textFieldsBox = (HBox) mainLayout.getChildren().get(1);
             TextField endpointField = (TextField) textFieldsBox.getChildren().get(0);
+            ComboBox<String> authComboBox = (ComboBox<String>) textFieldsBox.getChildren().get(1);
+            TextField authField1 = (TextField) textFieldsBox.getChildren().get(2);
+            TextField authField2 = (TextField) textFieldsBox.getChildren().get(3);
             endpointField.setDisable(true);
+            authComboBox.setDisable(true);
+            authField1.setDisable(true);
+            authField2.setDisable(true);
             updateButtonStates(table);
         });
         addStepButton.setOnMouseEntered(e -> addStepButton.setStyle(BUTTON_HOVER_STYLE));
         addStepButton.setOnMouseExited(e -> addStepButton.setStyle(BUTTON_STYLE));
 
-        Button addAboveButton = new Button("Add Above");
+        addAboveButton = new Button("Add Above");
         addAboveButton.setStyle(BUTTON_STYLE);
         addAboveButton.setTooltip(new Tooltip("Add a new step above the selected row"));
         addAboveButton.setOnAction(e -> {
@@ -867,14 +966,20 @@ public class CreateEditAPITest extends Application {
                 table.refresh();
                 HBox textFieldsBox = (HBox) mainLayout.getChildren().get(1);
                 TextField endpointField = (TextField) textFieldsBox.getChildren().get(0);
+                ComboBox<String> authComboBox = (ComboBox<String>) textFieldsBox.getChildren().get(1);
+                TextField authField1 = (TextField) textFieldsBox.getChildren().get(2);
+                TextField authField2 = (TextField) textFieldsBox.getChildren().get(3);
                 endpointField.setDisable(true);
+                authComboBox.setDisable(true);
+                authField1.setDisable(true);
+                authField2.setDisable(true);
             }
             updateButtonStates(table);
         });
         addAboveButton.setOnMouseEntered(e -> addAboveButton.setStyle(BUTTON_HOVER_STYLE));
         addAboveButton.setOnMouseExited(e -> addAboveButton.setStyle(BUTTON_STYLE));
 
-        Button addBelowButton = new Button("Add Below");
+        addBelowButton = new Button("Add Below");
         addBelowButton.setStyle(BUTTON_STYLE);
         addBelowButton.setTooltip(new Tooltip("Add a new step below the selected row"));
         addBelowButton.setOnAction(e -> {
@@ -885,14 +990,20 @@ public class CreateEditAPITest extends Application {
                 table.refresh();
                 HBox textFieldsBox = (HBox) mainLayout.getChildren().get(1);
                 TextField endpointField = (TextField) textFieldsBox.getChildren().get(0);
+                ComboBox<String> authComboBox = (ComboBox<String>) textFieldsBox.getChildren().get(1);
+                TextField authField1 = (TextField) textFieldsBox.getChildren().get(2);
+                TextField authField2 = (TextField) textFieldsBox.getChildren().get(3);
                 endpointField.setDisable(true);
+                authComboBox.setDisable(true);
+                authField1.setDisable(true);
+                authField2.setDisable(true);
             }
             updateButtonStates(table);
         });
         addBelowButton.setOnMouseEntered(e -> addBelowButton.setStyle(BUTTON_HOVER_STYLE));
         addBelowButton.setOnMouseExited(e -> addBelowButton.setStyle(BUTTON_STYLE));
 
-        Button moveUpButton = new Button("Move Up");
+        moveUpButton = new Button("Move Up");
         moveUpButton.setStyle(BUTTON_STYLE);
         moveUpButton.setTooltip(new Tooltip("Move the selected step up"));
         moveUpButton.setOnAction(e -> {
@@ -910,7 +1021,7 @@ public class CreateEditAPITest extends Application {
         moveUpButton.setOnMouseEntered(e -> moveUpButton.setStyle(BUTTON_HOVER_STYLE));
         moveUpButton.setOnMouseExited(e -> moveUpButton.setStyle(BUTTON_STYLE));
 
-        Button moveDownButton = new Button("Move Down");
+        moveDownButton = new Button("Move Down");
         moveDownButton.setStyle(BUTTON_STYLE);
         moveDownButton.setTooltip(new Tooltip("Move the selected step down"));
         moveDownButton.setOnAction(e -> {
@@ -928,14 +1039,14 @@ public class CreateEditAPITest extends Application {
         moveDownButton.setOnMouseEntered(e -> moveDownButton.setStyle(BUTTON_HOVER_STYLE));
         moveDownButton.setOnMouseExited(e -> moveDownButton.setStyle(BUTTON_STYLE));
 
-        Button deleteStepButton = new Button("Delete Step");
+        deleteStepButton = new Button("Delete Step");
         deleteStepButton.setStyle(BUTTON_STYLE);
         deleteStepButton.setTooltip(new Tooltip("Delete the selected step"));
         deleteStepButton.setOnAction(e -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
                 String[] selectedRow = table.getItems().get(selectedIndex);
-                String testId = selectedRow[0];
+                String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
                 if (testId != null && !testId.isEmpty()) {
                     Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
                     confirmation.setTitle("Confirm Delete");
@@ -956,14 +1067,14 @@ public class CreateEditAPITest extends Application {
         deleteStepButton.setOnMouseEntered(e -> deleteStepButton.setStyle(BUTTON_HOVER_STYLE));
         deleteStepButton.setOnMouseExited(e -> deleteStepButton.setStyle(BUTTON_STYLE));
 
-        Button deleteTestCaseButton = new Button("Delete Test Case");
+        deleteTestCaseButton = new Button("Delete Test Case");
         deleteTestCaseButton.setStyle(BUTTON_STYLE);
         deleteTestCaseButton.setTooltip(new Tooltip("Delete all steps for the selected test case"));
         deleteTestCaseButton.setOnAction(e -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
                 String[] selectedRow = table.getItems().get(selectedIndex);
-                String testId = selectedRow[0];
+                String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
                 if (testId == null || testId.isEmpty()) {
                     showError("Please select a row with a valid Test ID to delete the test case.");
                     return;
@@ -976,11 +1087,11 @@ public class CreateEditAPITest extends Application {
                 Optional<ButtonType> result = confirmation.showAndWait();
                 if (result.isPresent() && result.get() == ButtonType.OK) {
                     int startIndex = selectedIndex;
-                    while (startIndex > 0 && (table.getItems().get(startIndex - 1)[0] == null || table.getItems().get(startIndex - 1)[0].isEmpty())) {
+                    while (startIndex > 0 && (table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()] == null || table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
                         startIndex--;
                     }
                     int endIndex = startIndex;
-                    while (endIndex < table.getItems().size() && (table.getItems().get(endIndex)[0] == null || table.getItems().get(endIndex)[0].isEmpty() || table.getItems().get(endIndex)[0].equals(testId))) {
+                    while (endIndex < table.getItems().size() && (table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()] == null || table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].isEmpty() || table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].equals(testId))) {
                         endIndex++;
                     }
                     if (endIndex > startIndex) {
@@ -1002,7 +1113,7 @@ public class CreateEditAPITest extends Application {
         deleteTestCaseButton.setOnMouseEntered(e -> deleteTestCaseButton.setStyle(BUTTON_HOVER_STYLE));
         deleteTestCaseButton.setOnMouseExited(e -> deleteTestCaseButton.setStyle(BUTTON_STYLE));
 
-        Button saveTestButton = new Button("Save Test");
+        saveTestButton = new Button("Save Test");
         saveTestButton.setStyle(BUTTON_STYLE);
         saveTestButton.setTooltip(new Tooltip("Save the test case to an Excel file"));
         saveTestButton.setOnAction(e -> {
@@ -1098,7 +1209,7 @@ public class CreateEditAPITest extends Application {
         loadTestButton.setOnMouseEntered(e -> loadTestButton.setStyle(BUTTON_HOVER_STYLE));
         loadTestButton.setOnMouseExited(e -> loadTestButton.setStyle(BUTTON_STYLE));
 
-        Button createNewTestButton = new Button("Create New Test");
+        createNewTestButton = new Button("Create New Test");
         createNewTestButton.setStyle(BUTTON_STYLE);
         createNewTestButton.setTooltip(new Tooltip("Start a new test case"));
         createNewTestButton.setOnAction(e -> {
@@ -1109,7 +1220,13 @@ public class CreateEditAPITest extends Application {
             table.refresh();
             HBox textFieldsBox = (HBox) mainLayout.getChildren().get(1);
             TextField endpointField = (TextField) textFieldsBox.getChildren().get(0);
+            ComboBox<String> authComboBox = (ComboBox<String>) textFieldsBox.getChildren().get(1);
+            TextField authField1 = (TextField) textFieldsBox.getChildren().get(2);
+            TextField authField2 = (TextField) textFieldsBox.getChildren().get(3);
             endpointField.setDisable(true);
+            authComboBox.setDisable(true);
+            authField1.setDisable(true);
+            authField2.setDisable(true);
             isModified = false;
             loadedFile = null;
             updateButtonStates(table);
@@ -1121,9 +1238,9 @@ public class CreateEditAPITest extends Application {
         addEditEnvVarButton.setStyle(BUTTON_STYLE);
         addEditEnvVarButton.setTooltip(new Tooltip("Add or edit environment variables"));
         addEditEnvVarButton.setOnAction(e -> {
-            Stage envVarStage = new Stage();
-            EnvVarList simpleTableWindow = new EnvVarList();
             try {
+                Stage envVarStage = new Stage();
+                EnvVarList simpleTableWindow = new EnvVarList();
                 simpleTableWindow.start(envVarStage);
             } catch (Exception ex) {
                 showError("Failed to open environment variables window: " + ex.getMessage());
@@ -1148,15 +1265,6 @@ public class CreateEditAPITest extends Application {
         int selectedIndex = table.getSelectionModel().getSelectedIndex();
         int lastIndex = table.getItems().size() - 1;
 
-        Button addAboveButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(1);
-        Button addBelowButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(2);
-        Button moveUpButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(3);
-        Button moveDownButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(4);
-        Button deleteStepButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(5);
-        Button deleteTestCaseButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(6);
-        Button saveTestButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(7);
-        Button createNewTestButton = (Button) ((VBox) ((HBox) mainLayout.getChildren().get(0)).getChildren().get(1)).getChildren().get(9);
-
         addAboveButton.setDisable(isTableEmpty);
         addBelowButton.setDisable(isTableEmpty);
         moveUpButton.setDisable(isTableEmpty || selectedIndex <= 0);
@@ -1176,7 +1284,6 @@ public class CreateEditAPITest extends Application {
             endpointField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
         endpointField.setDisable(true);
-        // Set endpointField width to match the first two columns of additionalFields (26.73% + 26.73% = 53.46%)
         endpointField.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.5346));
         endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
         endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
@@ -1184,7 +1291,100 @@ public class CreateEditAPITest extends Application {
         endpointField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[2] = newVal;
+                table.getItems().get(selectedIndex)[ColumnIndex.END_POINT.getIndex()] = newVal;
+                isModified = true;
+                table.refresh();
+            }
+        });
+
+        ComboBox<String> authComboBox = new ComboBox<>(AUTH_OPTIONS);
+        authComboBox.setPromptText("Authorization");
+        authComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
+        authComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+        authComboBox.setDisable(true);
+        authComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            authComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        authComboBox.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.15));
+        authComboBox.maxWidthProperty().bind(authComboBox.prefWidthProperty());
+        authComboBox.minWidthProperty().bind(authComboBox.prefWidthProperty());
+
+        TextField authField1 = new TextField();
+        authField1.setPromptText("Username");
+        authField1.setStyle(FIELD_STYLE_UNFOCUSED);
+        authField1.setPrefHeight(TEXT_FIELD_HEIGHT);
+        authField1.setDisable(true);
+        authField1.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            authField1.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        authField1.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.15));
+        authField1.maxWidthProperty().bind(authField1.prefWidthProperty());
+        authField1.minWidthProperty().bind(authField1.prefWidthProperty());
+
+        TextField authField2 = new TextField();
+        authField2.setPromptText("Password");
+        authField2.setStyle(FIELD_STYLE_UNFOCUSED);
+        authField2.setPrefHeight(TEXT_FIELD_HEIGHT);
+        authField2.setDisable(true);
+        authField2.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            authField2.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        authField2.prefWidthProperty().bind(additionalFields.widthProperty().multiply(0.15));
+        authField2.maxWidthProperty().bind(authField2.prefWidthProperty());
+        authField2.minWidthProperty().bind(authField2.prefWidthProperty());
+
+        authComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                if ("Basic Auth".equals(newVal)) {
+                    authField1.setPromptText("Username");
+                    authField2.setPromptText("Password");
+                    authField2.setDisable(false);
+                } else if ("Bearer Token".equals(newVal)) {
+                    authField1.setPromptText("Token");
+                    authField2.setPromptText("");
+                    authField2.setText("");
+                    authField2.setDisable(true);
+                } else {
+                    authField1.setPromptText("Username");
+                    authField2.setPromptText("Password");
+                    authField1.setText("");
+                    authField2.setText("");
+                    authField2.setDisable(false);
+                }
+                String authData = "";
+                if ("Basic Auth".equals(newVal)) {
+                    authData = "Basic:" + authField1.getText() + ":" + authField2.getText();
+                } else if ("Bearer Token".equals(newVal)) {
+                    authData = "Bearer:" + authField1.getText();
+                }
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTHORIZATION.getIndex()] = authData;
+                isModified = true;
+                table.refresh();
+            }
+        });
+
+        authField1.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                String authType = authComboBox.getValue();
+                String authData = "";
+                if ("Basic Auth".equals(authType)) {
+                    authData = "Basic:" + newVal + ":" + authField2.getText();
+                } else if ("Bearer Token".equals(authType)) {
+                    authData = "Bearer:" + newVal;
+                }
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTHORIZATION.getIndex()] = authData;
+                isModified = true;
+                table.refresh();
+            }
+        });
+
+        authField2.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && "Basic Auth".equals(authComboBox.getValue())) {
+                String authData = "Basic:" + authField1.getText() + ":" + newVal;
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTHORIZATION.getIndex()] = authData;
                 isModified = true;
                 table.refresh();
             }
@@ -1195,9 +1395,12 @@ public class CreateEditAPITest extends Application {
         statusLabel.setWrapText(true);
         HBox.setHgrow(statusLabel, Priority.ALWAYS);
 
-        HBox textFieldsBox = new HBox(10, endpointField, statusLabel);
+        HBox textFieldsBox = new HBox(10, endpointField, authComboBox, authField1, authField2, statusLabel);
         textFieldsBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         HBox.setHgrow(endpointField, Priority.NEVER);
+        HBox.setHgrow(authComboBox, Priority.NEVER);
+        HBox.setHgrow(authField1, Priority.NEVER);
+        HBox.setHgrow(authField2, Priority.NEVER);
         return textFieldsBox;
     }
 
@@ -1222,71 +1425,120 @@ public class CreateEditAPITest extends Application {
         alert.showAndWait();
     }
 
-    private class CustomComboBoxTableCell extends ComboBoxTableCell<String[], String> {
-        public CustomComboBoxTableCell(TableView<String[]> table, ObservableList<String> items) {
-            super(new StringConverter<String>() {
-                @Override
-                public String toString(String object) {
-                    return object == null ? "" : object;
-                }
-                @Override
-                public String fromString(String string) {
-                    return string;
-                }
-            }, items);
+    private class CustomComboBoxTableCell extends TableCell<String[], String> {
+        private final ComboBox<String> comboBox;
+        private final TableView<String[]> table;
+        private final int columnIndex;
 
-            setOnMouseClicked(event -> {
-                if (event.getClickCount() == 1 && !isEditing() && !isEmpty()) {
-                    startEdit();
-                    if (getGraphic() instanceof ComboBox) {
-                        @SuppressWarnings("unchecked")
-                        ComboBox<String> comboBox = (ComboBox<String>) getGraphic();
-                        Platform.runLater(() -> {
-                            comboBox.show();
-                            comboBox.requestFocus();
-                        });
+        public CustomComboBoxTableCell(TableView<String[]> table, int columnIndex, ObservableList<String> items) {
+            this.table = table;
+            this.columnIndex = columnIndex;
+            this.comboBox = new ComboBox<>(items);
+            comboBox.setStyle(FIELD_STYLE_UNFOCUSED);
+            comboBox.setPrefHeight(26);
+            comboBox.setMaxHeight(26);
+            comboBox.setMinHeight(26);
+            comboBox.setEditable(false);
+
+            comboBox.setCellFactory(listView -> new ListCell<String>() {
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty || item == null) {
+                        setText(null);
+                        setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
+                    } else {
+                        setText(item);
+                        setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
+                        if (comboBox.getValue() != null && comboBox.getValue().equals(item)) {
+                            setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white;");
+                        }
                     }
                 }
             });
 
-            setOnKeyPressed(event -> {
-                if (event.getCode() == KeyCode.ENTER && !isEditing() && !isEmpty()) {
-                    startEdit();
-                    if (getGraphic() instanceof ComboBox) {
-                        @SuppressWarnings("unchecked")
-                        ComboBox<String> comboBox = (ComboBox<String>) getGraphic();
-                        Platform.runLater(() -> {
-                            comboBox.show();
-                            comboBox.requestFocus();
-                        });
+            comboBox.valueProperty().addListener((obs, oldValue, newValue) -> {
+                if (isEditing() && newValue != null) {
+                    commitEdit(newValue);
+                }
+            });
+
+            comboBox.setOnKeyPressed(event -> {
+                if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE) {
+                    commitEdit(comboBox.getValue());
+                    event.consume();
+                } else if (event.getCode() == KeyCode.TAB) {
+                    commitEdit(comboBox.getValue());
+                    int rowIndex = getTableRow().getIndex();
+                    int nextColumnIndex = (columnIndex + 1) % table.getColumns().size();
+                    table.getFocusModel().focus(rowIndex, table.getColumns().get(nextColumnIndex));
+                    table.getSelectionModel().select(rowIndex, table.getColumns().get(nextColumnIndex));
+                    if (table.getColumns().get(nextColumnIndex).isEditable()) {
+                        table.edit(rowIndex, table.getColumns().get(nextColumnIndex));
                     }
+                    event.consume();
+                } else if (event.getCode() == KeyCode.ESCAPE) {
+                    cancelEdit();
+                    event.consume();
                 }
             });
         }
 
         @Override
         public void startEdit() {
-            if (!isEmpty()) {
-                super.startEdit();
-                if (getGraphic() instanceof ComboBox) {
-                    @SuppressWarnings("unchecked")
-                    ComboBox<String> comboBox = (ComboBox<String>) getGraphic();
-                    Platform.runLater(() -> {
-                        comboBox.show();
-                        comboBox.requestFocus();
-                    });
-                }
+            if (!isEditable() || !getTableView().isEditable() || !getTableColumn().isEditable()) {
+                return;
+            }
+            super.startEdit();
+            comboBox.setValue(getItem());
+            setText(null);
+            setGraphic(comboBox);
+            comboBox.requestFocus();
+            if (!comboBox.isShowing()) {
+                comboBox.show();
             }
         }
 
         @Override
         public void cancelEdit() {
             super.cancelEdit();
-            setText(getItem() != null ? getItem() : "");
+            setText(getItem());
             setGraphic(null);
         }
-    }
 
+        @Override
+        public void commitEdit(String newValue) {
+            super.commitEdit(newValue);
+            setText(newValue);
+            setGraphic(null);
+            table.getItems().get(getTableRow().getIndex())[columnIndex] = newValue;
+            isModified = true;
+            table.refresh();
+            int rowIndex = getTableRow().getIndex();
+            TablePosition<String[], ?> pos = new TablePosition<>(table, rowIndex, getTableColumn());
+            table.getFocusModel().focus(pos);
+            table.getSelectionModel().select(rowIndex, getTableColumn());
+        }
+
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty) {
+                setText(null);
+                setGraphic(null);
+            } else {
+                if (isEditing()) {
+                    comboBox.setValue(item);
+                    setGraphic(comboBox);
+                    setText(null);
+                } else {
+                    setText(item != null ? item : "");
+                    setGraphic(null);
+                }
+            }
+        }
+    }
+    
     private class CustomTextFieldTableCell extends TextFieldTableCell<String[], String> {
         private final TableView<String[]> table;
         private final int columnIndex;

@@ -118,6 +118,7 @@ public class EnvVarList extends Application {
         .enable(SerializationFeature.INDENT_OUTPUT);
 
     private Label statusLabel;
+    private TableView<String[]> table;
 
     private boolean isValidEnvName(String name, Set<String> nameSet, String currentId, int rowIndex, TableView<String[]> table) {
         if (name == null || name.isEmpty()) {
@@ -132,9 +133,66 @@ public class EnvVarList extends Application {
         return true;
     }
 
+    private void stopEditing() {
+        if (table.getEditingCell() != null) {
+            TablePosition<String[], ?> editingCell = table.getEditingCell();
+            TableCell<String[], String> cell = getTableCellAt(editingCell.getRow(), editingCell.getColumn());
+            if (cell instanceof CustomTextFieldTableCell) {
+                CustomTextFieldTableCell customCell = (CustomTextFieldTableCell) cell;
+                if (customCell.getGraphic() instanceof javafx.scene.control.TextField) {
+                    String text = ((javafx.scene.control.TextField) customCell.getGraphic()).getText();
+                    if (customCell.columnIndex == 0 && !text.isEmpty()) {
+                        if (isValidEnvName(text, customCell.nameSet, customCell.originalValue, editingCell.getRow(), table)) {
+                            customCell.commitEdit(text);
+                        } else {
+                            customCell.cancelEdit();
+                        }
+                    } else {
+                        customCell.commitEdit(text);
+                    }
+                }
+            }
+        }
+    }
+
+    private TableCell<String[], String> getTableCellAt(int rowIndex, int columnIndex) {
+        for (Node node : table.lookupAll(".table-cell")) {
+            if (node instanceof TableCell) {
+                TableCell<?, ?> cell = (TableCell<?, ?>) node;
+                if (cell.getTableRow() != null && cell.getTableRow().getIndex() == rowIndex && cell.getTableColumn() == table.getColumns().get(columnIndex)) {
+                    return (TableCell<String[], String>) cell;
+                }
+            }
+        }
+        return null;
+    }
+
+    private void reloadEnvJson() {
+        try {
+            File file = new File("env.json");
+            if (file.exists()) {
+                table.getItems().clear(); // Clear existing items
+                Map<String, String> envMap = objectMapper.readValue(file, new TypeReference<LinkedHashMap<String, String>>() {});
+                for (Map.Entry<String, String> entry : envMap.entrySet()) {
+                    table.getItems().add(new String[]{entry.getKey(), entry.getValue()});
+                }
+                // Activate first row if table is not empty
+                if (!table.getItems().isEmpty()) {
+                    Platform.runLater(() -> {
+                        table.getSelectionModel().select(0);
+                        table.getFocusModel().focus(0);
+                        table.scrollTo(0);
+                    });
+                }
+            }
+        } catch (Exception ex) {
+            System.err.println("Failed to load env.json: " + ex.getMessage());
+        }
+    }
+
     @Override
     public void start(Stage primaryStage) {
-        TableView<String[]> table = createTable();
+        table = createTable();
 
         statusLabel = new Label();
         statusLabel.setStyle("-fx-text-fill: #FF5555;");
@@ -142,11 +200,12 @@ public class EnvVarList extends Application {
 
         HBox buttonsHBox = new HBox(10);
         buttonsHBox.setAlignment(Pos.CENTER);
-        buttonsHBox.setStyle("-fx-padding: 10px 10px 20px 10px;");
+        buttonsHBox.setStyle("-fx-padding: 10px;");
 
         Button addButton = new Button("Add");
         addButton.setStyle(BUTTON_STYLE);
         addButton.setOnAction(e -> {
+            stopEditing();
             table.getItems().add(new String[2]);
             int newIndex = table.getItems().size() - 1;
             table.getSelectionModel().select(newIndex);
@@ -159,6 +218,7 @@ public class EnvVarList extends Application {
         Button deleteButton = new Button("Delete");
         deleteButton.setStyle(BUTTON_STYLE);
         deleteButton.setOnAction(e -> {
+            stopEditing();
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
                 table.getItems().remove(selectedIndex);
@@ -177,6 +237,7 @@ public class EnvVarList extends Application {
         Button saveButton = new Button("Save");
         saveButton.setStyle(BUTTON_STYLE);
         saveButton.setOnAction(e -> {
+            stopEditing();
             Map<String, String> envMap = new LinkedHashMap<>();
             for (String[] row : table.getItems()) {
                 String name = row[0] != null ? row[0].trim() : "";
@@ -186,7 +247,7 @@ public class EnvVarList extends Application {
                 }
             }
             try {
-                String resourcePath = "src/main/resources/env.json";
+                String resourcePath = "env.json";
                 File outputFile = new File(resourcePath);
                 File parentDir = outputFile.getParentFile();
                 if (parentDir != null && !parentDir.exists()) {
@@ -209,35 +270,28 @@ public class EnvVarList extends Application {
 
         buttonsHBox.getChildren().addAll(addButton, deleteButton, saveButton);
 
-        // Load from env.json
-        try {
-            File file = new File("src/main/resources/env.json");
-            if (file.exists()) {
-                Map<String, String> envMap = objectMapper.readValue(file, new TypeReference<LinkedHashMap<String, String>>() {});
-                for (Map.Entry<String, String> entry : envMap.entrySet()) {
-                    table.getItems().add(new String[]{entry.getKey(), entry.getValue()});
-                }
-            }
-        } catch (Exception ex) {
-            System.err.println("Failed to load env.json: " + ex.getMessage());
-        }
+        // Load from env.json on startup
+        reloadEnvJson();
 
-        if (!table.getItems().isEmpty()) {
-            table.getSelectionModel().select(0);
-        }
+        // Reload env.json when window gains focus
+        primaryStage.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+            if (isNowFocused) {
+                reloadEnvJson();
+            }
+        });
 
         table.getSelectionModel().selectedIndexProperty().addListener((obs, oldVal, newVal) -> {
             deleteButton.setDisable(newVal.intValue() < 0);
         });
 
-        VBox tableLayout = new VBox(10, table, statusLabel);
+        VBox tableLayout = new VBox(0, table, statusLabel);
         tableLayout.setAlignment(Pos.TOP_CENTER);
-        tableLayout.setStyle("-fx-padding: 10px 10px 0px 10px;");
+        tableLayout.setStyle("-fx-padding: 0;");
 
         BorderPane mainLayout = new BorderPane();
         mainLayout.setCenter(tableLayout);
         mainLayout.setBottom(buttonsHBox);
-        mainLayout.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 10px; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
+        mainLayout.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 0; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
 
         Scene scene = new Scene(mainLayout);
         scene.getStylesheets().add("data:text/css," + CSS.replaceAll("\n", "%0A"));
@@ -250,7 +304,8 @@ public class EnvVarList extends Application {
         primaryStage.setResizable(false);
         primaryStage.centerOnScreen();
 
-        table.prefHeightProperty().bind(mainLayout.heightProperty().subtract(buttonsHBox.heightProperty()).subtract(50).multiply(1.1));
+        table.prefWidthProperty().bind(mainLayout.widthProperty());
+        table.prefHeightProperty().bind(mainLayout.heightProperty().subtract(buttonsHBox.heightProperty()));
 
         primaryStage.setScene(scene);
         primaryStage.setTitle("Environment Variables");
@@ -261,7 +316,6 @@ public class EnvVarList extends Application {
         TableView<String[]> table = new TableView<>();
         table.setEditable(true);
         table.setStyle("-fx-background-color: #2E2E2E; -fx-table-cell-border-color: transparent; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
-        table.setPrefWidth(300);
 
         Label placeholderLabel = new Label("No environment variables defined");
         placeholderLabel.setStyle("-fx-text-fill: white;");
@@ -454,69 +508,51 @@ public class EnvVarList extends Application {
                     if (e.getCode() == KeyCode.TAB) {
                         String text = textField.getText() != null ? textField.getText() : "";
                         int rowIndex = getTableRow().getIndex();
-                        int newColumn = (columnIndex + 1) % table.getColumns().size();
-                        int newRow = rowIndex;
-                        if (columnIndex == 0) {
-                            if (!text.isEmpty() && (!isValidEnvName(text, nameSet, originalValue, rowIndex, table))) {
-                                showError("Cannot commit duplicate/invalid name: " + text);
-                                Platform.runLater(textField::requestFocus); // Retain focus in current cell
-                                e.consume();
-                                return;
-                            }
+                        if (columnIndex == 0 && !text.isEmpty() && !isValidEnvName(text, nameSet, originalValue, rowIndex, table)) {
+                            showError("Cannot commit duplicate/invalid name: " + text);
+                            Platform.runLater(() -> textField.requestFocus());
+                            e.consume();
+                            return;
                         }
                         commitEdit(getConverter().fromString(text));
-                        if (newColumn == 0 && rowIndex < table.getItems().size() - 1) {
-                            newRow = rowIndex + 1; // Move to next row if at last column
-                        }
-                        final int finalNewRow = newRow;
-                        final int finalNewColumn = newColumn;
                         Platform.runLater(() -> {
-                            table.getSelectionModel().clearAndSelect(finalNewRow);
-                            table.getFocusModel().focus(finalNewRow, table.getColumns().get(finalNewColumn));
-                            table.edit(finalNewRow, table.getColumns().get(finalNewColumn));
-                            table.scrollTo(finalNewRow);
-                            table.scrollToColumn(table.getColumns().get(finalNewColumn));
-                            TableCell<?, ?> nextCell = getTableCellAt(finalNewRow, finalNewColumn);
-                            if (nextCell != null && nextCell instanceof CustomTextFieldTableCell) {
-                                CustomTextFieldTableCell nextTextCell = (CustomTextFieldTableCell) nextCell;
-                                if (nextTextCell.getGraphic() instanceof javafx.scene.control.TextField) {
-                                    ((javafx.scene.control.TextField) nextTextCell.getGraphic()).requestFocus();
-                                }
-                            }
+                            // Ensure the current row remains selected
+                            table.getSelectionModel().clearAndSelect(rowIndex);
+                            table.getFocusModel().focus(rowIndex, table.getColumns().get(columnIndex));
+                            // Stop editing by clearing the editing cell
+                            table.edit(-1, null);
+                            // Return focus to the TableView
+                            table.requestFocus();
                         });
                         e.consume();
                     } else if (e.getCode() == KeyCode.ENTER) {
                         String text = textField.getText() != null ? textField.getText() : "";
-                        if (columnIndex == 0) {
-                            int rowIndex = getTableRow().getIndex();
-                            if (!text.isEmpty() && (!isValidEnvName(text, nameSet, originalValue, rowIndex, table))) {
-                                showError("Cannot commit duplicate/invalid name: " + text);
-                                Platform.runLater(textField::requestFocus); // Retain focus in current cell
-                                e.consume();
-                                return;
-                            }
+                        if (columnIndex == 0 && !text.isEmpty() && !isValidEnvName(text, nameSet, originalValue, getTableRow().getIndex(), table)) {
+                            showError("Cannot commit duplicate/invalid name: " + text);
+                            Platform.runLater(() -> textField.requestFocus());
+                            e.consume();
+                            return;
                         }
                         commitEdit(getConverter().fromString(text));
+                        Platform.runLater(() -> {
+                            // Ensure the current row remains selected
+                            table.getSelectionModel().clearAndSelect(getTableRow().getIndex());
+                            table.getFocusModel().focus(getTableRow().getIndex(), table.getColumns().get(columnIndex));
+                            // Stop editing
+                            table.edit(-1, null);
+                            table.requestFocus();
+                        });
                         e.consume();
                     } else if (e.getCode() == KeyCode.ESCAPE) {
                         cancelEdit();
                         e.consume();
                     }
                 });
-                Platform.runLater(textField::requestFocus);
+                Platform.runLater(() -> {
+                    textField.requestFocus();
+                    textField.selectAll();
+                });
             }
-        }
-
-        private TableCell<?, ?> getTableCellAt(int rowIndex, int columnIndex) {
-            for (Node node : table.lookupAll(".table-cell")) {
-                if (node instanceof TableCell) {
-                    TableCell<?, ?> cell = (TableCell<?, ?>) node;
-                    if (cell.getTableRow() != null && cell.getTableRow().getIndex() == rowIndex && cell.getTableColumn() == table.getColumns().get(columnIndex)) {
-                        return cell;
-                    }
-                }
-            }
-            return null;
         }
 
         @Override
@@ -545,7 +581,6 @@ public class EnvVarList extends Application {
             setGraphic(null);
             if (columnIndex == 0) {
                 clearDuplicateHighlights();
-                // Do not revert to originalValue, allow empty cell
                 table.refresh();
             }
         }

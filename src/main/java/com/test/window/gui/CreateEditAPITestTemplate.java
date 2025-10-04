@@ -10,6 +10,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -27,6 +28,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 
 public class CreateEditAPITestTemplate extends Application {
 
@@ -51,6 +57,9 @@ public class CreateEditAPITestTemplate extends Application {
 
     private static final String BUTTON_HOVER_STYLE = 
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
+
+    private static final String HIGHLIGHT_STYLE = 
+        "-fx-fill: #FF8C00;"; // Orange color for {{anytext}}
 
     private static final String CSS = """
         .table-view .scroll-bar:vertical,
@@ -151,6 +160,9 @@ public class CreateEditAPITestTemplate extends Application {
             -fx-background-color: #2E2E2E;
             -fx-text-fill: white;
         }
+        .highlight-orange {
+            -fx-fill: #FF8C00;
+        }
         """;
 
     private static final double TEXT_FIELD_HEIGHT = 30.0;
@@ -158,13 +170,24 @@ public class CreateEditAPITestTemplate extends Application {
         .enable(SerializationFeature.INDENT_OUTPUT)
         .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
 
+    // Define key order for payload JSON
+    private static final String[] PAYLOAD_TOP_LEVEL_KEY_ORDER = {"client_timestamp", "fields"};
+    private static final String[] PAYLOAD_FIELDS_KEY_ORDER = {
+        "page_number", "role", "name", "width", "x", "y", "type", "required", "height"
+    };
+
     private Label statusLabel;
     private VBox mainLayout;
     private File loadedFile;
     private boolean isModified;
     private TableManager tableManager;
     private UIComponentsManager uiComponents;
-
+    
+    // Getter method to access HIGHLIGHT_STYLE
+    public static String getHighlightStyle() {
+        return HIGHLIGHT_STYLE;
+    }
+    
     @Override
     public void start(Stage primaryStage) {
         try {
@@ -172,8 +195,8 @@ public class CreateEditAPITestTemplate extends Application {
             statusLabel.setStyle("-fx-text-fill: #FF5555;");
             statusLabel.setWrapText(true);
 
-            tableManager = new TableManager(COLUMN_NAMES, statusLabel);
-            uiComponents = new UIComponentsManager(tableManager.getTable(), statusLabel, COLUMN_NAMES);
+            tableManager = new TableManager(COLUMN_NAMES, statusLabel, this);
+            uiComponents = new UIComponentsManager(tableManager.getTable(), statusLabel, COLUMN_NAMES, tableManager, this);
 
             TableView<String[]> table = tableManager.getTable();
             VBox buttonsVBox = uiComponents.createButtonsVBox(primaryStage, this::checkUnsavedChanges, this::saveToFile, this::saveAsToFile);
@@ -183,7 +206,7 @@ public class CreateEditAPITestTemplate extends Application {
             HBox.setHgrow(table, Priority.ALWAYS);
             HBox.setHgrow(buttonsVBox, Priority.NEVER);
             VBox.setVgrow(tableWithButtons, Priority.NEVER);
-            table.prefHeightProperty().bind(primaryStage.heightProperty().multiply(0.6));
+            table.prefHeightProperty().bind(primaryStage.heightProperty().multiply(0.66));
 
             VBox additionalContent = uiComponents.createAdditionalContent();
             ScrollPane scrollPane = new ScrollPane(additionalContent);
@@ -222,39 +245,16 @@ public class CreateEditAPITestTemplate extends Application {
         }
     }
 
-    private String formatJson(String input) {
-        if (input == null || input.trim().isEmpty()) {
-            return input != null ? input : "";
-        }
-        try {
-            Object parsedJson = objectMapper.readValue(input, LinkedHashMap.class);
-            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsedJson);
-        } catch (Exception e) {
-            Platform.runLater(() -> statusLabel.setText("Invalid JSON: " + e.getMessage()));
-            return input;
-        }
+    public File getLoadedFile() {
+        return loadedFile;
     }
 
-    private boolean isValidTestId(String testId, Set<String> testIds, String currentId, int rowIndex, TableView<String[]> table) {
-        if (testId == null || testId.isEmpty()) {
-            return false;
-        }
-        if (!testId.equals(currentId) && testIds.contains(testId)) {
-            return false;
-        }
-        if (testId.length() > 5) {
-            return false;
-        }
-        if (!testId.matches("^[0-9#]*$")) {
-            return false;
-        }
-        if (testId.startsWith("#") && testId.matches(".*[0-9].*")) {
-            return false;
-        }
-        if (testId.matches("^[0-9].*") && testId.contains("#")) {
-            return false;
-        }
-        return true;
+    public void setLoadedFile(File file) {
+        this.loadedFile = file;
+    }
+
+    public void setModified(boolean modified) {
+        this.isModified = modified;
     }
 
     private boolean checkUnsavedChanges(Stage primaryStage) {
@@ -292,6 +292,14 @@ public class CreateEditAPITestTemplate extends Application {
 
     private boolean saveToFile(File file, Stage primaryStage) {
         TableView<String[]> table = tableManager.getTable();
+        File targetFile = (file != null) ? file : loadedFile;
+        if (targetFile == null) {
+            return false;
+        }
+        if (!targetFile.exists() && !targetFile.getParentFile().canWrite()) {
+            showError("Cannot write to directory: " + targetFile.getParentFile().getAbsolutePath());
+            return false;
+        }
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Test Data");
             Row headerRow = sheet.createRow(0);
@@ -310,25 +318,31 @@ public class CreateEditAPITestTemplate extends Application {
             for (int i = 0; i < COLUMN_NAMES.length; i++) {
                 sheet.autoSizeColumn(i);
             }
-            try (FileOutputStream fileOut = new FileOutputStream(file)) {
+            try (FileOutputStream fileOut = new FileOutputStream(targetFile)) {
                 workbook.write(fileOut);
+                fileOut.flush();
             } catch (IOException ex) {
                 String message = "Failed to save file: " + ex.getMessage();
                 if (ex instanceof java.nio.file.AccessDeniedException) {
-                    message = "Permission denied while saving file: " + file.getAbsolutePath();
+                    message = "Permission denied while saving file: " + targetFile.getAbsolutePath();
                 } else if (ex instanceof java.nio.file.NoSuchFileException) {
-                    message = "Invalid file path: " + file.getAbsolutePath();
+                    message = "Invalid file path: " + targetFile.getAbsolutePath();
                 }
                 showError(message);
                 return false;
             }
             isModified = false;
-            loadedFile = file;
+            loadedFile = targetFile;
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
             alert.setTitle("Success");
             alert.setHeaderText("File Saved");
-            alert.setContentText("Test case saved successfully to " + file.getAbsolutePath());
+            alert.setContentText("Test case saved successfully to " + targetFile.getAbsolutePath());
             alert.showAndWait();
+            try {
+                EnvJsonUpdater.updateEnvJsonFromTable(tableManager.getTable());
+            } catch (IOException ex) {
+                showError("Failed to update env.json: " + ex.getMessage());
+            }
             return true;
         } catch (IOException ex) {
             showError("Failed to save file: " + ex.getMessage());
@@ -349,9 +363,135 @@ public class CreateEditAPITestTemplate extends Application {
         return false;
     }
 
-    private static void showError(String message) {
+    public static String formatJson(String input, Label statusLabel) {
+        if (input == null || input.trim().isEmpty()) {
+            return input != null ? input : "";
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper()
+                .enable(SerializationFeature.INDENT_OUTPUT)
+                .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+
+            // Parse input JSON
+            Object parsedJson = mapper.readValue(input, Object.class);
+
+            // If it's a map (expected for payload), reorder keys
+            if (parsedJson instanceof Map) {
+                Map<String, Object> inputMap = (Map<String, Object>) parsedJson;
+                Map<String, Object> orderedMap = new LinkedHashMap<>();
+
+                // Reorder top-level keys
+                for (String key : PAYLOAD_TOP_LEVEL_KEY_ORDER) {
+                    if (inputMap.containsKey(key)) {
+                        Object value = inputMap.get(key);
+                        if (key.equals("fields") && value instanceof List) {
+                            // Reorder each object in fields array
+                            List<Map<String, Object>> fields = (List<Map<String, Object>>) value;
+                            List<Map<String, Object>> orderedFields = new ArrayList<>();
+                            for (Map<String, Object> field : fields) {
+                                Map<String, Object> orderedField = new LinkedHashMap<>();
+                                for (String fieldKey : PAYLOAD_FIELDS_KEY_ORDER) {
+                                    if (field.containsKey(fieldKey)) {
+                                        orderedField.put(fieldKey, field.get(fieldKey));
+                                    }
+                                }
+                                orderedFields.add(orderedField);
+                            }
+                            orderedMap.put(key, orderedFields);
+                        } else {
+                            orderedMap.put(key, value);
+                        }
+                    }
+                }
+                // Add any remaining keys (for robustness)
+                for (String key : inputMap.keySet()) {
+                    if (!orderedMap.containsKey(key)) {
+                        orderedMap.put(key, inputMap.get(key));
+                    }
+                }
+                return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(orderedMap);
+            }
+            // Fallback for non-map JSON (e.g., arrays, primitives)
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsedJson);
+        } catch (Exception e) {
+            Platform.runLater(() -> statusLabel.setText("Invalid JSON: " + e.getMessage()));
+            return input;
+        }
+    }
+
+    public static boolean isValidTestId(String testId, Set<String> testIds, String currentId) {
+        if (testId == null || testId.isEmpty()) {
+            return false;
+        }
+        if (!testId.equals(currentId) && testIds.contains(testId)) {
+            return false;
+        }
+        if (testId.length() > 5) {
+            return false;
+        }
+        if (!testId.matches("[0-9]+")) {
+            return false;
+        }
+        return true;
+    }
+
+    public static void showError(String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR, message);
         alert.showAndWait();
+    }
+
+    public static void applyHighlighting(TextField textField) {
+        textField.textProperty().addListener((obs, oldVal, newVal) -> {
+            TextFlow textFlow = new TextFlow();
+            if (newVal == null || newVal.isEmpty()) {
+                textField.setText(newVal);
+                return;
+            }
+            String[] parts = newVal.split("(\\{\\{[^\\}]+\\}\\})");
+            for (String part : parts) {
+                Text text = new Text(part);
+                if (part.matches("\\{\\{[^\\}]+\\}\\}")) {
+                    text.setStyle(HIGHLIGHT_STYLE);
+                } else {
+                    text.setStyle("-fx-fill: white;");
+                }
+                textFlow.getChildren().add(text);
+            }
+            textField.setStyle(partContainsPattern(newVal) ? HIGHLIGHT_STYLE : FIELD_STYLE_UNFOCUSED);
+        });
+        textField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            textField.setStyle(newVal ? FIELD_STYLE_FOCUSED : 
+                (partContainsPattern(textField.getText()) ? HIGHLIGHT_STYLE : FIELD_STYLE_UNFOCUSED));
+        });
+    }
+
+    public static void applyHighlighting(TextArea textArea) {
+        textArea.textProperty().addListener((obs, oldVal, newVal) -> {
+            TextFlow textFlow = new TextFlow();
+            if (newVal == null || newVal.isEmpty()) {
+                textArea.setText(newVal);
+                return;
+            }
+            String[] parts = newVal.split("(\\{\\{[^\\}]+\\}\\})");
+            for (String part : parts) {
+                Text text = new Text(part);
+                if (part.matches("\\{\\{[^\\}]+\\}\\}")) {
+                    text.setStyle(HIGHLIGHT_STYLE);
+                } else {
+                    text.setStyle("-fx-fill: white;");
+                }
+                textFlow.getChildren().add(text);
+            }
+            textArea.setStyle(partContainsPattern(newVal) ? HIGHLIGHT_STYLE : "-fx-text-fill: white;");
+        });
+        textArea.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            textArea.setStyle(newVal ? FIELD_STYLE_FOCUSED : 
+                (partContainsPattern(textArea.getText()) ? HIGHLIGHT_STYLE : "-fx-text-fill: white;"));
+        });
+    }
+
+    private static boolean partContainsPattern(String text) {
+        return text != null && text.matches(".*\\{\\{[^\\}]+\\}\\}.*");
     }
 
     public static void main(String[] args) {

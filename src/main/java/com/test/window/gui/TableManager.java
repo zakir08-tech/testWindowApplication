@@ -6,6 +6,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
@@ -21,6 +22,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
 import javafx.util.StringConverter;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 
@@ -30,8 +32,8 @@ public class TableManager {
         TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
         PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
         MODIFY_PAYLOAD_KEY(9), MODIFY_PAYLOAD_VALUE(10), RESPONSE_KEY_NAME(11),
-        CAPTURE_VALUE(12), AUTHORIZATION(13), SSL_VALIDATION(16), EXPECTED_STATUS(17),
-        VERIFY_RESPONSE(18), TEST_DESCRIPTION(19);
+        CAPTURE_VALUE(12), AUTHORIZATION(13), AUTH_FIELD1(14), AUTH_FIELD2(15),
+        SSL_VALIDATION(16), EXPECTED_STATUS(17), VERIFY_RESPONSE(18), TEST_DESCRIPTION(19);
 
         private final int index;
         ColumnIndex(int index) { this.index = index; }
@@ -44,10 +46,12 @@ public class TableManager {
     private final TableView<String[]> table;
     private final Label statusLabel;
     private final String[] columnNames;
+    private final CreateEditAPITestTemplate app; // Add reference
 
-    public TableManager(String[] columnNames, Label statusLabel) {
+    public TableManager(String[] columnNames, Label statusLabel, CreateEditAPITestTemplate app) {
         this.columnNames = columnNames;
         this.statusLabel = statusLabel;
+        this.app = app;
         this.table = createTable();
     }
 
@@ -72,9 +76,9 @@ public class TableManager {
             column.setText(""); // Prevent default text to avoid duplication
             column.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue()[index]));
             
-            // Disable editing for specified columns
+            // Disable editing for specified columns, including Request
             column.setEditable(!(index == ColumnIndex.REQUEST.getIndex() ||
-            					 index == ColumnIndex.END_POINT.getIndex() ||
+                                 index == ColumnIndex.END_POINT.getIndex() ||
                                  index == ColumnIndex.HEADER_KEY.getIndex() ||
                                  index == ColumnIndex.HEADER_VALUE.getIndex() ||
                                  index == ColumnIndex.PARAM_KEY.getIndex() ||
@@ -87,7 +91,7 @@ public class TableManager {
                                  index == ColumnIndex.AUTHORIZATION.getIndex() ||
                                  index == ColumnIndex.VERIFY_RESPONSE.getIndex()));
             
-            column.setCellFactory(col -> new CustomTextFieldTableCell(table, index, statusLabel));
+            column.setCellFactory(col -> new CustomTextFieldTableCell(table, index, statusLabel, app));
             column.setOnEditCommit(event -> {
                 String newValue = event.getNewValue() != null ? event.getNewValue() : "";
                 int colIndex = event.getTablePosition().getColumn();
@@ -95,17 +99,12 @@ public class TableManager {
                 if (colIndex == ColumnIndex.EXPECTED_STATUS.getIndex() && !newValue.matches("\\d+|^$")) {
                     statusLabel.setText("Status must be a number");
                     return;
-                } else if (colIndex == ColumnIndex.REQUEST.getIndex()) {
-                    if (!newValue.isEmpty() && !HTTP_METHODS.contains(newValue)) {
-                        statusLabel.setText("Invalid HTTP method");
-                        return; // Prevent committing invalid HTTP method
-                    } else {
-                        statusLabel.setText("");
-                    }
                 }
                 statusLabel.setText("");
                 event.getTableView().getItems().get(rowIndex)[colIndex] = newValue;
+                app.setModified(true); // Set modified on edit commit
                 table.refresh();
+                updateAuthFieldHeaders(rowIndex);
             });
             
             column.setGraphic(new Label(columnNames[i]) {{
@@ -144,6 +143,9 @@ public class TableManager {
 
         table.getSelectionModel().selectedIndexProperty().addListener((obs, oldVal, newVal) -> {
             table.refresh();
+            if (newVal != null && newVal.intValue() >= 0) {
+                updateAuthFieldHeaders(newVal.intValue());
+            }
         });
 
         table.setOnMouseClicked(event -> {
@@ -159,14 +161,39 @@ public class TableManager {
         return table;
     }
 
+    public void updateAuthFieldHeaders(int rowIndex) {
+        if (rowIndex < 0 || rowIndex >= table.getItems().size()) {
+            return;
+        }
+        String[] row = table.getItems().get(rowIndex);
+        String authValue = row[ColumnIndex.AUTHORIZATION.getIndex()];
+        TableColumn<String[], String> authField1Col = (TableColumn<String[], String>) table.getColumns().get(ColumnIndex.AUTH_FIELD1.getIndex());
+        TableColumn<String[], String> authField2Col = (TableColumn<String[], String>) table.getColumns().get(ColumnIndex.AUTH_FIELD2.getIndex());
+        Label authField1Label = (Label) authField1Col.getGraphic();
+        Label authField2Label = (Label) authField2Col.getGraphic();
+
+        if ("Basic Auth".equals(authValue)) {
+            authField1Label.setText("Username");
+            authField2Label.setText("Password");
+        } else if ("Bearer Token".equals(authValue)) {
+            authField1Label.setText("Token");
+            authField2Label.setText("");
+        } else {
+            authField1Label.setText("");
+            authField2Label.setText("");
+        }
+        table.refresh();
+    }
+
     private class CustomTextFieldTableCell extends TextFieldTableCell<String[], String> {
         private final TableView<String[]> table;
         private final int columnIndex;
         private final Label statusLabel;
         private final Set<String> testIds = new HashSet<>();
         private String originalValue;
+        private final CreateEditAPITestTemplate app;
 
-        public CustomTextFieldTableCell(TableView<String[]> table, int columnIndex, Label statusLabel) {
+        public CustomTextFieldTableCell(TableView<String[]> table, int columnIndex, Label statusLabel, CreateEditAPITestTemplate app) {
             super(new StringConverter<String>() {
                 @Override
                 public String toString(String object) {
@@ -180,7 +207,7 @@ public class TableManager {
             this.table = table;
             this.columnIndex = columnIndex;
             this.statusLabel = statusLabel;
-
+            this.app = app;
             table.getItems().addListener((javafx.collections.ListChangeListener<String[]>) c -> {
                 updateTestIds();
             });
@@ -198,27 +225,24 @@ public class TableManager {
         }
 
         private String suggestUniqueTestId(String input) {
-            if (input == null || input.isEmpty()) {
-                return generateUniqueId("1");
+            if (input == null || input.isEmpty() || !input.matches("[0-9]+")) {
+                return generateUniqueId("0");
             }
-            String base = input.replaceAll("[^0-9#]", "");
+            String base = input.replaceAll("[^0-9]", "");
             if (base.isEmpty()) {
-                base = "1";
+                base = "0";
             }
             return generateUniqueId(base);
         }
 
         private String generateUniqueId(String base) {
             String candidate = base;
-            int suffix = 1;
-            while (testIds.contains(candidate)) {
-                candidate = base + suffix;
+            int suffix = 0;
+            while (testIds.contains(candidate) || !candidate.matches("[0-9]+")) {
                 suffix++;
+                candidate = String.valueOf(suffix);
                 if (candidate.length() > 5) {
                     candidate = candidate.substring(0, 5);
-                    if (testIds.contains(candidate)) {
-                        candidate = String.valueOf(suffix);
-                    }
                 }
             }
             return candidate;
@@ -240,39 +264,37 @@ public class TableManager {
             table.getItems().forEach((row) -> {
                 int index = table.getItems().indexOf(row);
                 TableRow<String[]> tableRow = (TableRow<String[]>) table.lookup(".table-row-cell[index=" + index + "]");
-                if (tableRow != null && index != table.getSelectionModel().getSelectedIndex()) {
-                    tableRow.setStyle("-fx-table-cell-border-color: #3C3F41; -fx-table-cell-border-width: 1px;");
+                if (tableRow != null && tableRow.getStyle().contains("4A90E2")) {
+                    if (index == table.getSelectionModel().getSelectedIndex()) {
+                        tableRow.setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-table-cell-border-color: #3C3F41; -fx-table-cell-border-width: 1px;");
+                    } else {
+                        tableRow.setStyle("-fx-table-cell-border-color: #3C3F41; -fx-table-cell-border-width: 1px;");
+                    }
                 }
             });
-            statusLabel.setText("");
+        }
+
+        private void clearRowData(int rowIndex) {
+            String[] row = table.getItems().get(rowIndex);
+            for (int i = 1; i < row.length; i++) {
+                row[i] = "";
+            }
+            app.setModified(true); // Set modified on clear
         }
 
         @Override
         public void startEdit() {
-            if (table.getItems().isEmpty() || isEditing()) {
-                return;
-            }
             super.startEdit();
-            originalValue = getItem();
-            if (getGraphic() instanceof TextField) {
+            if (isEditing() && getGraphic() instanceof TextField) {
                 TextField textField = (TextField) getGraphic();
-                textField.setPrefHeight(26);
-                textField.setMaxHeight(26);
-                textField.setMinHeight(26);
-                textField.setStyle("-fx-alignment: center-left;"); // Left-align TextField content
-                if (columnIndex == 0) {
+                originalValue = getItem() != null ? getItem() : "";
+                if (columnIndex == ColumnIndex.TEST_ID.getIndex()) {
                     UnaryOperator<TextFormatter.Change> filter = change -> {
                         String newText = change.getControlNewText();
                         if (newText.length() > 5) {
                             return null;
                         }
-                        if (!newText.matches("^[0-9#]*$")) {
-                            return null;
-                        }
-                        if (newText.startsWith("#") && newText.matches(".*[0-9].*")) {
-                            return null;
-                        }
-                        if (newText.matches("^[0-9].*") && newText.contains("#")) {
+                        if (!newText.matches("[0-9]*")) {
                             return null;
                         }
                         if (!newText.isEmpty() && !newText.equals(originalValue) && testIds.contains(newText)) {
@@ -286,23 +308,12 @@ public class TableManager {
                         return change;
                     };
                     textField.setTextFormatter(new TextFormatter<>(filter));
-                } else if (columnIndex == 17) {
+                } else if (columnIndex == ColumnIndex.EXPECTED_STATUS.getIndex()) {
                     UnaryOperator<TextFormatter.Change> filter = change -> {
                         String newText = change.getControlNewText();
                         if (newText.matches("\\d*")) {
                             return change;
                         }
-                        return null;
-                    };
-                    textField.setTextFormatter(new TextFormatter<>(filter));
-                } else if (columnIndex == 1) { // Request column
-                    UnaryOperator<TextFormatter.Change> filter = change -> {
-                        String newText = change.getControlNewText();
-                        if (newText.isEmpty() || HTTP_METHODS.contains(newText)) {
-                            statusLabel.setText("");
-                            return change;
-                        }
-                        statusLabel.setText("Invalid HTTP method");
                         return null;
                     };
                     textField.setTextFormatter(new TextFormatter<>(filter));
@@ -312,26 +323,34 @@ public class TableManager {
                         String text = textField.getText() != null ? textField.getText() : "";
                         int rowIndex = getTableRow().getIndex();
                         int newColumn = (columnIndex + 1) % table.getColumns().size();
-                        if (columnIndex == 0 && !text.isEmpty() && !isValidTestId(text)) {
-                            showError("Cannot commit duplicate/invalid Test ID: " + text);
+                        if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !text.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(text, testIds, originalValue)) {
+                            CreateEditAPITestTemplate.showError("Cannot commit invalid Test ID: " + text + ". Use only 0-9.");
                             cancelEdit();
                             setText(getItem() != null ? getItem() : "");
                             setGraphic(null);
                             table.refresh();
-                        } else if (columnIndex == 1 && !text.isEmpty() && !HTTP_METHODS.contains(text)) {
-                            showError("Invalid HTTP method: " + text);
-                            cancelEdit();
-                            setText(getItem() != null ? getItem() : "");
-                            setGraphic(null);
-                            table.refresh();
+                        } else if (columnIndex == ColumnIndex.TEST_ID.getIndex() && text.isEmpty() && originalValue != null && !originalValue.isEmpty()) {
+                            Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
+                            confirmation.setTitle("Confirm Delete Test ID");
+                            confirmation.setHeaderText("Delete Test Step Data");
+                            confirmation.setContentText("Removing the Test ID will delete all data in this test step. Are you sure?");
+                            Optional<ButtonType> result = confirmation.showAndWait();
+                            if (result.isPresent() && result.get() == ButtonType.OK) {
+                                clearRowData(rowIndex);
+                                commitEdit("");
+                            } else {
+                                cancelEdit();
+                                setText(originalValue != null ? originalValue : "");
+                                setGraphic(null);
+                                table.refresh();
+                            }
                         } else {
-                            commitEdit(getConverter().fromString(text));
+                            commitEdit(CreateEditAPITestTemplate.formatJson(text, statusLabel));
                         }
                         table.getFocusModel().focus(rowIndex, table.getColumns().get(newColumn));
                         table.getSelectionModel().select(rowIndex);
                         table.edit(rowIndex, table.getColumns().get(newColumn));
                         Platform.runLater(() -> {
-                            // Find the TableCell for the new row and column
                             TableCell<?, ?> nextCell = null;
                             for (Node node : table.lookupAll(".table-cell")) {
                                 if (node instanceof TableCell) {
@@ -353,18 +372,29 @@ public class TableManager {
                         e.consume();
                     } else if (e.getCode() == KeyCode.ENTER) {
                         String text = textField.getText() != null ? textField.getText() : "";
-                        if (columnIndex == 0) {
-                            if (!text.isEmpty() && !isValidTestId(text)) {
-                                showError("Cannot commit duplicate/invalid Test ID: " + text);
+                        if (columnIndex == ColumnIndex.TEST_ID.getIndex()) {
+                            if (!text.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(text, testIds, originalValue)) {
+                                CreateEditAPITestTemplate.showError("Cannot commit invalid Test ID: " + text + ". Use only 0-9.");
                                 return;
-                            }
-                        } else if (columnIndex == 1) {
-                            if (!text.isEmpty() && !HTTP_METHODS.contains(text)) {
-                                showError("Invalid HTTP method: " + text);
-                                return;
+                            } else if (text.isEmpty() && originalValue != null && !originalValue.isEmpty()) {
+                                Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
+                                confirmation.setTitle("Confirm Delete Test ID");
+                                confirmation.setHeaderText("Delete Test Step Data");
+                                confirmation.setContentText("Removing the Test ID will delete all data in this test step. Are you sure?");
+                                Optional<ButtonType> result = confirmation.showAndWait();
+                                if (result.isPresent() && result.get() == ButtonType.OK) {
+                                    clearRowData(getTableRow().getIndex());
+                                    commitEdit("");
+                                } else {
+                                    cancelEdit();
+                                    setText(originalValue != null ? originalValue : "");
+                                    setGraphic(null);
+                                    table.refresh();
+                                    return;
+                                }
                             }
                         }
-                        commitEdit(getConverter().fromString(text));
+                        commitEdit(CreateEditAPITestTemplate.formatJson(text, statusLabel));
                         e.consume();
                     } else if (e.getCode() == KeyCode.ESCAPE) {
                         cancelEdit();
@@ -393,25 +423,29 @@ public class TableManager {
 
         @Override
         public void commitEdit(String newValue) {
-            if (columnIndex == 0 && !newValue.isEmpty() && !isValidTestId(newValue)) {
+            if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !newValue.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(newValue, testIds, originalValue)) {
                 return;
             }
             super.commitEdit(newValue);
-            if (columnIndex == 0) {
+            app.setModified(true); // Set modified on commit
+            if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !newValue.isEmpty()) {
                 clearDuplicateHighlights();
                 updateTestIds();
                 int rowIndex = getTableRow().getIndex();
                 String[] row = table.getItems().get(rowIndex);
-                if (row[3] == null || row[3].isEmpty()) {
-                    row[3] = "Content-Type";
+                if (row[ColumnIndex.HEADER_KEY.getIndex()] == null || row[ColumnIndex.HEADER_KEY.getIndex()].isEmpty()) {
+                    row[ColumnIndex.HEADER_KEY.getIndex()] = "Content-Type";
                 }
-                if (row[4] == null || row[4].isEmpty()) {
-                    row[4] = "application/json";
+                if (row[ColumnIndex.HEADER_VALUE.getIndex()] == null || row[ColumnIndex.HEADER_VALUE.getIndex()].isEmpty()) {
+                    row[ColumnIndex.HEADER_VALUE.getIndex()] = "application/json";
                 }
                 table.refresh();
                 int currentIndex = getTableRow().getIndex();
                 table.getSelectionModel().clearSelection();
                 table.getSelectionModel().select(currentIndex);
+            } else if (columnIndex == ColumnIndex.AUTHORIZATION.getIndex()) {
+                int rowIndex = getTableRow().getIndex();
+                updateAuthFieldHeaders(rowIndex);
             }
         }
 
@@ -420,40 +454,13 @@ public class TableManager {
             super.cancelEdit();
             setText(getItem() != null ? getItem() : "");
             setGraphic(null);
-            if (columnIndex == 0) {
+            if (columnIndex == ColumnIndex.TEST_ID.getIndex()) {
                 clearDuplicateHighlights();
                 if (getTableRow() != null && getTableRow().getItem() != null && originalValue != null) {
-                    getTableRow().getItem()[0] = originalValue;
+                    getTableRow().getItem()[ColumnIndex.TEST_ID.getIndex()] = originalValue;
                     table.refresh();
                 }
             }
-        }
-
-        private boolean isValidTestId(String testId) {
-            if (testId == null || testId.isEmpty()) {
-                return false;
-            }
-            if (!testId.equals(originalValue) && testIds.contains(testId)) {
-                return false;
-            }
-            if (testId.length() > 5) {
-                return false;
-            }
-            if (!testId.matches("^[0-9#]*$")) {
-                return false;
-            }
-            if (testId.startsWith("#") && testId.matches(".*[0-9].*")) {
-                return false;
-            }
-            if (testId.matches("^[0-9].*") && testId.contains("#")) {
-                return false;
-            }
-            return true;
-        }
-
-        private void showError(String message) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, message);
-            alert.showAndWait();
         }
     }
 }

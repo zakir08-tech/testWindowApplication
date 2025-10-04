@@ -1,7 +1,23 @@
 package com.test.window.gui;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 import javafx.application.Platform;
-import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
@@ -24,21 +40,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import java.util.LinkedHashMap;
 
 public class UIComponentsManager {
 
@@ -46,8 +47,8 @@ public class UIComponentsManager {
         TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
         PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
         MODIFY_PAYLOAD_KEY(9), MODIFY_PAYLOAD_VALUE(10), RESPONSE_KEY_NAME(11),
-        CAPTURE_VALUE(12), AUTHORIZATION(13), SSL_VALIDATION(16), EXPECTED_STATUS(17),
-        VERIFY_RESPONSE(18), TEST_DESCRIPTION(19);
+        CAPTURE_VALUE(12), AUTHORIZATION(13), AUTH_FIELD1(14), AUTH_FIELD2(15),
+        SSL_VALIDATION(16), EXPECTED_STATUS(17), VERIFY_RESPONSE(18), TEST_DESCRIPTION(19);
 
         private final int index;
         ColumnIndex(int index) { this.index = index; }
@@ -57,13 +58,23 @@ public class UIComponentsManager {
     private static final ObservableList<String> AUTH_OPTIONS = 
         FXCollections.observableArrayList("", "Basic Auth", "Bearer Token");
 
+    private static final ObservableList<String> HTTP_METHODS = 
+        FXCollections.observableArrayList("", "GET", "POST", "PUT", "PATCH", "DELETE");
+
+    private static final ObservableList<String> PAYLOAD_TYPES = 
+        FXCollections.observableArrayList("", "json", "form-data", "urlencoded");
+
     private static final String FIELD_STYLE_UNFOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
-        "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #888888; -fx-border-radius: 5px;";
+        "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
     private static final String FIELD_STYLE_FOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
-        "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #888888; -fx-border-radius: 5px;";
+        "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
+
+    private static final String FIELD_STYLE_DISABLED = 
+        "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: #888888; " +
+        "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
     private static final String BUTTON_STYLE = 
         "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
@@ -72,313 +83,347 @@ public class UIComponentsManager {
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
     private static final double TEXT_FIELD_HEIGHT = 30.0;
-    private static final ObjectMapper objectMapper = new ObjectMapper()
-        .enable(SerializationFeature.INDENT_OUTPUT)
-        .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
 
     private final TableView<String[]> table;
     private final Label statusLabel;
     private final String[] columnNames;
+    private final TableManager tableManager;
+    private final CreateEditAPITestTemplate app;
     private TextArea payloadField;
     private TextArea verifyResponseField;
     private ScrollPane headerFieldsScroll;
     private Button addAboveButton, addBelowButton, moveUpButton, moveDownButton, 
                    deleteStepButton, deleteTestCaseButton, saveTestButton, createNewTestButton;
+    private static Stage envVarStage; // Track single EnvVarList window
 
-    public UIComponentsManager(TableView<String[]> table, Label statusLabel, String[] columnNames) {
+    public UIComponentsManager(TableView<String[]> table, Label statusLabel, String[] columnNames, TableManager tableManager, CreateEditAPITestTemplate app) {
         this.table = table;
         this.statusLabel = statusLabel;
         this.columnNames = columnNames;
+        this.tableManager = tableManager;
+        this.app = app;
     }
 
-    public VBox createButtonsVBox(Stage primaryStage, Function<Stage, Boolean> checkUnsavedChanges, 
-                                  BiFunction<File, Stage, Boolean> saveToFile, 
-                                  Function<Stage, Boolean> saveAsToFile) {
-        VBox buttonsVBox = new VBox(10);
-        buttonsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 10px;");
-        buttonsVBox.setAlignment(Pos.TOP_CENTER);
-
-        Button addStepButton = new Button("Add Step");
-        addStepButton.setStyle(BUTTON_STYLE);
-        addStepButton.setTooltip(new Tooltip("Add a new test step to the table"));
-        addStepButton.setOnAction(e -> {
-            table.getItems().add(new String[columnNames.length]);
-            table.getSelectionModel().select(table.getItems().size() - 1);
-            table.refresh();
-            updateButtonStates();
-        });
-        addStepButton.setOnMouseEntered(e -> addStepButton.setStyle(BUTTON_HOVER_STYLE));
-        addStepButton.setOnMouseExited(e -> addStepButton.setStyle(BUTTON_STYLE));
-
-        addAboveButton = new Button("Add Above");
-        addAboveButton.setStyle(BUTTON_STYLE);
-        addAboveButton.setTooltip(new Tooltip("Add a new step above the selected row"));
-        addAboveButton.setOnAction(e -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                table.getItems().add(selectedIndex, new String[columnNames.length]);
-                table.getSelectionModel().select(selectedIndex);
-                table.refresh();
+    public HBox createTextFieldsBox() {
+        ComboBox<String> requestComboBox = new ComboBox<>(HTTP_METHODS);
+        requestComboBox.setPromptText("Request");
+        requestComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
+        requestComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+        requestComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!requestComboBox.isDisable()) {
+                requestComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
             }
-            updateButtonStates();
         });
-        addAboveButton.setOnMouseEntered(e -> addAboveButton.setStyle(BUTTON_HOVER_STYLE));
-        addAboveButton.setOnMouseExited(e -> addAboveButton.setStyle(BUTTON_STYLE));
+        requestComboBox.setDisable(true);
+        requestComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.07));
+        requestComboBox.maxWidthProperty().bind(requestComboBox.prefWidthProperty());
+        requestComboBox.minWidthProperty().bind(requestComboBox.prefWidthProperty());
 
-        addBelowButton = new Button("Add Below");
-        addBelowButton.setStyle(BUTTON_STYLE);
-        addBelowButton.setTooltip(new Tooltip("Add a new step below the selected row"));
-        addBelowButton.setOnAction(e -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                table.getItems().add(selectedIndex + 1, new String[columnNames.length]);
-                table.getSelectionModel().select(selectedIndex + 1);
-                table.refresh();
+        TextField endpointField = new TextField();
+        endpointField.setPromptText("End-Point");
+        endpointField.setStyle(FIELD_STYLE_UNFOCUSED);
+        endpointField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        endpointField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            endpointField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        endpointField.setDisable(true);
+        endpointField.prefWidthProperty().bind(table.widthProperty().multiply(0.375));
+        endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
+        endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
+
+        TextField statusField = new TextField();
+        statusField.setPromptText("Status");
+        statusField.setStyle(FIELD_STYLE_UNFOCUSED);
+        statusField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        statusField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            statusField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        statusField.setDisable(true);
+        statusField.prefWidthProperty().bind(table.widthProperty().multiply(0.07));
+        statusField.maxWidthProperty().bind(statusField.prefWidthProperty());
+        statusField.minWidthProperty().bind(statusField.prefWidthProperty());
+
+        ComboBox<String> payloadTypeComboBox = new ComboBox<>(PAYLOAD_TYPES);
+        payloadTypeComboBox.setPromptText("Payload Type");
+        payloadTypeComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
+        payloadTypeComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+        payloadTypeComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!payloadTypeComboBox.isDisable()) {
+                payloadTypeComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
             }
-            updateButtonStates();
         });
-        addBelowButton.setOnMouseEntered(e -> addBelowButton.setStyle(BUTTON_HOVER_STYLE));
-        addBelowButton.setOnMouseExited(e -> addBelowButton.setStyle(BUTTON_STYLE));
+        payloadTypeComboBox.setDisable(true);
+        payloadTypeComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.0924));
+        payloadTypeComboBox.maxWidthProperty().bind(payloadTypeComboBox.prefWidthProperty());
+        payloadTypeComboBox.minWidthProperty().bind(payloadTypeComboBox.prefWidthProperty());
 
-        moveUpButton = new Button("Move Up");
-        moveUpButton.setStyle(BUTTON_STYLE);
-        moveUpButton.setTooltip(new Tooltip("Move the selected step up"));
-        moveUpButton.setOnAction(e -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex > 0) {
-                ObservableList<String[]> items = table.getItems();
-                String[] temp = items.get(selectedIndex - 1);
-                items.set(selectedIndex - 1, items.get(selectedIndex));
-                items.set(selectedIndex, temp);
-                table.getSelectionModel().select(selectedIndex - 1);
-                table.refresh();
+        ComboBox<String> authComboBox = new ComboBox<>(AUTH_OPTIONS);
+        authComboBox.setPromptText("Authorization");
+        authComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
+        authComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+        authComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!authComboBox.isDisable()) {
+                authComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
             }
-            updateButtonStates();
         });
-        moveUpButton.setOnMouseEntered(e -> moveUpButton.setStyle(BUTTON_HOVER_STYLE));
-        moveUpButton.setOnMouseExited(e -> moveUpButton.setStyle(BUTTON_STYLE));
+        authComboBox.setDisable(true);
+        authComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.0924));
+        authComboBox.maxWidthProperty().bind(authComboBox.prefWidthProperty());
+        authComboBox.minWidthProperty().bind(authComboBox.prefWidthProperty());
 
-        moveDownButton = new Button("Move Down");
-        moveDownButton.setStyle(BUTTON_STYLE);
-        moveDownButton.setTooltip(new Tooltip("Move the selected step down"));
-        moveDownButton.setOnAction(e -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0 && selectedIndex < table.getItems().size() - 1) {
-                ObservableList<String[]> items = table.getItems();
-                String[] temp = items.get(selectedIndex + 1);
-                items.set(selectedIndex + 1, items.get(selectedIndex));
-                items.set(selectedIndex, temp);
-                table.getSelectionModel().select(selectedIndex + 1);
-                table.refresh();
-            }
-            updateButtonStates();
+        TextField usernameTokenField = new TextField();
+        usernameTokenField.setPromptText("Username/Token");
+        usernameTokenField.setStyle(FIELD_STYLE_UNFOCUSED);
+        usernameTokenField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        usernameTokenField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            usernameTokenField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
-        moveDownButton.setOnMouseEntered(e -> moveDownButton.setStyle(BUTTON_HOVER_STYLE));
-        moveDownButton.setOnMouseExited(e -> moveDownButton.setStyle(BUTTON_STYLE));
+        usernameTokenField.setDisable(true);
+        usernameTokenField.setVisible(false);
+        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
 
-        deleteStepButton = new Button("Delete Step");
-        deleteStepButton.setStyle(BUTTON_STYLE);
-        deleteStepButton.setTooltip(new Tooltip("Delete the selected step"));
-        deleteStepButton.setOnAction(e -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                String[] selectedRow = table.getItems().get(selectedIndex);
-                String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
-                if (testId != null && !testId.isEmpty()) {
-                    Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
-                    confirmation.setTitle("Confirm Delete");
-                    confirmation.setHeaderText("Delete Test Step");
-                    confirmation.setContentText("The selected step has a Test ID: " + testId + ". Are you sure you want to delete it?");
-                    Optional<ButtonType> result = confirmation.showAndWait();
-                    if (result.isPresent() && result.get() == ButtonType.OK) {
-                        table.getItems().remove(selectedIndex);
-                        table.refresh();
+        TextField passwordField = new TextField();
+        passwordField.setPromptText("Password");
+        passwordField.setStyle(FIELD_STYLE_UNFOCUSED);
+        passwordField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        passwordField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            passwordField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        passwordField.setDisable(true);
+        passwordField.setVisible(false);
+        passwordField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+        passwordField.maxWidthProperty().bind(passwordField.prefWidthProperty());
+        passwordField.minWidthProperty().bind(passwordField.prefWidthProperty());
+
+        HBox textFieldsBox = new HBox(10);
+        textFieldsBox.setStyle("-fx-background-color: #2E2E2E;");
+        textFieldsBox.getChildren().addAll(requestComboBox, endpointField, statusField, payloadTypeComboBox, authComboBox, usernameTokenField, passwordField);
+        HBox.setHgrow(requestComboBox, Priority.NEVER);
+        HBox.setHgrow(endpointField, Priority.ALWAYS);
+        HBox.setHgrow(statusField, Priority.NEVER);
+        HBox.setHgrow(payloadTypeComboBox, Priority.NEVER);
+        HBox.setHgrow(authComboBox, Priority.NEVER);
+        HBox.setHgrow(usernameTokenField, Priority.NEVER);
+        HBox.setHgrow(passwordField, Priority.NEVER);
+
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
+            if (newItem != null) {
+                int selectedIndex = table.getSelectionModel().getSelectedIndex();
+                String[] row = table.getItems().get(selectedIndex);
+                String testId = row[ColumnIndex.TEST_ID.getIndex()];
+                Set<String> testIds = new HashSet<>();
+                for (String[] tableRow : table.getItems()) {
+                    if (tableRow[ColumnIndex.TEST_ID.getIndex()] != null && !tableRow[ColumnIndex.TEST_ID.getIndex()].isEmpty()) {
+                        testIds.add(tableRow[ColumnIndex.TEST_ID.getIndex()]);
+                    }
+                }
+                boolean isValidTestId = CreateEditAPITestTemplate.isValidTestId(testId, testIds, testId);
+                requestComboBox.setValue(row[ColumnIndex.REQUEST.getIndex()]);
+                endpointField.setText(row[ColumnIndex.END_POINT.getIndex()]);
+                statusField.setText(row[ColumnIndex.EXPECTED_STATUS.getIndex()]);
+                payloadTypeComboBox.setValue(row[ColumnIndex.PAYLOAD_TYPE.getIndex()] != null ? row[ColumnIndex.PAYLOAD_TYPE.getIndex()] : "");
+                authComboBox.setValue(row[ColumnIndex.AUTHORIZATION.getIndex()]);
+                usernameTokenField.setText(row[ColumnIndex.AUTH_FIELD1.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD1.getIndex()] : "");
+                passwordField.setText(row[ColumnIndex.AUTH_FIELD2.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD2.getIndex()] : "");
+                requestComboBox.setDisable(!isValidTestId);
+                endpointField.setDisable(!isValidTestId);
+                statusField.setDisable(!isValidTestId);
+                payloadTypeComboBox.setDisable(!isValidTestId);
+                authComboBox.setDisable(!isValidTestId);
+                if (!isValidTestId) {
+                    requestComboBox.setStyle(FIELD_STYLE_DISABLED);
+                    authComboBox.setStyle(FIELD_STYLE_DISABLED);
+                    payloadTypeComboBox.setStyle(FIELD_STYLE_DISABLED);
+                    requestComboBox.setPromptText("Request");
+                    authComboBox.setPromptText("Authorization");
+                    payloadTypeComboBox.setPromptText("Payload Type");
+                } else {
+                    requestComboBox.setStyle(requestComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                    authComboBox.setStyle(authComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                    payloadTypeComboBox.setStyle(payloadTypeComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                }
+                if (isValidTestId && authComboBox.getValue() != null) {
+                    if ("Basic Auth".equals(authComboBox.getValue())) {
+                        usernameTokenField.setPromptText("Username");
+                        usernameTokenField.setVisible(true);
+                        usernameTokenField.setDisable(false);
+                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        passwordField.setVisible(true);
+                        passwordField.setDisable(false);
+                    } else if ("Bearer Token".equals(authComboBox.getValue())) {
+                        usernameTokenField.setPromptText("Token");
+                        usernameTokenField.setVisible(true);
+                        usernameTokenField.setDisable(false);
+                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.21));
+                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        passwordField.setVisible(false);
+                        passwordField.setDisable(true);
+                    } else {
+                        usernameTokenField.setPromptText("Username/Token");
+                        usernameTokenField.setVisible(false);
+                        usernameTokenField.setDisable(true);
+                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        passwordField.setVisible(false);
+                        passwordField.setDisable(true);
                     }
                 } else {
-                    table.getItems().remove(selectedIndex);
-                    table.refresh();
+                    usernameTokenField.setPromptText("Username/Token");
+                    usernameTokenField.setVisible(false);
+                    usernameTokenField.setDisable(true);
+                    usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+                    usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                    usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                    passwordField.setVisible(false);
+                    passwordField.setDisable(true);
                 }
+            } else {
+                requestComboBox.setValue(null);
+                requestComboBox.setStyle(FIELD_STYLE_DISABLED);
+                requestComboBox.setPromptText("Request");
+                endpointField.clear();
+                statusField.clear();
+                payloadTypeComboBox.setValue(null);
+                payloadTypeComboBox.setStyle(FIELD_STYLE_DISABLED);
+                payloadTypeComboBox.setPromptText("Payload Type");
+                authComboBox.setValue(null);
+                authComboBox.setStyle(FIELD_STYLE_DISABLED);
+                authComboBox.setPromptText("Authorization");
+                usernameTokenField.setPromptText("Username/Token");
+                usernameTokenField.clear();
+                usernameTokenField.setVisible(false);
+                usernameTokenField.setDisable(true);
+                passwordField.clear();
+                passwordField.setVisible(false);
+                passwordField.setDisable(true);
+                requestComboBox.setDisable(true);
+                endpointField.setDisable(true);
+                statusField.setDisable(true);
+                payloadTypeComboBox.setDisable(true);
+                authComboBox.setDisable(true);
             }
             updateButtonStates();
         });
-        deleteStepButton.setOnMouseEntered(e -> deleteStepButton.setStyle(BUTTON_HOVER_STYLE));
-        deleteStepButton.setOnMouseExited(e -> deleteStepButton.setStyle(BUTTON_STYLE));
 
-        deleteTestCaseButton = new Button("Delete Test Case");
-        deleteTestCaseButton.setStyle(BUTTON_STYLE);
-        deleteTestCaseButton.setTooltip(new Tooltip("Delete all steps for the selected test case"));
-        deleteTestCaseButton.setOnAction(e -> {
+        authComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
-                String[] selectedRow = table.getItems().get(selectedIndex);
-                String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
-                if (testId == null || testId.isEmpty()) {
-                    showError("Please select a row with a valid Test ID to delete the test case.");
-                    return;
+                String[] row = table.getItems().get(selectedIndex);
+                String testId = row[ColumnIndex.TEST_ID.getIndex()];
+                Set<String> testIds = new HashSet<>();
+                for (String[] tableRow : table.getItems()) {
+                    if (tableRow[ColumnIndex.TEST_ID.getIndex()] != null && !tableRow[ColumnIndex.TEST_ID.getIndex()].isEmpty()) {
+                        testIds.add(tableRow[ColumnIndex.TEST_ID.getIndex()]);
+                    }
                 }
-
-                Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
-                confirmation.setTitle("Confirm Delete Test Case");
-                confirmation.setHeaderText("Delete Test Case: " + testId);
-                confirmation.setContentText("Are you sure you want to delete all steps for Test ID: " + testId + "?");
-                Optional<ButtonType> result = confirmation.showAndWait();
-                if (result.isPresent() && result.get() == ButtonType.OK) {
-                    int startIndex = selectedIndex;
-                    while (startIndex > 0 && (table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()] == null || 
-                            table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
-                        startIndex--;
-                    }
-                    int endIndex = startIndex;
-                    while (endIndex < table.getItems().size() && (table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()] == null || 
-                            table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].isEmpty() || 
-                            table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].equals(testId))) {
-                        endIndex++;
-                    }
-                    if (endIndex > startIndex) {
-                        table.getItems().subList(startIndex, endIndex).clear();
+                boolean isValidTestId = CreateEditAPITestTemplate.isValidTestId(testId, testIds, testId);
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTHORIZATION.getIndex()] = newVal;
+                table.refresh();
+                tableManager.updateAuthFieldHeaders(selectedIndex);
+                app.setModified(true);
+                if (isValidTestId) {
+                    if ("Basic Auth".equals(newVal)) {
+                        usernameTokenField.setPromptText("Username");
+                        usernameTokenField.setVisible(true);
+                        usernameTokenField.setDisable(false);
+                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        passwordField.setVisible(true);
+                        passwordField.setDisable(false);
+                    } else if ("Bearer Token".equals(newVal)) {
+                        usernameTokenField.setPromptText("Token");
+                        usernameTokenField.setVisible(true);
+                        usernameTokenField.setDisable(false);
+                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.21));
+                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        passwordField.setVisible(false);
+                        passwordField.setDisable(true);
                     } else {
-                        table.getItems().remove(startIndex);
+                        usernameTokenField.setPromptText("Username/Token");
+                        usernameTokenField.setVisible(false);
+                        usernameTokenField.setDisable(true);
+                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        passwordField.setVisible(false);
+                        passwordField.setDisable(true);
                     }
-                    table.refresh();
-                    if (!table.getItems().isEmpty()) {
-                        int newIndex = Math.min(startIndex, table.getItems().size() - 1);
-                        table.getSelectionModel().select(newIndex);
-                    } else {
-                        table.getSelectionModel().clearSelection();
-                    }
+                } else {
+                    usernameTokenField.setPromptText("Username/Token");
+                    usernameTokenField.setVisible(false);
+                    usernameTokenField.setDisable(true);
+                    usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
+                    usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                    usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                    passwordField.setVisible(false);
+                    passwordField.setDisable(true);
                 }
             }
-            updateButtonStates();
         });
-        deleteTestCaseButton.setOnMouseEntered(e -> deleteTestCaseButton.setStyle(BUTTON_HOVER_STYLE));
-        deleteTestCaseButton.setOnMouseExited(e -> deleteTestCaseButton.setStyle(BUTTON_STYLE));
 
-        saveTestButton = new Button("Save Test");
-        saveTestButton.setStyle(BUTTON_STYLE);
-        saveTestButton.setTooltip(new Tooltip("Save the test case to an Excel file"));
-        saveTestButton.setOnAction(e -> {
-            Alert saveOptionAlert = new Alert(Alert.AlertType.CONFIRMATION);
-            saveOptionAlert.setTitle("Save Options");
-            saveOptionAlert.setHeaderText("Save Test Case");
-            saveOptionAlert.setContentText("Choose an option to save your test case:");
-            ButtonType saveButton = new ButtonType("Save");
-            ButtonType saveAsButton = new ButtonType("Save As");
-            ButtonType cancelButton = new ButtonType("Cancel");
-            saveOptionAlert.getButtonTypes().setAll(saveButton, saveAsButton, cancelButton);
-            Optional<ButtonType> result = saveOptionAlert.showAndWait();
-            if (result.isPresent()) {
-                if (result.get() == saveButton) {
-                    saveToFile.apply(null, primaryStage);
-                } else if (result.get() == saveAsButton) {
-                    saveAsToFile.apply(primaryStage);
-                }
-            }
-            updateButtonStates();
-        });
-        saveTestButton.setOnMouseEntered(e -> saveTestButton.setStyle(BUTTON_HOVER_STYLE));
-        saveTestButton.setOnMouseExited(e -> saveTestButton.setStyle(BUTTON_STYLE));
-
-        Button loadTestButton = new Button("Load Test");
-        loadTestButton.setStyle(BUTTON_STYLE);
-        loadTestButton.setTooltip(new Tooltip("Load a test case from an Excel file"));
-        loadTestButton.setOnAction(e -> {
-            if (!checkUnsavedChanges.apply(primaryStage)) {
-                return;
-            }
-            FileChooser fileChooser = new FileChooser();
-            fileChooser.setTitle("Load Test Case");
-            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"));
-            fileChooser.setInitialDirectory(new File(System.getProperty("user.home") + "/Documents"));
-            File file = fileChooser.showOpenDialog(primaryStage);
-            if (file != null) {
-                try (FileInputStream fileIn = new FileInputStream(file);
-                     XSSFWorkbook workbook = new XSSFWorkbook(fileIn)) {
-                    Sheet sheet = workbook.getSheetAt(0);
-                    Row headerRow = sheet.getRow(0);
-                    boolean headersValid = headerRow != null && headerRow.getPhysicalNumberOfCells() == columnNames.length;
-                    if (headersValid) {
-                        for (int i = 0; i < columnNames.length; i++) {
-                            Cell cell = headerRow.getCell(i);
-                            String headerValue = cell != null ? cell.getStringCellValue() : "";
-                            if (!columnNames[i].equals(headerValue)) {
-                                headersValid = false;
-                                break;
-                            }
-                        }
-                    }
-                    if (!headersValid) {
-                        String fileName = file.getName().replaceFirst("[.][^.]+$", "");
-                        showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
-                        return;
-                    }
-
-                    table.getItems().clear();
-                    for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                        Row row = sheet.getRow(i);
-                        if (row != null) {
-                            String[] data = new String[columnNames.length];
-                            for (int j = 0; j < columnNames.length; j++) {
-                                Cell cell = row.getCell(j);
-                                data[j] = cell != null ? cell.toString() : "";
-                            }
-                            table.getItems().add(data);
-                        }
-                    }
-                    table.refresh();
-                    if (!table.getItems().isEmpty()) {
-                        table.getSelectionModel().select(0);
-                    }
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                    alert.setTitle("Success");
-                    alert.setHeaderText("File Loaded");
-                    alert.setContentText("Test case loaded successfully from " + file.getAbsolutePath());
-                    alert.showAndWait();
-                } catch (IOException ex) {
-                    String fileName = file.getName().replaceFirst("[.][^.]+$", "");
-                    showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
-                }
-            }
-            updateButtonStates();
-        });
-        loadTestButton.setOnMouseEntered(e -> loadTestButton.setStyle(BUTTON_HOVER_STYLE));
-        loadTestButton.setOnMouseExited(e -> loadTestButton.setStyle(BUTTON_STYLE));
-
-        createNewTestButton = new Button("Create New Test");
-        createNewTestButton.setStyle(BUTTON_STYLE);
-        createNewTestButton.setTooltip(new Tooltip("Start a new test case"));
-        createNewTestButton.setOnAction(e -> {
-            if (!checkUnsavedChanges.apply(primaryStage)) {
-                return;
-            }
-            table.getItems().clear();
-            table.refresh();
-            updateButtonStates();
-        });
-        createNewTestButton.setOnMouseEntered(e -> createNewTestButton.setStyle(BUTTON_HOVER_STYLE));
-        createNewTestButton.setOnMouseExited(e -> createNewTestButton.setStyle(BUTTON_STYLE));
-
-        Button addEditEnvVarButton = new Button("Add/Edit Env Var");
-        addEditEnvVarButton.setStyle(BUTTON_STYLE);
-        addEditEnvVarButton.setTooltip(new Tooltip("Add or edit environment variables"));
-        addEditEnvVarButton.setOnAction(e -> {
-            try {
-                Stage envVarStage = new Stage();
-                EnvVarList simpleTableWindow = new EnvVarList();
-                simpleTableWindow.start(envVarStage);
-            } catch (Exception ex) {
-                showError("Failed to open environment variables window: " + ex.getMessage());
+        requestComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                table.getItems().get(selectedIndex)[ColumnIndex.REQUEST.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
             }
         });
-        addEditEnvVarButton.setOnMouseEntered(e -> addEditEnvVarButton.setStyle(BUTTON_HOVER_STYLE));
-        addEditEnvVarButton.setOnMouseExited(e -> addEditEnvVarButton.setStyle(BUTTON_STYLE));
 
-        buttonsVBox.getChildren().addAll(
-            addStepButton, addAboveButton, addBelowButton, moveUpButton, moveDownButton,
-            deleteStepButton, deleteTestCaseButton, saveTestButton, loadTestButton,
-            createNewTestButton, addEditEnvVarButton
-        );
+        endpointField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                table.getItems().get(selectedIndex)[ColumnIndex.END_POINT.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+        });
 
-        return buttonsVBox;
+        statusField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                table.getItems().get(selectedIndex)[ColumnIndex.EXPECTED_STATUS.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+        });
+
+        payloadTypeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                table.getItems().get(selectedIndex)[ColumnIndex.PAYLOAD_TYPE.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+        });
+
+        usernameTokenField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD1.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+        });
+
+        passwordField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD2.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+        });
+
+        return textFieldsBox;
     }
 
     public VBox createAdditionalContent() {
@@ -437,6 +482,7 @@ public class UIComponentsManager {
         payloadField.setMinHeight(200);
         payloadField.setMaxHeight(200);
         payloadField.setWrapText(true);
+        payloadField.setDisable(false);
         payloadField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             payloadField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
@@ -444,10 +490,11 @@ public class UIComponentsManager {
         payloadField.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.TAB) {
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
-                if (selectedIndex >= 0) {
+                if (selectedIndex >= 0 && payloadField.isEditable()) {
                     String rawText = payloadField.getText();
                     table.getItems().get(selectedIndex)[ColumnIndex.PAYLOAD.getIndex()] = rawText;
                     table.refresh();
+                    app.setModified(true);
                 }
                 if (!headerFieldsVBox.getChildren().isEmpty()) {
                     HBox firstHeaderPair = (HBox) headerFieldsVBox.getChildren().get(0);
@@ -471,6 +518,7 @@ public class UIComponentsManager {
         verifyResponseField.setMinHeight(200);
         verifyResponseField.setMaxHeight(200);
         verifyResponseField.setWrapText(true);
+        verifyResponseField.setDisable(false);
         verifyResponseField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             verifyResponseField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
@@ -478,10 +526,11 @@ public class UIComponentsManager {
         verifyResponseField.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.TAB) {
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
-                if (selectedIndex >= 0) {
+                if (selectedIndex >= 0 && verifyResponseField.isEditable()) {
                     String rawText = verifyResponseField.getText();
                     table.getItems().get(selectedIndex)[ColumnIndex.VERIFY_RESPONSE.getIndex()] = rawText;
                     table.refresh();
+                    app.setModified(true);
                 }
                 table.requestFocus();
                 if (selectedIndex >= 0) {
@@ -532,7 +581,12 @@ public class UIComponentsManager {
                         testIds.add(row[ColumnIndex.TEST_ID.getIndex()]);
                     }
                 }
-                boolean isValid = isValidTestId(testId, testIds, testId, selectedIndex);
+                boolean isValid = CreateEditAPITestTemplate.isValidTestId(testId, testIds, testId);
+                payloadField.setDisable(false);
+                payloadField.setEditable(isValid);
+                verifyResponseField.setDisable(false);
+                verifyResponseField.setEditable(isValid);
+
                 if (!isValid) {
                     payloadField.clear();
                     verifyResponseField.clear();
@@ -586,11 +640,13 @@ public class UIComponentsManager {
                     headerKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.HEADER_KEY.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     headerValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.HEADER_VALUE.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     headerFieldsVBox.getChildren().add(headerPair);
@@ -625,11 +681,13 @@ public class UIComponentsManager {
                     modifyKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     modifyValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     modifyPayloadVBox.getChildren().add(modifyPair);
@@ -664,11 +722,13 @@ public class UIComponentsManager {
                     paramKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.PARAM_KEY.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     paramValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.PARAM_VALUE.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     paramFieldsVBox.getChildren().add(paramPair);
@@ -703,216 +763,425 @@ public class UIComponentsManager {
                     responseKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     captureValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
                         table.getItems().get(rowIndex)[ColumnIndex.CAPTURE_VALUE.getIndex()] = newVal2.trim();
                         table.refresh();
+                        app.setModified(true);
                     });
 
                     responseCaptureVBox.getChildren().add(responsePair);
                 }
 
                 String payload = newItem[ColumnIndex.PAYLOAD.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD.getIndex()] : "";
-                payloadField.setText(payload);
+                payloadField.setText(CreateEditAPITestTemplate.formatJson(payload, statusLabel));
                 String verify = newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] != null ? newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] : "";
-                verifyResponseField.setText(verify);
+                verifyResponseField.setText(CreateEditAPITestTemplate.formatJson(verify, statusLabel));
             } else {
                 payloadField.clear();
+                payloadField.setDisable(false);
+                payloadField.setEditable(false);
                 verifyResponseField.clear();
+                verifyResponseField.setDisable(false);
+                verifyResponseField.setEditable(false);
             }
         });
 
         return additionalContent;
     }
 
-    public HBox createTextFieldsBox() {
-        ComboBox<String> requestComboBox = new ComboBox<>(FXCollections.observableArrayList("", "GET", "POST", "PUT", "PATCH", "DELETE"));
-        requestComboBox.setPromptText("Request");
-        requestComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
-        requestComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
-        requestComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            requestComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-        });
-        requestComboBox.setDisable(true);
-        requestComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.1));
-        requestComboBox.maxWidthProperty().bind(requestComboBox.prefWidthProperty());
-        requestComboBox.minWidthProperty().bind(requestComboBox.prefWidthProperty());
+    public VBox createButtonsVBox(Stage primaryStage, Function<Stage, Boolean> checkUnsavedChanges, 
+                                  BiFunction<File, Stage, Boolean> saveToFile, 
+                                  Function<Stage, Boolean> saveAsToFile) {
+        VBox buttonsVBox = new VBox(10);
+        buttonsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 10px;");
+        buttonsVBox.setAlignment(Pos.TOP_CENTER);
 
-        requestComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+        Button addStepButton = new Button("Add Step");
+        addStepButton.setStyle(BUTTON_STYLE);
+        addStepButton.setTooltip(new Tooltip("Add a new test step to the table"));
+        addStepButton.setOnAction(e -> {
+            table.getItems().add(new String[columnNames.length]);
+            table.getSelectionModel().select(table.getItems().size() - 1);
+            table.refresh();
+            app.setModified(true);
+            updateButtonStates();
+        });
+        addStepButton.setOnMouseEntered(e -> addStepButton.setStyle(BUTTON_HOVER_STYLE));
+        addStepButton.setOnMouseExited(e -> addStepButton.setStyle(BUTTON_STYLE));
+
+        addAboveButton = new Button("Add Above");
+        addAboveButton.setStyle(BUTTON_STYLE);
+        addAboveButton.setTooltip(new Tooltip("Add a new step above the selected row"));
+        addAboveButton.setOnAction(e -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.REQUEST.getIndex()] = newVal;
+                table.getItems().add(selectedIndex, new String[columnNames.length]);
+                table.getSelectionModel().select(selectedIndex);
                 table.refresh();
+                app.setModified(true);
             }
+            updateButtonStates();
         });
+        addAboveButton.setOnMouseEntered(e -> addAboveButton.setStyle(BUTTON_HOVER_STYLE));
+        addAboveButton.setOnMouseExited(e -> addAboveButton.setStyle(BUTTON_STYLE));
 
-        TextField endpointField = new TextField();
-        endpointField.setPromptText("End-Point");
-        endpointField.setStyle(FIELD_STYLE_UNFOCUSED);
-        endpointField.setPrefHeight(TEXT_FIELD_HEIGHT);
-        endpointField.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            endpointField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-        });
-        endpointField.setDisable(true);
-        endpointField.prefWidthProperty().bind(table.widthProperty().multiply(0.4346));
-        endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
-        endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
-
-        endpointField.textProperty().addListener((obs, oldVal, newVal) -> {
+        addBelowButton = new Button("Add Below");
+        addBelowButton.setStyle(BUTTON_STYLE);
+        addBelowButton.setTooltip(new Tooltip("Add a new step below the selected row"));
+        addBelowButton.setOnAction(e -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.END_POINT.getIndex()] = newVal;
+                table.getItems().add(selectedIndex + 1, new String[columnNames.length]);
+                table.getSelectionModel().select(selectedIndex + 1);
                 table.refresh();
+                app.setModified(true);
             }
+            updateButtonStates();
         });
+        addBelowButton.setOnMouseEntered(e -> addBelowButton.setStyle(BUTTON_HOVER_STYLE));
+        addBelowButton.setOnMouseExited(e -> addBelowButton.setStyle(BUTTON_STYLE));
 
-        ComboBox<String> authComboBox = new ComboBox<>(AUTH_OPTIONS);
-        authComboBox.setPromptText("Authorization");
-        authComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
-        authComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
-        authComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            authComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        moveUpButton = new Button("Move Up");
+        moveUpButton.setStyle(BUTTON_STYLE);
+        moveUpButton.setTooltip(new Tooltip("Move the selected step up"));
+        moveUpButton.setOnAction(e -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex > 0) {
+                ObservableList<String[]> items = table.getItems();
+                String[] temp = items.get(selectedIndex - 1);
+                items.set(selectedIndex - 1, items.get(selectedIndex));
+                items.set(selectedIndex, temp);
+                table.getSelectionModel().select(selectedIndex - 1);
+                table.refresh();
+                app.setModified(true);
+            }
+            updateButtonStates();
         });
-        authComboBox.setDisable(true);
-        authComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.2));
-        authComboBox.maxWidthProperty().bind(authComboBox.prefWidthProperty());
-        authComboBox.minWidthProperty().bind(authComboBox.prefWidthProperty());
+        moveUpButton.setOnMouseEntered(e -> moveUpButton.setStyle(BUTTON_HOVER_STYLE));
+        moveUpButton.setOnMouseExited(e -> moveUpButton.setStyle(BUTTON_STYLE));
 
-        authComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+        moveDownButton = new Button("Move Down");
+        moveDownButton.setStyle(BUTTON_STYLE);
+        moveDownButton.setTooltip(new Tooltip("Move the selected step down"));
+        moveDownButton.setOnAction(e -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && selectedIndex < table.getItems().size() - 1) {
+                ObservableList<String[]> items = table.getItems();
+                String[] temp = items.get(selectedIndex + 1);
+                items.set(selectedIndex + 1, items.get(selectedIndex));
+                items.set(selectedIndex, temp);
+                table.getSelectionModel().select(selectedIndex + 1);
+                table.refresh();
+                app.setModified(true);
+            }
+            updateButtonStates();
+        });
+        moveDownButton.setOnMouseEntered(e -> moveDownButton.setStyle(BUTTON_HOVER_STYLE));
+        moveDownButton.setOnMouseExited(e -> moveDownButton.setStyle(BUTTON_STYLE));
+
+        deleteStepButton = new Button("Delete Step");
+        deleteStepButton.setStyle(BUTTON_STYLE);
+        deleteStepButton.setTooltip(new Tooltip("Delete the selected step"));
+        deleteStepButton.setOnAction(e -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.AUTHORIZATION.getIndex()] = newVal;
-                table.refresh();
+                String[] selectedRow = table.getItems().get(selectedIndex);
+                String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
+                if (testId != null && !testId.isEmpty()) {
+                    Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
+                    confirmation.setTitle("Confirm Delete");
+                    confirmation.setHeaderText("Delete Test Step");
+                    confirmation.setContentText("The selected step has a Test ID: " + testId + ". Are you sure you want to delete it?");
+                    Optional<ButtonType> result = confirmation.showAndWait();
+                    if (result.isPresent() && result.get() == ButtonType.OK) {
+                        table.getItems().remove(selectedIndex);
+                        table.refresh();
+                        app.setModified(true);
+                    }
+                } else {
+                    table.getItems().remove(selectedIndex);
+                    table.refresh();
+                    app.setModified(true);
+                }
             }
+            updateButtonStates();
         });
+        deleteStepButton.setOnMouseEntered(e -> deleteStepButton.setStyle(BUTTON_HOVER_STYLE));
+        deleteStepButton.setOnMouseExited(e -> deleteStepButton.setStyle(BUTTON_STYLE));
 
-        TextField descriptionField = new TextField();
-        descriptionField.setPromptText("Test Description");
-        descriptionField.setStyle(FIELD_STYLE_UNFOCUSED);
-        descriptionField.setPrefHeight(TEXT_FIELD_HEIGHT);
-        descriptionField.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            descriptionField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-        });
-        descriptionField.setDisable(true);
-        descriptionField.prefWidthProperty().bind(table.widthProperty().multiply(0.2654));
-        descriptionField.maxWidthProperty().bind(descriptionField.prefWidthProperty());
-        descriptionField.minWidthProperty().bind(descriptionField.prefWidthProperty());
-
-        descriptionField.textProperty().addListener((obs, oldVal, newVal) -> {
+        deleteTestCaseButton = new Button("Delete Test Case");
+        deleteTestCaseButton.setStyle(BUTTON_STYLE);
+        deleteTestCaseButton.setTooltip(new Tooltip("Delete all steps for the selected test case"));
+        deleteTestCaseButton.setOnAction(e -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.TEST_DESCRIPTION.getIndex()] = newVal;
-                table.refresh();
-            }
-        });
-
-        HBox textFieldsBox = new HBox(10, requestComboBox, endpointField, authComboBox, descriptionField);
-        textFieldsBox.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(requestComboBox, Priority.NEVER);
-        HBox.setHgrow(endpointField, Priority.ALWAYS);
-        HBox.setHgrow(authComboBox, Priority.NEVER);
-        HBox.setHgrow(descriptionField, Priority.NEVER);
-
-        table.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
-            if (newSelection != null) {
-                int selectedIndex = table.getSelectionModel().getSelectedIndex();
-                String testId = newSelection[ColumnIndex.TEST_ID.getIndex()];
-                Set<String> testIds = new HashSet<>();
-                for (String[] row : table.getItems()) {
-                    if (row[ColumnIndex.TEST_ID.getIndex()] != null && !row[ColumnIndex.TEST_ID.getIndex()].isEmpty()) {
-                        testIds.add(row[ColumnIndex.TEST_ID.getIndex()]);
+                String[] selectedRow = table.getItems().get(selectedIndex);
+                String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
+                if (testId == null || testId.isEmpty()) {
+                    CreateEditAPITestTemplate.showError("Please select a row with a valid Test ID to delete the test case.");
+                    return;
+                }
+                Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
+                confirmation.setTitle("Confirm Delete Test Case");
+                confirmation.setHeaderText("Delete Test Case: " + testId);
+                confirmation.setContentText("Are you sure you want to delete all steps for Test ID: " + testId + "?");
+                Optional<ButtonType> result = confirmation.showAndWait();
+                if (result.isPresent() && result.get() == ButtonType.OK) {
+                    int startIndex = selectedIndex;
+                    while (startIndex > 0 && (table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()] == null || 
+                            table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
+                        startIndex--;
+                    }
+                    int endIndex = startIndex;
+                    while (endIndex < table.getItems().size() && (table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()] == null || 
+                            table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].isEmpty() || 
+                            table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].equals(testId))) {
+                        endIndex++;
+                    }
+                    if (endIndex > startIndex) {
+                        table.getItems().subList(startIndex, endIndex).clear();
+                    } else {
+                        table.getItems().remove(startIndex);
+                    }
+                    table.refresh();
+                    app.setModified(true);
+                    if (!table.getItems().isEmpty()) {
+                        int newIndex = Math.min(startIndex, table.getItems().size() - 1);
+                        table.getSelectionModel().select(newIndex);
+                    } else {
+                        table.getSelectionModel().clearSelection();
                     }
                 }
-                boolean isValid = isValidTestId(testId, testIds, testId, selectedIndex);
-                requestComboBox.setDisable(!isValid);
-                endpointField.setDisable(!isValid);
-                authComboBox.setDisable(!isValid);
-                descriptionField.setDisable(!isValid);
-                if (isValid) {
-                    requestComboBox.setValue(newSelection[ColumnIndex.REQUEST.getIndex()] != null ? 
-                            newSelection[ColumnIndex.REQUEST.getIndex()] : "");
-                    endpointField.setText(newSelection[ColumnIndex.END_POINT.getIndex()] != null ? 
-                            newSelection[ColumnIndex.END_POINT.getIndex()] : "");
-                    authComboBox.setValue(newSelection[ColumnIndex.AUTHORIZATION.getIndex()] != null ? 
-                            newSelection[ColumnIndex.AUTHORIZATION.getIndex()] : "");
-                    descriptionField.setText(newSelection[ColumnIndex.TEST_DESCRIPTION.getIndex()] != null ? 
-                            newSelection[ColumnIndex.TEST_DESCRIPTION.getIndex()] : "");
-                } else {
-                    requestComboBox.setValue("");
-                    endpointField.clear();
-                    authComboBox.setValue("");
-                    descriptionField.clear();
+            }
+            updateButtonStates();
+        });
+        deleteTestCaseButton.setOnMouseEntered(e -> deleteTestCaseButton.setStyle(BUTTON_HOVER_STYLE));
+        deleteTestCaseButton.setOnMouseExited(e -> deleteTestCaseButton.setStyle(BUTTON_STYLE));
+
+        saveTestButton = new Button("Save Test");
+        saveTestButton.setStyle(BUTTON_STYLE);
+        saveTestButton.setTooltip(new Tooltip("Save the test case to an Excel file"));
+        saveTestButton.setOnAction(e -> {
+            Alert saveOptionAlert = new Alert(Alert.AlertType.CONFIRMATION);
+            saveOptionAlert.setTitle("Save Options");
+            saveOptionAlert.setHeaderText("Save Test Case");
+            saveOptionAlert.setContentText("Choose an option to save your test case:");
+            ButtonType saveButton = new ButtonType("Save");
+            ButtonType saveAsButton = new ButtonType("Save As");
+            ButtonType cancelButton = new ButtonType("Cancel");
+            saveOptionAlert.getButtonTypes().setAll(saveButton, saveAsButton, cancelButton);
+            Optional<ButtonType> result = saveOptionAlert.showAndWait();
+            if (result.isPresent()) {
+                if (result.get() == saveButton) {
+                    if (app.getLoadedFile() == null) {
+                        saveAsToFile.apply(primaryStage);
+                    } else {
+                        saveToFile.apply(app.getLoadedFile(), primaryStage);
+                    }
+                } else if (result.get() == saveAsButton) {
+                    saveAsToFile.apply(primaryStage);
                 }
+            }
+            updateButtonStates();
+        });
+        saveTestButton.setOnMouseEntered(e -> saveTestButton.setStyle(BUTTON_HOVER_STYLE));
+        saveTestButton.setOnMouseExited(e -> saveTestButton.setStyle(BUTTON_STYLE));
+
+        Button loadTestButton = new Button("Load Test");
+        loadTestButton.setStyle(BUTTON_STYLE);
+        loadTestButton.setTooltip(new Tooltip("Load a test case from an Excel file"));
+        loadTestButton.setOnAction(e -> {
+            if (!checkUnsavedChanges.apply(primaryStage)) {
+                return;
+            }
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Load Test Case");
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel Files", "*.xlsx"));
+            fileChooser.setInitialDirectory(new File(System.getProperty("user.home") + "/Documents"));
+            File file = fileChooser.showOpenDialog(primaryStage);
+            if (file != null) {
+                try (FileInputStream fileIn = new FileInputStream(file);
+                     XSSFWorkbook workbook = new XSSFWorkbook(fileIn)) {
+                    Sheet sheet = workbook.getSheetAt(0);
+                    Row headerRow = sheet.getRow(0);
+                    boolean headersValid = headerRow != null && headerRow.getPhysicalNumberOfCells() == columnNames.length;
+                    if (headersValid) {
+                        for (int i = 0; i < columnNames.length; i++) {
+                            Cell cell = headerRow.getCell(i);
+                            String headerValue = cell != null ? cell.getStringCellValue() : "";
+                            if (!columnNames[i].equals(headerValue)) {
+                                headersValid = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!headersValid) {
+                        String fileName = file.getName().replaceFirst("[.][^.]+$", "");
+                        CreateEditAPITestTemplate.showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
+                        return;
+                    }
+
+                    table.getItems().clear();
+                    Set<String> testIds = new HashSet<>();
+                    List<String[]> validRows = new ArrayList<>();
+                    for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                        Row row = sheet.getRow(i);
+                        if (row != null) {
+                            String[] data = new String[columnNames.length];
+                            for (int j = 0; j < columnNames.length; j++) {
+                                Cell cell = row.getCell(j);
+                                if (j == ColumnIndex.TEST_ID.getIndex() && cell != null) {
+                                    String testId;
+                                    if (cell.getCellType() == CellType.NUMERIC) {
+                                        int wholeNumber = (int) Math.floor(cell.getNumericCellValue());
+                                        testId = String.valueOf(wholeNumber);
+                                    } else {
+                                        testId = cell.toString().trim();
+                                    }
+                                    if (!testId.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(testId, testIds, null)) {
+                                        String fileName = file.getName().replaceFirst("[.][^.]+$", "");
+                                        CreateEditAPITestTemplate.showError("Invalid Test ID '" + testId + "' in row " + (i + 1) + " of " + fileName + ". Must be digits, length <= 5, and unique.");
+                                        return;
+                                    }
+                                    if (!testId.isEmpty()) {
+                                        testIds.add(testId);
+                                    }
+                                    data[j] = testId;
+                                } else {
+                                    data[j] = cell != null ? cell.toString().trim() : "";
+                                }
+                            }
+                            validRows.add(data);
+                        }
+                    }
+                    table.getItems().addAll(validRows);
+                    table.refresh();
+                    if (!table.getItems().isEmpty()) {
+                        table.getSelectionModel().select(0);
+                    }
+                    app.setModified(false);
+                    app.setLoadedFile(file);
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Success");
+                    alert.setHeaderText("File Loaded");
+                    alert.setContentText("Test case loaded successfully from " + file.getAbsolutePath());
+                    alert.showAndWait();
+                    try {
+                        EnvJsonUpdater.updateEnvJsonFromTable(table);
+                    } catch (IOException ex) {
+                        CreateEditAPITestTemplate.showError("Failed to update env.json: " + ex.getMessage());
+                    }
+                } catch (IOException ex) {
+                    String fileName = file.getName().replaceFirst("[.][^.]+$", "");
+                    CreateEditAPITestTemplate.showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
+                }
+            }
+            updateButtonStates();
+        });
+        loadTestButton.setOnMouseEntered(e -> loadTestButton.setStyle(BUTTON_HOVER_STYLE));
+        loadTestButton.setOnMouseExited(e -> loadTestButton.setStyle(BUTTON_STYLE));
+
+        createNewTestButton = new Button("Create New Test");
+        createNewTestButton.setStyle(BUTTON_STYLE);
+        createNewTestButton.setTooltip(new Tooltip("Start a new test case"));
+        createNewTestButton.setOnAction(e -> {
+            if (!checkUnsavedChanges.apply(primaryStage)) {
+                return;
+            }
+            table.getItems().clear();
+            table.refresh();
+            app.setModified(false);
+            app.setLoadedFile(null);
+            updateButtonStates();
+        });
+        createNewTestButton.setOnMouseEntered(e -> createNewTestButton.setStyle(BUTTON_HOVER_STYLE));
+        createNewTestButton.setOnMouseExited(e -> createNewTestButton.setStyle(BUTTON_STYLE));
+
+        Button addEditEnvVarButton = new Button("Add/Edit Env Var");
+        addEditEnvVarButton.setStyle(BUTTON_STYLE);
+        addEditEnvVarButton.setTooltip(new Tooltip("Add or edit environment variables"));
+        addEditEnvVarButton.setOnAction(e -> {
+            if (envVarStage != null && envVarStage.isShowing()) {
+                Platform.runLater(() -> envVarStage.requestFocus());
             } else {
-                requestComboBox.setValue("");
-                endpointField.clear();
-                authComboBox.setValue("");
-                descriptionField.clear();
-                requestComboBox.setDisable(true);
-                endpointField.setDisable(true);
-                authComboBox.setDisable(true);
-                descriptionField.setDisable(true);
+                try {
+                    envVarStage = new Stage();
+                    EnvVarList simpleTableWindow = new EnvVarList();
+                    simpleTableWindow.start(envVarStage);
+                    envVarStage.setOnCloseRequest(event -> {
+                        envVarStage = null; // Clear reference when window is closed
+                    });
+                } catch (Exception ex) {
+                    CreateEditAPITestTemplate.showError("Failed to open environment variables window: " + ex.getMessage());
+                }
             }
         });
+        addEditEnvVarButton.setOnMouseEntered(e -> addEditEnvVarButton.setStyle(BUTTON_HOVER_STYLE));
+        addEditEnvVarButton.setOnMouseExited(e -> addEditEnvVarButton.setStyle(BUTTON_STYLE));
 
-        return textFieldsBox;
+        Button importCollectionButton = new Button("Import Collection");
+        importCollectionButton.setStyle(BUTTON_STYLE);
+        importCollectionButton.setTooltip(new Tooltip("Import a collection of test cases"));
+        importCollectionButton.setOnMouseEntered(e -> importCollectionButton.setStyle(BUTTON_HOVER_STYLE));
+        importCollectionButton.setOnMouseExited(e -> importCollectionButton.setStyle(BUTTON_STYLE));
+        
+        importCollectionButton.setOnAction(e -> {
+            if (!checkUnsavedChanges.apply(primaryStage)) {
+                return;
+            }
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Import Postman Collection");
+            fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Files", "*.json"));
+            fileChooser.setInitialDirectory(new File(System.getProperty("user.home") + "/Documents"));
+            File file = fileChooser.showOpenDialog(primaryStage);
+            if (file != null) {
+                try {
+                    List<String[]> rows = PostmanCollectionImporter.importFromFile(file);
+                    table.getItems().clear();
+                    table.getItems().addAll(rows);
+                    table.refresh();
+                    if (!rows.isEmpty()) {
+                        table.getSelectionModel().select(0);
+                    }
+                    app.setModified(false);
+                    app.setLoadedFile(null); // Imported from JSON, not XLSX
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Success");
+                    alert.setHeaderText("Collection Imported");
+                    alert.setContentText("Postman collection imported successfully from " + file.getAbsolutePath());
+                    alert.showAndWait();
+                    EnvJsonUpdater.updateEnvJsonFromTable(table);
+                } catch (Exception ex) {
+                    CreateEditAPITestTemplate.showError("Failed to import Postman collection: " + ex.getMessage());
+                }
+            }
+            updateButtonStates();
+        });
+
+        buttonsVBox.getChildren().addAll(
+            addStepButton, addAboveButton, addBelowButton, moveUpButton, moveDownButton,
+            deleteStepButton, deleteTestCaseButton, saveTestButton, loadTestButton,
+            createNewTestButton, addEditEnvVarButton, importCollectionButton
+        );
+
+        return buttonsVBox;
     }
 
     public void updateButtonStates() {
         int selectedIndex = table.getSelectionModel().getSelectedIndex();
-        boolean isRowSelected = selectedIndex >= 0;
-        boolean isNotFirstRow = selectedIndex > 0;
-        boolean isNotLastRow = selectedIndex >= 0 && selectedIndex < table.getItems().size() - 1;
+        boolean hasSelection = selectedIndex >= 0;
         boolean hasItems = !table.getItems().isEmpty();
 
-        addAboveButton.setDisable(!isRowSelected);
-        addBelowButton.setDisable(!isRowSelected);
-        moveUpButton.setDisable(!isRowSelected || !isNotFirstRow);
-        moveDownButton.setDisable(!isRowSelected || !isNotLastRow);
-        deleteStepButton.setDisable(!isRowSelected);
-        deleteTestCaseButton.setDisable(!isRowSelected);
+        addAboveButton.setDisable(!hasSelection);
+        addBelowButton.setDisable(!hasSelection);
+        moveUpButton.setDisable(!hasSelection || selectedIndex == 0);
+        moveDownButton.setDisable(!hasSelection || selectedIndex == table.getItems().size() - 1);
+        deleteStepButton.setDisable(!hasSelection);
+        deleteTestCaseButton.setDisable(!hasSelection);
         saveTestButton.setDisable(!hasItems);
-        createNewTestButton.setDisable(!hasItems);
-    }
-
-    private boolean isValidTestId(String testId, Set<String> testIds, String currentId, int rowIndex) {
-        if (testId == null || testId.isEmpty()) {
-            return false;
-        }
-        if (!testId.equals(currentId) && testIds.contains(testId)) {
-            return false;
-        }
-        if (testId.length() > 5) {
-            return false;
-        }
-        if (!testId.matches("^[0-9#]*$")) {
-            return false;
-        }
-        if (testId.startsWith("#") && testId.matches(".*[0-9].*")) {
-            return false;
-        }
-        if (testId.matches("^[0-9].*") && testId.contains("#")) {
-            return false;
-        }
-        return true;
-    }
-
-    private void showError(String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR, message);
-        alert.showAndWait();
-    }
-
-    private String formatJson(String input) {
-        if (input == null || input.trim().isEmpty()) {
-            return input != null ? input : "";
-        }
-        try {
-            Object parsedJson = objectMapper.readValue(input, LinkedHashMap.class);
-            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsedJson);
-        } catch (Exception e) {
-            Platform.runLater(() -> statusLabel.setText("Invalid JSON: " + e.getMessage()));
-            return input;
-        }
+        createNewTestButton.setDisable(false);
     }
 }

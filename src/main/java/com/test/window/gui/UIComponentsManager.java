@@ -22,6 +22,8 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
 import javafx.geometry.VPos;
+import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -33,6 +35,7 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -441,7 +444,7 @@ public class UIComponentsManager {
         headerFieldsScroll.setMaxHeight(200);
         headerFieldsScroll.setMinHeight(200);
         headerFieldsVBox.setMaxHeight(190);
-
+        
         VBox paramFieldsVBox = new VBox(5);
         paramFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         ScrollPane paramListField = new ScrollPane(paramFieldsVBox);
@@ -487,8 +490,9 @@ public class UIComponentsManager {
             payloadField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
 
-        payloadField.setOnKeyPressed(event -> {
+        payloadField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
+                event.consume(); // Prevent tab character insertion
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0 && payloadField.isEditable()) {
                     String rawText = payloadField.getText();
@@ -496,18 +500,7 @@ public class UIComponentsManager {
                     table.refresh();
                     app.setModified(true);
                 }
-                if (!headerFieldsVBox.getChildren().isEmpty()) {
-                    HBox firstHeaderPair = (HBox) headerFieldsVBox.getChildren().get(0);
-                    TextField firstHeaderField = (TextField) firstHeaderPair.getChildren().get(0);
-                    firstHeaderField.requestFocus();
-                } else {
-                    table.requestFocus();
-                    if (selectedIndex >= 0) {
-                        table.getSelectionModel().select(selectedIndex);
-                        table.getFocusModel().focus(selectedIndex, table.getColumns().get(0));
-                    }
-                }
-                event.consume();
+                moveFocus(payloadField, !event.isShiftDown()); // Move focus forward or backward
             }
         });
 
@@ -523,8 +516,9 @@ public class UIComponentsManager {
             verifyResponseField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
 
-        verifyResponseField.setOnKeyPressed(event -> {
+        verifyResponseField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
+                event.consume(); // Prevent tab character insertion
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0 && verifyResponseField.isEditable()) {
                     String rawText = verifyResponseField.getText();
@@ -532,12 +526,7 @@ public class UIComponentsManager {
                     table.refresh();
                     app.setModified(true);
                 }
-                table.requestFocus();
-                if (selectedIndex >= 0) {
-                    table.getSelectionModel().select(selectedIndex);
-                    table.getFocusModel().focus(selectedIndex, table.getColumns().get(0));
-                }
-                event.consume();
+                moveFocus(verifyResponseField, !event.isShiftDown()); // Move focus forward or backward
             }
         });
 
@@ -623,7 +612,7 @@ public class UIComponentsManager {
                             row[ColumnIndex.HEADER_VALUE.getIndex()] : "");
                     headerValueField.setPromptText("Header Value");
                     headerValueField.setStyle(FIELD_STYLE_UNFOCUSED);
-                    headerValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    headerKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
                     headerValueField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
                         headerValueField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
@@ -1183,5 +1172,29 @@ public class UIComponentsManager {
         deleteTestCaseButton.setDisable(!hasSelection);
         saveTestButton.setDisable(!hasItems);
         createNewTestButton.setDisable(false);
+    }
+    
+    private void moveFocus(Node fromNode, boolean next) {
+        List<Node> traversables = new ArrayList<>();
+        addTraversableNodes(fromNode.getScene().getRoot(), traversables);
+        int currentIndex = traversables.indexOf(fromNode.getScene().getFocusOwner());
+        if (currentIndex >= 0) {
+            int targetIndex = currentIndex + (next ? 1 : -1);
+            if (targetIndex < 0) {
+                targetIndex = traversables.size() - 1;
+            } else if (targetIndex >= traversables.size()) {
+                targetIndex = 0;
+            }
+            traversables.get(targetIndex).requestFocus();
+        }
+    }
+
+    private void addTraversableNodes(Node node, List<Node> list) {
+        if (node.isFocusTraversable() && node.isVisible() && !node.isDisabled()) {
+            list.add(node);
+        }
+        if (node instanceof Parent) {
+            ((Parent) node).getChildrenUnmodifiable().forEach(child -> addTraversableNodes(child, list));
+        }
     }
 }

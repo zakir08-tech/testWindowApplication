@@ -46,7 +46,7 @@ public class TableManager {
     private final TableView<String[]> table;
     private final Label statusLabel;
     private final String[] columnNames;
-    private final CreateEditAPITestTemplate app; // Add reference
+    private final CreateEditAPITestTemplate app;
 
     public TableManager(String[] columnNames, Label statusLabel, CreateEditAPITestTemplate app) {
         this.columnNames = columnNames;
@@ -111,9 +111,9 @@ public class TableManager {
                 setTooltip(new Tooltip("Click to edit"));
             }});
             double charWidth = 7.0;
-            double minWidth = columnNames[i].length() * charWidth + 20;
-            column.setMinWidth(minWidth);
-            column.setPrefWidth(index == ColumnIndex.TEST_ID.getIndex() ? 80 : 150);
+            double headerBasedWidth = columnNames[i].length() * charWidth + 20;
+            column.setMinWidth(headerBasedWidth);
+            column.setPrefWidth(headerBasedWidth);
             column.setStyle("-fx-text-fill: white;");
             table.getColumns().add(column);
         }

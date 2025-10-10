@@ -29,6 +29,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
@@ -108,8 +109,19 @@ public class UIComponentsManager {
     }
 
     public HBox createTextFieldsBox() {
-        ComboBox<String> requestComboBox = new ComboBox<>(HTTP_METHODS);
+    	ComboBox<String> requestComboBox = new ComboBox<>(HTTP_METHODS);
         requestComboBox.setPromptText("Request");
+        requestComboBox.setButtonCell(new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText("Request");
+                } else {
+                    setText(item);
+                }
+            }
+        });
         requestComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
         requestComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
         requestComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
@@ -148,6 +160,17 @@ public class UIComponentsManager {
 
         ComboBox<String> payloadTypeComboBox = new ComboBox<>(PAYLOAD_TYPES);
         payloadTypeComboBox.setPromptText("Payload Type");
+        payloadTypeComboBox.setButtonCell(new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText("Payload Type");
+                } else {
+                    setText(item);
+                }
+            }
+        });
         payloadTypeComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
         payloadTypeComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
         payloadTypeComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
@@ -162,6 +185,17 @@ public class UIComponentsManager {
 
         ComboBox<String> authComboBox = new ComboBox<>(AUTH_OPTIONS);
         authComboBox.setPromptText("Authorization");
+        authComboBox.setButtonCell(new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText("Authorization");
+                } else {
+                    setText(item);
+                }
+            }
+        });
         authComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
         authComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
         authComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
@@ -242,6 +276,12 @@ public class UIComponentsManager {
                     requestComboBox.setPromptText("Request");
                     authComboBox.setPromptText("Authorization");
                     payloadTypeComboBox.setPromptText("Payload Type");
+                    requestComboBox.setValue(null);
+                    requestComboBox.getSelectionModel().clearSelection();
+                    payloadTypeComboBox.setValue(null);
+                    payloadTypeComboBox.getSelectionModel().clearSelection();
+                    authComboBox.setValue(null);
+                    authComboBox.getSelectionModel().clearSelection();
                 } else {
                     requestComboBox.setStyle(requestComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     authComboBox.setStyle(authComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
@@ -288,14 +328,17 @@ public class UIComponentsManager {
                 }
             } else {
                 requestComboBox.setValue(null);
+                requestComboBox.getSelectionModel().clearSelection();
                 requestComboBox.setStyle(FIELD_STYLE_DISABLED);
                 requestComboBox.setPromptText("Request");
                 endpointField.clear();
                 statusField.clear();
                 payloadTypeComboBox.setValue(null);
+                payloadTypeComboBox.getSelectionModel().clearSelection();
                 payloadTypeComboBox.setStyle(FIELD_STYLE_DISABLED);
                 payloadTypeComboBox.setPromptText("Payload Type");
                 authComboBox.setValue(null);
+                authComboBox.getSelectionModel().clearSelection();
                 authComboBox.setStyle(FIELD_STYLE_DISABLED);
                 authComboBox.setPromptText("Authorization");
                 usernameTokenField.setPromptText("Username/Token");
@@ -359,15 +402,6 @@ public class UIComponentsManager {
                         passwordField.setVisible(false);
                         passwordField.setDisable(true);
                     }
-                } else {
-                    usernameTokenField.setPromptText("Username/Token");
-                    usernameTokenField.setVisible(false);
-                    usernameTokenField.setDisable(true);
-                    usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-                    usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                    usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                    passwordField.setVisible(false);
-                    passwordField.setDisable(true);
                 }
             }
         });

@@ -58,6 +58,10 @@ public class HtmlReportGeneratorApi {
             max-width: 100%;
             margin: 0; /* Ensure no extra margin affects hover */
         }
+        .payload, .response-body {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
         .payload {
             color: #008000;
         }

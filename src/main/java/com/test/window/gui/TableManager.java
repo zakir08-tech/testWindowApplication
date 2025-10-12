@@ -46,9 +46,9 @@ public class TableManager {
     private final TableView<String[]> table;
     private final Label statusLabel;
     private final String[] columnNames;
-    private final CreateEditAPITestTemplate app;
+    private final CreateEditAPITest app;
 
-    public TableManager(String[] columnNames, Label statusLabel, CreateEditAPITestTemplate app) {
+    public TableManager(String[] columnNames, Label statusLabel, CreateEditAPITest app) {
         this.columnNames = columnNames;
         this.statusLabel = statusLabel;
         this.app = app;
@@ -191,9 +191,9 @@ public class TableManager {
         private final Label statusLabel;
         private final Set<String> testIds = new HashSet<>();
         private String originalValue;
-        private final CreateEditAPITestTemplate app;
+        private final CreateEditAPITest app;
 
-        public CustomTextFieldTableCell(TableView<String[]> table, int columnIndex, Label statusLabel, CreateEditAPITestTemplate app) {
+        public CustomTextFieldTableCell(TableView<String[]> table, int columnIndex, Label statusLabel, CreateEditAPITest app) {
             super(new StringConverter<String>() {
                 @Override
                 public String toString(String object) {
@@ -323,8 +323,8 @@ public class TableManager {
                         String text = textField.getText() != null ? textField.getText() : "";
                         int rowIndex = getTableRow().getIndex();
                         int newColumn = (columnIndex + 1) % table.getColumns().size();
-                        if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !text.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(text, testIds, originalValue)) {
-                            CreateEditAPITestTemplate.showError("Cannot commit invalid Test ID: " + text + ". Use only 0-9.");
+                        if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !text.isEmpty() && !CreateEditAPITest.isValidTestId(text, testIds, originalValue)) {
+                            CreateEditAPITest.showError("Cannot commit invalid Test ID: " + text + ". Use only 0-9.");
                             cancelEdit();
                             setText(getItem() != null ? getItem() : "");
                             setGraphic(null);
@@ -345,7 +345,7 @@ public class TableManager {
                                 table.refresh();
                             }
                         } else {
-                            commitEdit(CreateEditAPITestTemplate.formatJson(text, statusLabel));
+                            commitEdit(CreateEditAPITest.formatJson(text, statusLabel));
                         }
                         table.getFocusModel().focus(rowIndex, table.getColumns().get(newColumn));
                         table.getSelectionModel().select(rowIndex);
@@ -373,8 +373,8 @@ public class TableManager {
                     } else if (e.getCode() == KeyCode.ENTER) {
                         String text = textField.getText() != null ? textField.getText() : "";
                         if (columnIndex == ColumnIndex.TEST_ID.getIndex()) {
-                            if (!text.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(text, testIds, originalValue)) {
-                                CreateEditAPITestTemplate.showError("Cannot commit invalid Test ID: " + text + ". Use only 0-9.");
+                            if (!text.isEmpty() && !CreateEditAPITest.isValidTestId(text, testIds, originalValue)) {
+                                CreateEditAPITest.showError("Cannot commit invalid Test ID: " + text + ". Use only 0-9.");
                                 return;
                             } else if (text.isEmpty() && originalValue != null && !originalValue.isEmpty()) {
                                 Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
@@ -394,7 +394,7 @@ public class TableManager {
                                 }
                             }
                         }
-                        commitEdit(CreateEditAPITestTemplate.formatJson(text, statusLabel));
+                        commitEdit(CreateEditAPITest.formatJson(text, statusLabel));
                         e.consume();
                     } else if (e.getCode() == KeyCode.ESCAPE) {
                         cancelEdit();
@@ -423,7 +423,7 @@ public class TableManager {
 
         @Override
         public void commitEdit(String newValue) {
-            if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !newValue.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(newValue, testIds, originalValue)) {
+            if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !newValue.isEmpty() && !CreateEditAPITest.isValidTestId(newValue, testIds, originalValue)) {
                 return;
             }
             super.commitEdit(newValue);

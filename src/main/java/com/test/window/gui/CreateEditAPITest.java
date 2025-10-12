@@ -34,7 +34,7 @@ import java.util.ArrayList;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 
-public class CreateEditAPITestTemplate extends Application {
+public class CreateEditAPITest extends Application {
 
     private static final String[] COLUMN_NAMES = {
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",

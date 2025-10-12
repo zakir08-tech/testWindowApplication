@@ -92,7 +92,7 @@ public class UIComponentsManager {
     private final Label statusLabel;
     private final String[] columnNames;
     private final TableManager tableManager;
-    private final CreateEditAPITestTemplate app;
+    private final CreateEditAPITest app;
     private TextArea payloadField;
     private TextArea verifyResponseField;
     private ScrollPane headerFieldsScroll;
@@ -100,7 +100,7 @@ public class UIComponentsManager {
                    deleteStepButton, deleteTestCaseButton, saveTestButton, createNewTestButton;
     private static Stage envVarStage; // Track single EnvVarList window
 
-    public UIComponentsManager(TableView<String[]> table, Label statusLabel, String[] columnNames, TableManager tableManager, CreateEditAPITestTemplate app) {
+    public UIComponentsManager(TableView<String[]> table, Label statusLabel, String[] columnNames, TableManager tableManager, CreateEditAPITest app) {
         this.table = table;
         this.statusLabel = statusLabel;
         this.columnNames = columnNames;
@@ -256,7 +256,7 @@ public class UIComponentsManager {
                         testIds.add(tableRow[ColumnIndex.TEST_ID.getIndex()]);
                     }
                 }
-                boolean isValidTestId = CreateEditAPITestTemplate.isValidTestId(testId, testIds, testId);
+                boolean isValidTestId = CreateEditAPITest.isValidTestId(testId, testIds, testId);
                 requestComboBox.setValue(row[ColumnIndex.REQUEST.getIndex()]);
                 endpointField.setText(row[ColumnIndex.END_POINT.getIndex()]);
                 statusField.setText(row[ColumnIndex.EXPECTED_STATUS.getIndex()]);
@@ -368,7 +368,7 @@ public class UIComponentsManager {
                         testIds.add(tableRow[ColumnIndex.TEST_ID.getIndex()]);
                     }
                 }
-                boolean isValidTestId = CreateEditAPITestTemplate.isValidTestId(testId, testIds, testId);
+                boolean isValidTestId = CreateEditAPITest.isValidTestId(testId, testIds, testId);
                 table.getItems().get(selectedIndex)[ColumnIndex.AUTHORIZATION.getIndex()] = newVal;
                 table.refresh();
                 tableManager.updateAuthFieldHeaders(selectedIndex);
@@ -604,7 +604,7 @@ public class UIComponentsManager {
                         testIds.add(row[ColumnIndex.TEST_ID.getIndex()]);
                     }
                 }
-                boolean isValid = CreateEditAPITestTemplate.isValidTestId(testId, testIds, testId);
+                boolean isValid = CreateEditAPITest.isValidTestId(testId, testIds, testId);
                 payloadField.setDisable(false);
                 payloadField.setEditable(isValid);
                 verifyResponseField.setDisable(false);
@@ -799,9 +799,9 @@ public class UIComponentsManager {
                 }
 
                 String payload = newItem[ColumnIndex.PAYLOAD.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD.getIndex()] : "";
-                payloadField.setText(CreateEditAPITestTemplate.formatJson(payload, statusLabel));
+                payloadField.setText(CreateEditAPITest.formatJson(payload, statusLabel));
                 String verify = newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] != null ? newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] : "";
-                verifyResponseField.setText(CreateEditAPITestTemplate.formatJson(verify, statusLabel));
+                verifyResponseField.setText(CreateEditAPITest.formatJson(verify, statusLabel));
             } else {
                 payloadField.clear();
                 payloadField.setDisable(false);
@@ -944,7 +944,7 @@ public class UIComponentsManager {
                 String[] selectedRow = table.getItems().get(selectedIndex);
                 String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
                 if (testId == null || testId.isEmpty()) {
-                    CreateEditAPITestTemplate.showError("Please select a row with a valid Test ID to delete the test case.");
+                    CreateEditAPITest.showError("Please select a row with a valid Test ID to delete the test case.");
                     return;
                 }
                 Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
@@ -1043,7 +1043,7 @@ public class UIComponentsManager {
                     }
                     if (!headersValid) {
                         String fileName = file.getName().replaceFirst("[.][^.]+$", "");
-                        CreateEditAPITestTemplate.showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
+                        CreateEditAPITest.showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
                         return;
                     }
 
@@ -1064,9 +1064,9 @@ public class UIComponentsManager {
                                     } else {
                                         testId = cell.toString().trim();
                                     }
-                                    if (!testId.isEmpty() && !CreateEditAPITestTemplate.isValidTestId(testId, testIds, null)) {
+                                    if (!testId.isEmpty() && !CreateEditAPITest.isValidTestId(testId, testIds, null)) {
                                         String fileName = file.getName().replaceFirst("[.][^.]+$", "");
-                                        CreateEditAPITestTemplate.showError("Invalid Test ID '" + testId + "' in row " + (i + 1) + " of " + fileName + ". Must be digits, length <= 5, and unique.");
+                                        CreateEditAPITest.showError("Invalid Test ID '" + testId + "' in row " + (i + 1) + " of " + fileName + ". Must be digits, length <= 5, and unique.");
                                         return;
                                     }
                                     if (!testId.isEmpty()) {
@@ -1095,11 +1095,11 @@ public class UIComponentsManager {
                     try {
                         EnvJsonUpdater.updateEnvJsonFromTable(table);
                     } catch (IOException ex) {
-                        CreateEditAPITestTemplate.showError("Failed to update env.json: " + ex.getMessage());
+                        CreateEditAPITest.showError("Failed to update env.json: " + ex.getMessage());
                     }
                 } catch (IOException ex) {
                     String fileName = file.getName().replaceFirst("[.][^.]+$", "");
-                    CreateEditAPITestTemplate.showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
+                    CreateEditAPITest.showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
                 }
             }
             updateButtonStates();
@@ -1138,7 +1138,7 @@ public class UIComponentsManager {
                         envVarStage = null; // Clear reference when window is closed
                     });
                 } catch (Exception ex) {
-                    CreateEditAPITestTemplate.showError("Failed to open environment variables window: " + ex.getMessage());
+                    CreateEditAPITest.showError("Failed to open environment variables window: " + ex.getMessage());
                 }
             }
         });
@@ -1178,7 +1178,7 @@ public class UIComponentsManager {
                     alert.showAndWait();
                     EnvJsonUpdater.updateEnvJsonFromTable(table);
                 } catch (Exception ex) {
-                    CreateEditAPITestTemplate.showError("Failed to import Postman collection: " + ex.getMessage());
+                    CreateEditAPITest.showError("Failed to import Postman collection: " + ex.getMessage());
                 }
             }
             updateButtonStates();

@@ -420,38 +420,46 @@ public class RunApiTest extends Application {
                                 modifyPayloadMap.put(testId, processedModifyPayload);
                                 System.out.println("Debug: Processed modify payload for Test ID " + testId + ": " + processedModifyPayload);
 
-                                String processedPayload = payload;
-                                if (payload != null && !payload.trim().isEmpty() && !processedModifyPayload.isEmpty()) {
-                                    System.out.println("Debug: Parsing and modifying payload for Test ID " + testId);
-                                    processedPayload = replacePlaceholders(payload, envVars, testId);
-                                    try {
+                                modifiedPayload = payload;
+                                if (payload != null && !payload.trim().isEmpty()) {
+                                    System.out.println("Debug: Replacing placeholders in payload for Test ID " + testId);
+                                    modifiedPayload = replacePlaceholders(payload, envVars, testId);
+                                    String lowerPayloadType = payloadType != null ? payloadType.toLowerCase() : "";
+                                    boolean isJsonPayload = "json".equals(lowerPayloadType);
+                                    if (isJsonPayload) {
                                         // Validate JSON payload before parsing
                                         try {
-                                            objectMapper.readTree(processedPayload);
+                                            objectMapper.readTree(modifiedPayload);
                                         } catch (JsonProcessingException ex) {
                                             throw new Exception("Invalid JSON in payload for Test ID " + testId + ": " + ex.getMessage());
                                         }
-                                        Map<String, Object> payloadObj = objectMapper.readValue(processedPayload, HashMap.class);
-                                        System.out.println("Debug: Original JSON payload for Test ID " + testId + ": " + objectMapper.writeValueAsString(payloadObj));
-                                        for (Map.Entry<String, Object> entry : processedModifyPayload.entrySet()) {
-                                            String key = entry.getKey();
-                                            String value = entry.getValue() != null ? entry.getValue().toString() : "";
-                                            System.out.println("Debug: Attempting to set key '" + key + "' to value '" + value + "' for Test ID " + testId);
-                                            boolean success = setNestedValue(payloadObj, key, value, testId);
-                                            if (!success) {
-                                                System.err.println("Warning: Unable to set key '" + key + "' in payload for Test ID " + testId);
-                                            } else {
-                                                System.out.println("Debug: Successfully set key '" + key + "' to value '" + value + "' for Test ID " + testId);
+                                        if (!processedModifyPayload.isEmpty()) {
+                                            System.out.println("Debug: Parsing and modifying payload for Test ID " + testId);
+                                            Map<String, Object> payloadObj = objectMapper.readValue(modifiedPayload, HashMap.class);
+                                            System.out.println("Debug: Original JSON payload for Test ID " + testId + ": " + objectMapper.writeValueAsString(payloadObj));
+                                            for (Map.Entry<String, Object> entry : processedModifyPayload.entrySet()) {
+                                                String key = entry.getKey();
+                                                String value = entry.getValue() != null ? entry.getValue().toString() : "";
+                                                System.out.println("Debug: Attempting to set key '" + key + "' to value '" + value + "' for Test ID " + testId);
+                                                boolean success = setNestedValue(payloadObj, key, value, testId);
+                                                if (!success) {
+                                                    System.err.println("Warning: Unable to set key '" + key + "' in payload for Test ID " + testId);
+                                                } else {
+                                                    System.out.println("Debug: Successfully set key '" + key + "' to value '" + value + "' for Test ID " + testId);
+                                                }
                                             }
+                                            modifiedPayload = objectMapper.writeValueAsString(payloadObj);
+                                            System.out.println("Debug: Modified JSON payload for Test ID " + testId + ": " + modifiedPayload);
+                                        } else {
+                                            System.out.println("Debug: No payload modification needed for Test ID " + testId);
                                         }
-                                        modifiedPayload = objectMapper.writeValueAsString(payloadObj);
-                                        System.out.println("Debug: Modified JSON payload for Test ID " + testId + ": " + modifiedPayload);
-                                        testData.put("Payload", modifiedPayload); // Update testDataMap with modified payload
-                                    } catch (IOException ex) {
-                                        System.err.println("Error parsing or modifying payload for Test ID " + testId + ": " + ex.getMessage());
-                                        throw new Exception("Payload modification failed: " + ex.getMessage(), ex);
+                                    } else {
+                                        System.out.println("Debug: Skipping JSON-specific processing for non-JSON payload type '" + lowerPayloadType + "' for Test ID " + testId);
                                     }
+                                } else {
+                                    System.out.println("Debug: No payload to process for Test ID " + testId);
                                 }
+                                testData.put("Payload", modifiedPayload); // Update testDataMap with modified payload
                                 reportData.put("payload", modifiedPayload);
                                 reportData.put("payloadType", payloadType);
 

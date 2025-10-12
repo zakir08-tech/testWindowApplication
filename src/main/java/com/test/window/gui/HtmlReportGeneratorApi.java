@@ -4,26 +4,43 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import org.w3c.dom.Document;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
 public class HtmlReportGeneratorApi {
 
     private static final String BOOTSTRAP_CSS = """
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         """;
 
     private static final String BOOTSTRAP_ICONS_CSS = """
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
         """;
 
     private static final String BOOTSTRAP_JS = """
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
         """;
 
     private static final String CSS_STYLE = """
@@ -42,7 +59,7 @@ public class HtmlReportGeneratorApi {
             min-height: 100vh;
         }
         .report-container h1 {
-            font-size: calc(1.5 * 0.5rem); /* ~0.75rem */
+            font-size: 1.5rem;
         }
         .table-container {
             overflow-x: auto;
@@ -77,6 +94,18 @@ public class HtmlReportGeneratorApi {
             top: 0;
             z-index: 2;
             white-space: nowrap;
+        }
+        #testReportTable th:nth-child(6),
+        #testReportTable td:nth-child(6) {
+            min-width: 250px;
+        }
+        #testReportTable th:nth-child(11),
+        #testReportTable td:nth-child(11) {
+            min-width: 350px;
+        }
+        #testReportTable th:nth-child(12),
+        #testReportTable td:nth-child(12) {
+            min-width: 350px;
         }
         .pass {
             color: #008000 !important;
@@ -117,6 +146,14 @@ public class HtmlReportGeneratorApi {
             margin: 0;
             font-size: 10px;
         }
+        .verify-response-gray {
+            white-space: pre;
+            background-color: #F5F5F5;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 0;
+            font-size: 10px;
+        }
         .response-body {
             white-space: pre;
             color: #8B008B !important;
@@ -127,6 +164,7 @@ public class HtmlReportGeneratorApi {
             font-size: 10px;
         }
         .map-content {
+            white-space: pre;
             padding: 10px;
             border-radius: 4px;
             margin: 0;
@@ -260,7 +298,8 @@ public class HtmlReportGeneratorApi {
             html.append("<td>").append(safeToString(reportData.get("request"))).append("</td>\n");
             html.append("<td>").append(highlightPlaceholders(safeToString(reportData.get("endpoint")))).append("</td>\n");
 
-            html.append("<td>").append(formatJsonContent(safeToString(reportData.get("payload")), objectMapper, "payload")).append("</td>\n");
+            String payloadStr = reportData.get("payload") != null ? String.valueOf(reportData.get("payload")) : "";
+            html.append("<td>").append(formatJsonContent(payloadStr, objectMapper, "payload")).append("</td>\n");
 
             String headersContent = formatMap(reportData.get("headers"), objectMapper, false);
             html.append("<td>").append(headersContent.startsWith("<span") ? headersContent : "<pre class='map-content'>" + highlightPlaceholders(headersContent) + "</pre>").append("</td>\n");
@@ -273,18 +312,29 @@ public class HtmlReportGeneratorApi {
 
             html.append("<td>").append(safeToString(reportData.get("responseStatus"))).append("</td>\n");
 
-            String responseBody = safeToString(reportData.get("responseBody"));
-            html.append("<td>").append(formatJsonContent(responseBody, objectMapper, "response-body")).append("</td>\n");
+            String responseBodyStr = reportData.get("responseBody") != null ? String.valueOf(reportData.get("responseBody")) : "";
+            String contentType = detectContentType(responseBodyStr);
+            html.append("<td>").append(formatContent(responseBodyStr, objectMapper, "response-body", contentType)).append("</td>\n");
 
-            String verifyResponse = safeToString(reportData.get("verifyResponse"));
-            // Use "verificationPassed" from reportData instead of recomputing isMatch
-            boolean verificationPassed = reportData.containsKey("verificationPassed") ? (Boolean) reportData.get("verificationPassed") : true; // Default true if missing
-            String verifyResponseContent = (verifyResponse == null || verifyResponse.trim().isEmpty()) 
-                ? "<span class='not-available'>None</span>" 
-                : formatJsonContent(verifyResponse, objectMapper, verificationPassed ? "verify-response-green" : "verify-response-red");
+            String verifyResponseStr = reportData.get("verifyResponse") != null ? String.valueOf(reportData.get("verifyResponse")) : "";
+            String failureReasonStr = safeToString(reportData.get("failureReason"));
+            boolean isStatusMismatchFail = "Fail".equalsIgnoreCase(status) && !failureReasonStr.isEmpty() && failureReasonStr.contains("Status code mismatch");
+            String verifyResponseContent;
+            if (verifyResponseStr.trim().isEmpty()) {
+                verifyResponseContent = "<span class='not-available'>None</span>";
+            } else {
+                String verifyCssClass;
+                if (isStatusMismatchFail) {
+                    verifyCssClass = "verify-response-gray";
+                } else {
+                    boolean verificationPassed = reportData.containsKey("verificationPassed") ? (Boolean) reportData.get("verificationPassed") : true;
+                    verifyCssClass = verificationPassed ? "verify-response-green" : "verify-response-red";
+                }
+                verifyResponseContent = formatJsonContent(verifyResponseStr, objectMapper, verifyCssClass);
+            }
             html.append("<td>").append(verifyResponseContent).append("</td>\n");
 
-            html.append("<td class='failure-reason'>").append(formatFailureReason(safeToString(reportData.get("failureReason")))).append("</td>\n");
+            html.append("<td class='failure-reason'>").append(formatFailureReason(failureReasonStr)).append("</td>\n");
 
             String captureIssues = safeToString(reportData.get("captureIssues"));
             if (captureIssues == null || captureIssues.trim().isEmpty()) {
@@ -306,170 +356,109 @@ public class HtmlReportGeneratorApi {
         html.append(BOOTSTRAP_JS);
         html.append("<script>\n");
         html.append("document.addEventListener('DOMContentLoaded', function() {\n");
-        html.append(" console.log('DOM fully loaded at: ', new Date().toLocaleString());\n");
         html.append(" const tableContainer = document.getElementById('tableContainer');\n");
         html.append(" const testReportTable = document.getElementById('testReportTable');\n");
         html.append(" const filterAllBtn = document.getElementById('filterAllBtn');\n");
         html.append(" const filterPassBtn = document.getElementById('filterPassBtn');\n");
         html.append(" const filterFailBtn = document.getElementById('filterFailBtn');\n");
         html.append(" const scrollToTopBtn = document.getElementById('scrollToTopBtn');\n");
-        html.append(" if (!tableContainer) console.error('Table container (#tableContainer) not found');\n");
-        html.append(" else console.log('Table container found');\n");
-        html.append(" if (!testReportTable) console.error('Table (#testReportTable) not found');\n");
-        html.append(" else console.log('Table found, rows: ', testReportTable.querySelectorAll('tbody tr').length);\n");
-        html.append(" if (!filterAllBtn) console.error('Total Tests button (#filterAllBtn) not found');\n");
-        html.append(" else console.log('Total Tests button found');\n");
-        html.append(" if (!filterPassBtn) console.error('Passed button (#filterPassBtn) not found');\n");
-        html.append(" else console.log('Passed button found');\n");
-        html.append(" if (!filterFailBtn) console.error('Failed button (#filterFailBtn) not found');\n");
-        html.append(" else console.log('Failed button found');\n");
-        html.append(" if (!scrollToTopBtn) console.error('Scroll to top button (#scrollToTopBtn) not found');\n");
-        html.append(" else console.log('Scroll to top button found');\n");
         html.append(" function wrapLongContent() {\n");
-        html.append("  console.log('Running wrapLongContent at: ', new Date().toLocaleString());\n");
-        html.append("  document.querySelectorAll('#testReportTable tbody td.description').forEach(cell => {\n");
-        html.append("   const span = cell.querySelector('span');\n");
-        html.append("   const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
-        html.append("   console.log('Description text:', rawText);\n");
-        html.append("   console.log('Description text length:', rawText.length);\n");
-        html.append("   if (rawText.includes('{{')) {\n");
-        html.append("    const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\"color: #FF0000;\">${match}</span>`);\n");
-        html.append("    if (span) span.innerHTML = highlightedText;\n");
-        html.append("    else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
-        html.append("   }\n");
-        html.append("   if (rawText.length > 150) {\n");
-        html.append("    console.log('Applying wrap-long to Description');\n");
-        html.append("    cell.classList.add('wrap-long');\n");
-        html.append("    if (span) span.classList.add('wrap-long');\n");
-        html.append("   } else {\n");
-        html.append("    console.log('Skipping wrap-long for Description');\n");
-        html.append("   }\n");
-        html.append("  });\n");
-        html.append("  document.querySelectorAll('#testReportTable tbody td.capture-issues').forEach(cell => {\n");
-        html.append("   const span = cell.querySelector('span');\n");
-        html.append("   const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
-        html.append("   console.log('Capture Issues text:', rawText);\n");
-        html.append("   console.log('Capture Issues text length:', rawText.length);\n");
-        html.append("   if (rawText.includes('{{')) {\n");
-        html.append("    const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\"color: #FF0000;\">${match}</span>`);\n");
-        html.append("    if (span) span.innerHTML = highlightedText;\n");
-        html.append("    else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
-        html.append("   }\n");
-        html.append("   if (rawText.length > 150) {\n");
-        html.append("    console.log('Applying wrap-long to Capture Issues');\n");
-        html.append("    cell.classList.add('wrap-long');\n");
-        html.append("    if (span) span.classList.add('wrap-long');\n");
-        html.append("   } else {\n");
-        html.append("    console.log('Skipping wrap-long for Capture Issues');\n");
-        html.append("   }\n");
-        html.append("  });\n");
-        html.append("  document.querySelectorAll('#testReportTable tbody td').forEach(cell => {\n");
-        html.append("   const pre = cell.querySelector('pre.verify-response-green, pre.verify-response-red');\n");
-        html.append("   if (pre) {\n");
-        html.append("    const computedStyle = window.getComputedStyle(pre);\n");
-        html.append("    console.log('Verify Response cell class:', pre.className, 'color:', computedStyle.color);\n");
-        html.append("   }\n");
-        html.append("   const span = cell.querySelector('span.not-available');\n");
-        html.append("   if (span) {\n");
-        html.append("    const computedStyle = window.getComputedStyle(span);\n");
-        html.append("    console.log('None class:', span.className, 'color:', computedStyle.color);\n");
-        html.append("   }\n");
-        html.append("  });\n");
+        html.append(" document.querySelectorAll('#testReportTable tbody td.description').forEach(cell => {\n");
+        html.append(" const span = cell.querySelector('span');\n");
+        html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
+        html.append(" if (rawText.includes('{{')) {\n");
+        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\"color: #FF0000;\">${match}</span>`);\n");
+        html.append(" if (span) span.innerHTML = highlightedText;\n");
+        html.append(" else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
         html.append(" }\n");
+        html.append(" if (rawText.length > 150) {\n");
+        html.append(" cell.classList.add('wrap-long');\n");
+        html.append(" if (span) span.classList.add('wrap-long');\n");
+        html.append(" }\n");
+        html.append(" });\n");
+        html.append(" document.querySelectorAll('#testReportTable tbody td.capture-issues').forEach(cell => {\n");
+        html.append(" const span = cell.querySelector('span');\n");
+        html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
+        html.append(" if (rawText.includes('{{')) {\n");
+        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\"color: #FF0000;\">${match}</span>`);\n");
+        html.append(" if (span) span.innerHTML = highlightedText;\n");
+        html.append(" else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
+        html.append(" }\n");
+        html.append(" if (rawText.length > 150) {\n");
+        html.append(" cell.classList.add('wrap-long');\n");
+        html.append(" if (span) span.classList.add('wrap-long');\n");
+        html.append(" }\n");
+        html.append(" });\n");
+        html.append(" });\n");
         html.append(" try {\n");
-        html.append("  wrapLongContent();\n");
-        html.append("  console.log('wrapLongContent executed successfully');\n");
+        html.append(" wrapLongContent();\n");
         html.append(" } catch (e) {\n");
-        html.append("  console.error('Error in wrapLongContent: ', e);\n");
+        html.append(" console.error('Error in wrapLongContent: ', e);\n");
         html.append(" }\n");
         html.append(" if (filterAllBtn) {\n");
-        html.append("  filterAllBtn.addEventListener('click', function() {\n");
-        html.append("   console.log('Total Tests button clicked at: ', new Date().toLocaleString());\n");
-        html.append("   filterTests('all');\n");
-        html.append("  });\n");
+        html.append(" filterAllBtn.addEventListener('click', function() {\n");
+        html.append(" filterTests('all');\n");
+        html.append(" });\n");
         html.append(" }\n");
         html.append(" if (filterPassBtn) {\n");
-        html.append("  filterPassBtn.addEventListener('click', function() {\n");
-        html.append("   console.log('Passed button clicked at: ', new Date().toLocaleString());\n");
-        html.append("   filterTests('pass');\n");
-        html.append("  });\n");
+        html.append(" filterPassBtn.addEventListener('click', function() {\n");
+        html.append(" filterTests('pass');\n");
+        html.append(" });\n");
         html.append(" }\n");
         html.append(" if (filterFailBtn) {\n");
-        html.append("  filterFailBtn.addEventListener('click', function() {\n");
-        html.append("   console.log('Failed button clicked at: ', new Date().toLocaleString());\n");
-        html.append("   filterTests('fail');\n");
-        html.append("  });\n");
+        html.append(" filterFailBtn.addEventListener('click', function() {\n");
+        html.append(" filterTests('fail');\n");
+        html.append(" });\n");
         html.append(" }\n");
         html.append(" if (scrollToTopBtn) {\n");
-        html.append("  scrollToTopBtn.addEventListener('click', function() {\n");
-        html.append("   console.log('Scroll to top button clicked at: ', new Date().toLocaleString());\n");
-        html.append("   filterTests('all');\n");
-        html.append("  });\n");
+        html.append(" scrollToTopBtn.addEventListener('click', function() {\n");
+        html.append(" scrollToTop();\n");
+        html.append(" });\n");
         html.append(" }\n");
         html.append(" filterTests('all');\n");
         html.append(" function filterTests(filterType) {\n");
-        html.append("  console.log('filterTests called with type:', filterType, 'at: ', new Date().toLocaleString());\n");
-        html.append("  const rows = document.querySelectorAll('#testReportTable tbody tr');\n");
-        html.append("  console.log('Number of rows found:', rows.length);\n");
-        html.append("  if (rows.length === 0) {\n");
-        html.append("   console.warn('No table rows found to filter');\n");
-        html.append("   return;\n");
-        html.append("  }\n");
-        html.append("  rows.forEach(row => {\n");
-        html.append("   const status = row.getAttribute('data-status') || '';\n");
-        html.append("   console.log('Row ID:', row.id, 'Status:', status);\n");
-        html.append("   row.style.display = (filterType === 'all' || status === filterType) ? '' : 'none';\n");
-        html.append("   console.log(row.style.display === '' ? 'Showing row:' : 'Hiding row:', row.id);\n");
-        html.append("  });\n");
-        html.append("  const container = document.getElementById('tableContainer');\n");
-        html.append("  if (!container) {\n");
-        html.append("   console.error('Table container (#tableContainer) not found during filter');\n");
-        html.append("   return;\n");
-        html.append("  }\n");
-        html.append("  console.log('Resetting table scroll on filter');\n");
-        html.append("  try {\n");
-        html.append("   container.scrollTo({ top: 0, behavior: 'smooth' });\n");
-        html.append("   console.log('scrollTo executed on filter');\n");
-        html.append("  } catch (e) {\n");
-        html.append("   console.warn('scrollTo failed on filter, using scrollTop:', e);\n");
-        html.append("   container.scrollTop = 0;\n");
-        html.append("   console.log('scrollTop set to 0 on filter');\n");
-        html.append("  }\n");
-        html.append("  try {\n");
-        html.append("   wrapLongContent();\n");
-        html.append("   console.log('wrapLongContent called after filter');\n");
-        html.append("  } catch (e) {\n");
-        html.append("   console.error('Error in wrapLongContent after filter: ', e);\n");
-        html.append("  }\n");
+        html.append(" const rows = document.querySelectorAll('#testReportTable tbody tr');\n");
+        html.append(" if (rows.length === 0) {\n");
+        html.append(" return;\n");
+        html.append(" }\n");
+        html.append(" rows.forEach(row => {\n");
+        html.append(" const status = row.getAttribute('data-status') || '';\n");
+        html.append(" row.style.display = (filterType === 'all' || status === filterType) ? '' : 'none';\n");
+        html.append(" });\n");
+        html.append(" const container = document.getElementById('tableContainer');\n");
+        html.append(" if (!container) {\n");
+        html.append(" return;\n");
+        html.append(" }\n");
+        html.append(" try {\n");
+        html.append(" container.scrollTo({ top: 0, behavior: 'smooth' });\n");
+        html.append(" } catch (e) {\n");
+        html.append(" container.scrollTop = 0;\n");
+        html.append(" }\n");
+        html.append(" try {\n");
+        html.append(" wrapLongContent();\n");
+        html.append(" } catch (e) {\n");
+        html.append(" console.error('Error in wrapLongContent after filter: ', e);\n");
+        html.append(" }\n");
         html.append(" }\n");
         html.append(" function scrollToTop() {\n");
-        html.append("  console.log('scrollToTop called at: ', new Date().toLocaleString());\n");
-        html.append("  const container = document.getElementById('tableContainer');\n");
-        html.append("  if (!container) {\n");
-        html.append("   console.error('Table container (#tableContainer) not found');\n");
-        html.append("   return;\n");
-        html.append("  }\n");
-        html.append("  const scrollHeight = container.scrollHeight;\n");
-        html.append("  const clientHeight = container.clientHeight;\n");
-        html.append("  const scrollTop = container.scrollTop;\n");
-        html.append("  console.log('Table container stats - scrollHeight:', scrollHeight, 'clientHeight:', clientHeight, 'scrollTop:', scrollTop);\n");
-        html.append("  if (scrollHeight <= clientHeight) {\n");
-        html.append("   console.warn('Table container is not scrollable (scrollHeight <= clientHeight)');\n");
-        html.append("   return;\n");
-        html.append("  }\n");
-        html.append("  if (scrollTop === 0) {\n");
-        html.append("   console.log('Already at the top of the table');\n");
-        html.append("   return;\n");
-        html.append("  }\n");
-        html.append("  console.log('Attempting to scroll table container to top');\n");
-        html.append("  try {\n");
-        html.append("   container.scrollTo({ top: 0, behavior: 'smooth' });\n");
-        html.append("   console.log('scrollTo executed successfully');\n");
-        html.append("  } catch (e) {\n");
-        html.append("   console.warn('scrollTo failed, using scrollTop:', e);\n");
-        html.append("   container.scrollTop = 0;\n");
-        html.append("   console.log('scrollTop set to 0');\n");
-        html.append("  }\n");
+        html.append(" const container = document.getElementById('tableContainer');\n");
+        html.append(" if (!container) {\n");
+        html.append(" return;\n");
+        html.append(" }\n");
+        html.append(" const scrollHeight = container.scrollHeight;\n");
+        html.append(" const clientHeight = container.clientHeight;\n");
+        html.append(" const scrollTop = container.scrollTop;\n");
+        html.append(" if (scrollHeight <= clientHeight) {\n");
+        html.append(" return;\n");
+        html.append(" }\n");
+        html.append(" if (scrollTop === 0) {\n");
+        html.append(" return;\n");
+        html.append(" }\n");
+        html.append(" try {\n");
+        html.append(" container.scrollTo({ top: 0, behavior: 'smooth' });\n");
+        html.append(" } catch (e) {\n");
+        html.append(" container.scrollTop = 0;\n");
+        html.append(" }\n");
         html.append(" }\n");
         html.append("});\n");
         html.append("</script>\n");
@@ -484,13 +473,54 @@ public class HtmlReportGeneratorApi {
         }
     }
 
+    private String wrapLongLines(String text, int maxLength) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String[] lines = text.split("\n");
+        return Arrays.stream(lines)
+                .map(line -> wrapSingleLine(line, maxLength))
+                .collect(Collectors.joining("\n"));
+    }
+
+    private String wrapSingleLine(String line, int maxLength) {
+        if (line.length() <= maxLength) {
+            return line;
+        }
+        List<String> words = Arrays.asList(line.split("\\s+"));
+        StringBuilder wrapped = new StringBuilder();
+        StringBuilder currentLine = new StringBuilder();
+        for (String word : words) {
+            if (currentLine.length() + word.length() + 1 > maxLength) {
+                if (currentLine.length() > 0) {
+                    if (wrapped.length() > 0) {
+                        wrapped.append("\n");
+                    }
+                    wrapped.append(currentLine.toString().trim());
+                    currentLine = new StringBuilder();
+                }
+            }
+            if (currentLine.length() > 0) {
+                currentLine.append(" ");
+            }
+            currentLine.append(word);
+        }
+        if (currentLine.length() > 0) {
+            if (wrapped.length() > 0) {
+                wrapped.append("\n");
+            }
+            wrapped.append(currentLine.toString().trim());
+        }
+        return wrapped.toString();
+    }
+
     // CHANGE: Made public to allow reuse in RunApiTest without duplication (was private)
     public boolean isNoValidationFailure(String verifyResponse, String responseBody, ObjectMapper objectMapper) {
-        String verifyValue = safeToString(verifyResponse).trim();
-        String responseValue = safeToString(responseBody).trim();
+        String verifyValue = verifyResponse != null ? verifyResponse.trim() : "";
+        String responseValue = responseBody != null ? responseBody.trim() : "";
         System.out.println("Verify Response raw value: '" + verifyValue + "' (length: " + verifyValue.length() + ")");
         System.out.println("Response Body raw value: '" + responseValue + "' (length: " + responseValue.length() + ")");
-        
+
         if (verifyValue.isEmpty()) {
             System.out.println("Verify Response is empty or null, considered match");
             return true;
@@ -557,27 +587,75 @@ public class HtmlReportGeneratorApi {
     }
 
     private String formatJsonContent(String content, ObjectMapper objectMapper, String cssClass) {
+        return formatContent(content, objectMapper, cssClass, "json");
+    }
+
+    private String formatContent(String content, ObjectMapper objectMapper, String cssClass, String contentType) {
         if (content == null || content.trim().isEmpty()) {
-            String appliedClass = (cssClass.equals("verify-response-green") || cssClass.equals("verify-response-red")) ? "not-available" : "not-available";
-            System.out.println("formatJsonContent: Content is null or empty, using class: " + appliedClass);
+            String appliedClass = (cssClass.equals("verify-response-green") || cssClass.equals("verify-response-red") || cssClass.equals("verify-response-gray")) ? "not-available" : "not-available";
+            System.out.println("formatContent: Content is null or empty, using class: " + appliedClass);
             return "<span class='" + appliedClass + "'>None</span>";
         }
         try {
-            Object json = objectMapper.readValue(content, Object.class);
-            String prettyJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-            System.out.println("formatJsonContent: Formatted JSON for class: " + cssClass + ", content: " + prettyJson);
-            String highlighted = highlightPlaceholders(escapeHtml(prettyJson));
+            String formattedContent;
+            if ("xml".equals(contentType)) {
+                String prettyXml = prettyPrintXml(content);
+                formattedContent = prettyXml;
+                System.out.println("formatContent: Formatted XML for class: " + cssClass + ", content: " + prettyXml);
+            } else {
+                // Assume JSON
+                Object json = objectMapper.readValue(content, Object.class);
+                String prettyJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
+                formattedContent = prettyJson;
+                System.out.println("formatContent: Formatted JSON for class: " + cssClass + ", content: " + prettyJson);
+            }
+            // Wrap long lines
+            formattedContent = wrapLongLines(formattedContent, 100);
+            String escaped = escapeHtml(formattedContent);
+            String highlighted = highlightPlaceholders(escaped);
             if (cssClass.startsWith("verify-response")) {
                 highlighted = highlightAnyValue(highlighted);
             }
             return "<pre class='" + cssClass + "'>" + highlighted + "</pre>";
         } catch (Exception e) {
-            System.out.println("formatJsonContent: Failed to parse JSON, using raw content for class: " + cssClass + ", content: " + content);
-            String highlighted = highlightPlaceholders(escapeHtml(content));
+            System.out.println("formatContent: Failed to parse " + contentType + ", using raw content for class: " + cssClass + ", content: " + content);
+            String escaped = escapeHtml(content);
+            String formattedContent = wrapLongLines(escaped, 100);
+            String highlighted = highlightPlaceholders(formattedContent);
             if (cssClass.startsWith("verify-response")) {
                 highlighted = highlightAnyValue(highlighted);
             }
             return "<pre class='" + cssClass + "'>" + highlighted + "</pre>";
+        }
+    }
+
+    private String detectContentType(String body) {
+        if (body == null || body.trim().isEmpty()) {
+            return "text";
+        }
+        String trimmed = body.trim().toLowerCase();
+        if (trimmed.startsWith("<?xml") || (trimmed.startsWith("<") && trimmed.contains(">") && trimmed.endsWith(">"))) {
+            return "xml";
+        }
+        return "json"; // Default to JSON for parsing attempt
+    }
+
+    private String prettyPrintXml(String xml) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document document = builder.parse(new InputSource(new StringReader(xml)));
+
+            TransformerFactory transformerFactory = TransformerFactory.newInstance();
+            Transformer transformer = transformerFactory.newTransformer();
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+
+            StringWriter writer = new StringWriter();
+            transformer.transform(new DOMSource(document), new StreamResult(writer));
+            return writer.getBuffer().toString();
+        } catch (ParserConfigurationException | SAXException | IOException | TransformerException e) {
+            return xml; // Fallback to raw if parsing fails
         }
     }
 
@@ -590,7 +668,9 @@ public class HtmlReportGeneratorApi {
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
             String anyValue = matcher.group();
-            matcher.appendReplacement(result, "<span style=\"color: #000000;\">" + anyValue + "</span>");
+            // FIXED: Quote dynamic part for safe appendReplacement
+            String quotedAnyValue = Matcher.quoteReplacement(anyValue);
+            matcher.appendReplacement(result, "<span style=\"color: #000000;\">" + quotedAnyValue + "</span>");
         }
         matcher.appendTail(result);
         return result.toString();
@@ -608,7 +688,9 @@ public class HtmlReportGeneratorApi {
         while (matcher.find()) {
             String value = matcher.group(1).trim();
             String escapedValue = escapeHtml(value);
-            String replacement = "expected <span style=\"color: #008000;\">" + escapedValue + "</span>, ";
+            // FIXED: Quote dynamic part for safe appendReplacement
+            String quotedValue = Matcher.quoteReplacement(escapedValue);
+            String replacement = "expected <span style=\"color: #008000;\">" + quotedValue + "</span>, ";
             matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);
@@ -620,7 +702,9 @@ public class HtmlReportGeneratorApi {
         while (matcher.find()) {
             String value = matcher.group(1).trim();
             String escapedValue = escapeHtml(value);
-            String replacement = "got <span style=\"color: #FF0000;\">" + escapedValue + "</span>";
+            // FIXED: Quote dynamic part for safe appendReplacement
+            String quotedValue = Matcher.quoteReplacement(escapedValue);
+            String replacement = "got <span style=\"color: #FF0000;\">" + quotedValue + "</span>";
             matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);
@@ -636,7 +720,10 @@ public class HtmlReportGeneratorApi {
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
             String placeholder = matcher.group();
-            matcher.appendReplacement(result, "<span style=\"color: #FF0000;\">" + escapeHtml(placeholder) + "</span>");
+            String escapedPlaceholder = escapeHtml(placeholder);
+            // FIXED: Quote dynamic part for safe appendReplacement
+            String quotedPlaceholder = Matcher.quoteReplacement(escapedPlaceholder);
+            matcher.appendReplacement(result, "<span style=\"color: #FF0000;\">" + quotedPlaceholder + "</span>");
         }
         matcher.appendTail(result);
         return result.toString();

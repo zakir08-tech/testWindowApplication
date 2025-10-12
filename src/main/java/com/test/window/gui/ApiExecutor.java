@@ -3,21 +3,28 @@ package com.test.window.gui;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
+import java.net.URLDecoder;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ApiExecutor {
@@ -85,6 +92,26 @@ public class ApiExecutor {
         return executeRequest(method, url, headers, params, payload, payloadType, auth, sslValidation);
     }
 
+    private List<NameValuePair> parseUrlEncodedString(String encodedPayload) throws Exception {
+        List<NameValuePair> params = new ArrayList<>();
+        if (encodedPayload == null || encodedPayload.trim().isEmpty()) {
+            return params;
+        }
+        String[] pairs = encodedPayload.split("&");
+        for (String pairStr : pairs) {
+            if (pairStr.isEmpty()) continue;
+            int idx = pairStr.indexOf('=');
+            if (idx == -1) {
+                params.add(new BasicNameValuePair(URLDecoder.decode(pairStr, "UTF-8"), ""));
+            } else {
+                String key = URLDecoder.decode(pairStr.substring(0, idx), "UTF-8");
+                String value = URLDecoder.decode(pairStr.substring(idx + 1), "UTF-8");
+                params.add(new BasicNameValuePair(key, value));
+            }
+        }
+        return params;
+    }
+
     public Response executeRequest(
             String method,
             String url,
@@ -119,7 +146,9 @@ public class ApiExecutor {
                 String paramValue = param.getValue() != null ? param.getValue().toString() : "";
                 urlWithParams.append(param.getKey()).append("=").append(paramValue).append("&");
             }
-            urlWithParams.deleteCharAt(urlWithParams.length() - 1);
+            if (urlWithParams.length() > 0) {
+                urlWithParams.deleteCharAt(urlWithParams.length() - 1);
+            }
         }
 
         HttpRequestBase request;
@@ -157,25 +186,40 @@ public class ApiExecutor {
             }
         }
 
-        ContentType contentType;
-        switch (payloadType != null ? payloadType.toLowerCase() : "") {
-            case "json":
-                contentType = ContentType.APPLICATION_JSON;
-                break;
-            case "xml":
-                contentType = ContentType.APPLICATION_XML;
-                break;
-            case "text":
-                contentType = ContentType.TEXT_PLAIN;
-                break;
-            default:
-                contentType = ContentType.APPLICATION_JSON;
-                break;
-        }
-
-        if (payload != null && !payload.trim().isEmpty() && (request instanceof HttpPost || request instanceof HttpPut)) {
-            ((HttpEntityEnclosingRequestBase) request).setEntity(new StringEntity(payload, contentType));
-            System.out.println("Debug: Set payload in HTTP request: " + payload + " with Content-Type: " + contentType);
+        if (payload != null && !payload.trim().isEmpty() && (request instanceof HttpEntityEnclosingRequestBase)) {
+            HttpEntityEnclosingRequestBase entityRequest = (HttpEntityEnclosingRequestBase) request;
+            String lowerPayloadType = payloadType != null ? payloadType.toLowerCase() : "";
+            if ("urlencoded".equals(lowerPayloadType)) {
+                List<NameValuePair> formParams = parseUrlEncodedString(payload);
+                entityRequest.setEntity(new UrlEncodedFormEntity(formParams, "UTF-8"));
+                System.out.println("Debug: Set URL-encoded form entity with params: " + formParams);
+            } else if ("formdata".equals(lowerPayloadType) || "multipart".equals(lowerPayloadType)) {
+                List<NameValuePair> formParams = parseUrlEncodedString(payload);
+                MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+                for (NameValuePair nv : formParams) {
+                    builder.addTextBody(nv.getName(), nv.getValue(), ContentType.TEXT_PLAIN);
+                }
+                entityRequest.setEntity(builder.build());
+                System.out.println("Debug: Set multipart form entity with params: " + formParams);
+            } else {
+                ContentType contentType;
+                switch (lowerPayloadType) {
+                    case "json":
+                        contentType = ContentType.APPLICATION_JSON;
+                        break;
+                    case "xml":
+                        contentType = ContentType.APPLICATION_XML;
+                        break;
+                    case "text":
+                        contentType = ContentType.TEXT_PLAIN;
+                        break;
+                    default:
+                        contentType = ContentType.APPLICATION_JSON;
+                        break;
+                }
+                entityRequest.setEntity(new StringEntity(payload, contentType));
+                System.out.println("Debug: Set string entity with Content-Type: " + contentType + " for payload: " + payload);
+            }
         } else {
             System.out.println("Debug: No payload set in HTTP request (payload is null or empty, or method is not POST/PUT)");
         }

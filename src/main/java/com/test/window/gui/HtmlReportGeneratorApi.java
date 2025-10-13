@@ -818,40 +818,45 @@ public class HtmlReportGeneratorApi {
         if (mapObj == null) {
             return "<span class='not-available'>None</span>";
         }
-        if (mapObj instanceof Map) {
-            Map<?, ?> map = (Map<?, ?>) mapObj;
-            if (isAuthentication) {
-                Object type = map.get("Type");
-                if (type == null || "None".equalsIgnoreCase(String.valueOf(type))) {
-                    return "<span class='not-available'>None</span>";
-                }
-            }
-            if (map.isEmpty()) {
-                return "<span class='not-available'>None</span>";
-            }
+        if (!(mapObj instanceof Map)) {
             try {
-                ObjectNode jsonNode = objectMapper.createObjectNode();
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    String keyStr = String.valueOf(entry.getKey());
-                    String valStr = String.valueOf(entry.getValue());
-                    if (valStr.length() > 100) {
-                        valStr = wrapLongValue(valStr, 100);
-                    }
-                    jsonNode.put(keyStr, valStr);
-                }
-                String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonNode);
+                Object json = objectMapper.readValue(String.valueOf(mapObj), Object.class);
+                String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
                 return highlightPlaceholders(escapeHtml(jsonString));
             } catch (Exception e) {
                 return highlightPlaceholders(escapeHtml(String.valueOf(mapObj)));
             }
         }
-        try {
-            Object json = objectMapper.readValue(String.valueOf(mapObj), Object.class);
-            String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-            return highlightPlaceholders(escapeHtml(jsonString));
-        } catch (Exception e) {
-            return highlightPlaceholders(escapeHtml(String.valueOf(mapObj)));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> map = (Map<String, Object>) mapObj;
+        if (isAuthentication) {
+            Object type = map.get("Type");
+            if (type == null || "None".equalsIgnoreCase(String.valueOf(type))) {
+                return "<span class='not-available'>None</span>";
+            }
         }
+        if (map.isEmpty()) {
+            return "<span class='not-available'>None</span>";
+        }
+        StringBuilder htmlBuilder = new StringBuilder();
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String key = entry.getKey();
+            String value = String.valueOf(entry.getValue());
+            String escapedKey = escapeHtml(key);
+            String highlightedKey = highlightPlaceholders(escapedKey);
+            htmlBuilder.append("<div><strong>").append(highlightedKey).append(":</strong> ");
+            String valueContent;
+            if (value.length() > 100) {
+                String wrappedValue = wrapLongValue(value, 100);
+                String escapedValue = escapeHtml(wrappedValue);
+                valueContent = highlightPlaceholders(escapedValue).replace("\n", "<br>");
+            } else {
+                String escapedValue = escapeHtml(value);
+                valueContent = highlightPlaceholders(escapedValue);
+            }
+            htmlBuilder.append(valueContent).append("</div>\n");
+        }
+        return htmlBuilder.toString();
     }
 
     private String escapeHtml(String input) {

@@ -174,7 +174,7 @@ public class HtmlReportGeneratorApi {
              font-size: 10px;
          }
          .map-content {
-             white-space: pre-wrap;
+             white-space: pre;
              padding: 10px;
              border-radius: 4px;
              margin: 0;
@@ -822,11 +822,11 @@ public class HtmlReportGeneratorApi {
             try {
                 Object json = objectMapper.readValue(String.valueOf(mapObj), Object.class);
                 String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-                jsonString = wrapLongLines(jsonString, 100);
+                jsonString = wrapLongValue(jsonString, 100);
                 return highlightPlaceholders(escapeHtml(jsonString));
             } catch (Exception e) {
                 String raw = String.valueOf(mapObj);
-                String wrapped = wrapLongLines(raw, 100);
+                String wrapped = wrapLongValue(raw, 100);
                 return highlightPlaceholders(escapeHtml(wrapped));
             }
         }
@@ -847,11 +847,11 @@ public class HtmlReportGeneratorApi {
                 jsonNode.put(entry.getKey(), String.valueOf(entry.getValue()));
             }
             String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonNode);
-            jsonString = wrapLongLines(jsonString, 100);
+            jsonString = wrapLongValue(jsonString, 100);
             return highlightPlaceholders(escapeHtml(jsonString));
         } catch (Exception e) {
             String raw = String.valueOf(mapObj);
-            String wrapped = wrapLongLines(raw, 100);
+            String wrapped = wrapLongValue(raw, 100);
             return highlightPlaceholders(escapeHtml(wrapped));
         }
     }

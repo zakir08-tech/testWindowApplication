@@ -369,10 +369,10 @@ public class HtmlReportGeneratorApi {
             html.append("<td>").append(formatJsonContent(payloadStr, objectMapper, "payload")).append("</td>\n");
 
             String headersContent = formatMap(reportData.get("headers"), objectMapper, false);
-            html.append("<td>").append(headersContent.startsWith("<span") ? headersContent : "<div class='map-content'>" + headersContent + "</div>").append("</td>\n");
+            html.append("<td>").append(headersContent.startsWith("<span") ? headersContent : "<pre class='map-content'>" + headersContent + "</pre>").append("</td>\n");
 
             String parametersContent = formatMap(reportData.get("parameters"), objectMapper, false);
-            html.append("<td>").append(parametersContent.startsWith("<span") ? parametersContent : "<div class='map-content'>" + parametersContent + "</div>").append("</td>\n");
+            html.append("<td>").append(parametersContent.startsWith("<span") ? parametersContent : "<pre class='map-content'>" + parametersContent + "</pre>").append("</td>\n");
 
             String authContent;
             Object authObj = reportData.get("authentication");
@@ -384,7 +384,7 @@ public class HtmlReportGeneratorApi {
             } else {
                 authContent = formatMap(authObj, objectMapper, true);
             }
-            html.append("<td>").append(authContent.startsWith("<span") ? authContent : "<div class='map-content'>" + authContent + "</div>").append("</td>\n");
+            html.append("<td>").append(authContent.startsWith("<span") ? authContent : "<pre class='map-content'>" + authContent + "</pre>").append("</td>\n");
 
             html.append("<td>").append(safeToString(reportData.get("responseStatus"))).append("</td>\n");
 
@@ -822,9 +822,12 @@ public class HtmlReportGeneratorApi {
             try {
                 Object json = objectMapper.readValue(String.valueOf(mapObj), Object.class);
                 String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
+                jsonString = wrapLongLines(jsonString, 100);
                 return highlightPlaceholders(escapeHtml(jsonString));
             } catch (Exception e) {
-                return highlightPlaceholders(escapeHtml(String.valueOf(mapObj)));
+                String raw = String.valueOf(mapObj);
+                String wrapped = wrapLongLines(raw, 100);
+                return highlightPlaceholders(escapeHtml(wrapped));
             }
         }
         @SuppressWarnings("unchecked")
@@ -838,25 +841,19 @@ public class HtmlReportGeneratorApi {
         if (map.isEmpty()) {
             return "<span class='not-available'>None</span>";
         }
-        StringBuilder htmlBuilder = new StringBuilder();
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            String key = entry.getKey();
-            String value = String.valueOf(entry.getValue());
-            String escapedKey = escapeHtml(key);
-            String highlightedKey = highlightPlaceholders(escapedKey);
-            htmlBuilder.append("<div><strong>").append(highlightedKey).append(":</strong> ");
-            String valueContent;
-            if (value.length() > 100) {
-                String wrappedValue = wrapLongValue(value, 100);
-                String escapedValue = escapeHtml(wrappedValue);
-                valueContent = highlightPlaceholders(escapedValue).replace("\n", "<br>");
-            } else {
-                String escapedValue = escapeHtml(value);
-                valueContent = highlightPlaceholders(escapedValue);
+        try {
+            ObjectNode jsonNode = objectMapper.createObjectNode();
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                jsonNode.put(entry.getKey(), String.valueOf(entry.getValue()));
             }
-            htmlBuilder.append(valueContent).append("</div>\n");
+            String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonNode);
+            jsonString = wrapLongLines(jsonString, 100);
+            return highlightPlaceholders(escapeHtml(jsonString));
+        } catch (Exception e) {
+            String raw = String.valueOf(mapObj);
+            String wrapped = wrapLongLines(raw, 100);
+            return highlightPlaceholders(escapeHtml(wrapped));
         }
-        return htmlBuilder.toString();
     }
 
     private String escapeHtml(String input) {

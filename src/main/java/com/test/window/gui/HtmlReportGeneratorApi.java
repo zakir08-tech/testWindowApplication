@@ -32,7 +32,7 @@ import org.xml.sax.SAXException;
 public class HtmlReportGeneratorApi {
 
     private static final String BOOTSTRAP_CSS = """
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07v4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07v4J8+LH7qKnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         """;
 
     private static final String BOOTSTRAP_ICONS_CSS = """
@@ -384,17 +384,22 @@ public class HtmlReportGeneratorApi {
             String verifyResponseStr = reportData.get("verifyResponse") != null ? String.valueOf(reportData.get("verifyResponse")) : "";
             String failureReasonStr = safeToString(reportData.get("failureReason"));
             boolean isStatusMismatchFail = "Fail".equalsIgnoreCase(status) && !failureReasonStr.isEmpty() && failureReasonStr.contains("Status code mismatch");
+            boolean isNonResponseFailure = "Fail".equalsIgnoreCase(status) && (responseBodyStr.trim().isEmpty() || failureReasonStr.contains("Illegal character in path"));
             String verifyResponseContent;
+            String verifyCssClass;
+
+            // Debug statement to inspect input data
+            System.out.println("DEBUG - Test ID: " + safeToString(reportData.get("testId")) + ", status: " + status + ", verifyResponse: " + verifyResponseStr + ", verificationPassed: " + reportData.get("verificationPassed") + ", failureReason: " + failureReasonStr + ", responseBody: " + responseBodyStr);
+
             if (verifyResponseStr.trim().isEmpty()) {
+                verifyCssClass = "not-available";
                 verifyResponseContent = "<span class='not-available'>None</span>";
+            } else if (isNonResponseFailure || isStatusMismatchFail) {
+                verifyCssClass = "verify-response-gray";
+                verifyResponseContent = formatJsonContent(verifyResponseStr, objectMapper, verifyCssClass);
             } else {
-                String verifyCssClass;
-                if (isStatusMismatchFail) {
-                    verifyCssClass = "verify-response-gray";
-                } else {
-                    boolean verificationPassed = reportData.containsKey("verificationPassed") ? (Boolean) reportData.get("verificationPassed") : true;
-                    verifyCssClass = verificationPassed ? "verify-response-green" : "verify-response-red";
-                }
+                boolean verificationPassed = reportData.containsKey("verificationPassed") ? (Boolean) reportData.get("verificationPassed") : false;
+                verifyCssClass = verificationPassed && status.equalsIgnoreCase("Pass") ? "verify-response-green" : "verify-response-red";
                 verifyResponseContent = formatJsonContent(verifyResponseStr, objectMapper, verifyCssClass);
             }
             html.append("<td>").append(verifyResponseContent).append("</td>\n");

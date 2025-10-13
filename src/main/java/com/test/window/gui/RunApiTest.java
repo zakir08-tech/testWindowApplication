@@ -150,19 +150,11 @@ public class RunApiTest extends Application {
      * Inner class representing a single test case model with observable properties for UI binding.
      */
     private static class TestCase {
-        private final BooleanProperty run; // Whether to run this test case
-        private final StringProperty testId; // Unique ID of the test case
-        private final StringProperty testDescription; // Description of the test case
-        private final StringProperty status; // Current status of the test (e.g., "No Run", "Running...", "Pass", "Fail")
+        private final BooleanProperty run;
+        private final StringProperty testId;
+        private final StringProperty testDescription;
+        private final StringProperty status;
 
-        /**
-         * Constructor to initialize a TestCase with initial values.
-         *
-         * @param run initial run flag
-         * @param testId initial test ID
-         * @param testDescription initial description
-         * @param status initial status
-         */
         public TestCase(boolean run, String testId, String testDescription, String status) {
             this.run = new SimpleBooleanProperty(run);
             this.testId = new SimpleStringProperty(testId);
@@ -188,44 +180,35 @@ public class RunApiTest extends Application {
     }
 
     // UI Components
-    private TableView<TestCase> table; // Table to display test cases
-    private ObservableList<TestCase> testCases; // Observable list of test cases
-    private CheckBox selectAllCheckBox; // Checkbox to select/deselect all test cases
-    private Button loadButton; // Button to load a new Excel file
-    private Button runButton; // Button to start running selected tests
-    private Button stopButton; // Button to stop running tests
-    private Button refreshButton; // Button to reload from the last loaded file
-    private File lastLoadedFile; // Reference to the last loaded Excel file
-    private Task<Void> runTask; // Background task for running tests
-    private double lastScrollPosition = 0.0; // Last scroll position to maintain focus
+    private TableView<TestCase> table;
+    private ObservableList<TestCase> testCases;
+    private CheckBox selectAllCheckBox;
+    private Button loadButton;
+    private Button runButton;
+    private Button stopButton;
+    private Button refreshButton;
+    private File lastLoadedFile;
+    private Task<Void> runTask;
+    private double lastScrollPosition = 0.0;
 
     // Data storage for test configurations
-    private HashMap<Integer, HashMap<String, Object>> testDataMap = new HashMap<>(); // Test-specific data like endpoint, payload
-    private HashMap<Integer, HashMap<String, Object>> headersMap = new HashMap<>(); // Headers for each test
-    private HashMap<Integer, HashMap<String, Object>> paramsMap = new HashMap<>(); // Query parameters for each test
-    private HashMap<Integer, HashMap<String, Object>> modifyPayloadMap = new HashMap<>(); // Modifications to payload for each test
-    private HashMap<Integer, HashMap<String, Object>> responseCaptureMap = new HashMap<>(); // Response capture configurations
-    private HashMap<Integer, HashMap<String, Object>> authMap = new HashMap<>(); // Authentication details for each test
-    private List<Map<String, Object>> reportDataList = new ArrayList<>(); // List to hold report data for all tests
+    private HashMap<Integer, HashMap<String, Object>> testDataMap = new HashMap<>();
+    private HashMap<Integer, HashMap<String, Object>> headersMap = new HashMap<>();
+    private HashMap<Integer, HashMap<String, Object>> paramsMap = new HashMap<>();
+    private HashMap<Integer, HashMap<String, Object>> modifyPayloadMap = new HashMap<>();
+    private HashMap<Integer, HashMap<String, Object>> responseCaptureMap = new HashMap<>();
+    private HashMap<Integer, HashMap<String, Object>> authMap = new HashMap<>();
+    private List<Map<String, Object>> reportDataList = new ArrayList<>();
 
-    /**
-     * Set of required column headers in the Excel file for validation.
-     */
     private static final Set<String> REQUIRED_HEADERS = new HashSet<>(Arrays.asList(
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
         "Modify Payload (key)", "Modify Payload (value)", "Response (key) Name",
-        "Capture (key) Value (env var)", "Authorization", "", "",
-        "SSL Validation", "Expected Status", "Verify Response",
+        "Capture (key) Value (env var)", "Authorization", "", ""
+        , "SSL Validation", "Expected Status", "Verify Response",
         "Test Description"
     ));
 
-    /**
-     * Entry point for the JavaFX application.
-     * Sets up the UI, table columns, event handlers, and displays the stage.
-     *
-     * @param primaryStage the primary stage for this application
-     */
     @Override
     public void start(Stage primaryStage) {
         testCases = FXCollections.observableArrayList();
@@ -260,7 +243,6 @@ public class RunApiTest extends Application {
         runColumn.setResizable(false);
         runColumn.setStyle("-fx-alignment: CENTER;");
 
-        // Test ID column
         TableColumn<TestCase, String> testIdColumn = new TableColumn<>("Test ID");
         testIdColumn.setCellValueFactory(cellData -> cellData.getValue().testIdProperty());
         testIdColumn.setMinWidth(TEST_ID_COL_WIDTH);
@@ -269,13 +251,11 @@ public class RunApiTest extends Application {
         testIdColumn.setResizable(false);
         testIdColumn.setStyle("-fx-alignment: CENTER;");
 
-        // Test Description column (flexible width)
         TableColumn<TestCase, String> testDescriptionColumn = new TableColumn<>("Test Description");
         testDescriptionColumn.setCellValueFactory(cellData -> cellData.getValue().testDescriptionProperty());
         testDescriptionColumn.setMinWidth(TEST_DESC_MIN_WIDTH);
         testDescriptionColumn.setPrefWidth(TEST_DESC_MIN_WIDTH);
 
-        // Status column with color-coded text
         TableColumn<TestCase, String> statusColumn = new TableColumn<>("Status");
         statusColumn.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusColumn.setCellFactory(column -> new TableCell<TestCase, String>() {
@@ -303,16 +283,13 @@ public class RunApiTest extends Application {
         statusColumn.setPrefWidth(STATUS_COL_WIDTH);
         statusColumn.setResizable(false);
 
-        // Add columns to table and set resize policy
         table.getColumns().addAll(runColumn, testIdColumn, testDescriptionColumn, statusColumn);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setEditable(true);
 
-        // Set layout priorities for table
         HBox.setHgrow(table, Priority.ALWAYS);
         VBox.setVgrow(table, Priority.ALWAYS);
 
-        // Select All checkbox with event handler
         selectAllCheckBox = new CheckBox("Select All");
         selectAllCheckBox.setStyle(FIELD_STYLE_UNFOCUSED);
         selectAllCheckBox.setSelected(false);
@@ -323,7 +300,6 @@ public class RunApiTest extends Application {
             }
         });
 
-        // Listener for test cases list changes to update Select All state
         testCases.addListener((ListChangeListener<TestCase>) change -> {
             while (change.next()) {
                 if (change.wasAdded()) {
@@ -335,7 +311,6 @@ public class RunApiTest extends Application {
             updateSelectAllState();
         });
 
-        // Scroll event listener to track vertical scroll position
         table.setOnScroll(event -> {
             ScrollBar verticalScrollBar = getVerticalScrollBar();
             if (verticalScrollBar != null && verticalScrollBar.isVisible()) {
@@ -343,7 +318,6 @@ public class RunApiTest extends Application {
             }
         });
 
-        // Load button setup
         loadButton = new Button("Load");
         loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
         loadButton.setTooltip(new Tooltip("Load test cases from an Excel test suite"));
@@ -351,16 +325,14 @@ public class RunApiTest extends Application {
         loadButton.setOnMouseEntered(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
         loadButton.setOnMouseExited(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
 
-        // Run button setup with background task
         runButton = new Button("Run");
         runButton.setStyle(RUN_BUTTON_STYLE);
         runButton.setTooltip(new Tooltip("Run selected test cases"));
         runButton.setOnAction(e -> {
-            reportDataList.clear(); // Clear previous report data
+            reportDataList.clear();
             runTask = new Task<Void>() {
                 @Override
                 protected Void call() throws Exception {
-                    // Disable UI controls during execution
                     Platform.runLater(() -> {
                         runButton.setDisable(true);
                         loadButton.setDisable(true);
@@ -368,12 +340,10 @@ public class RunApiTest extends Application {
                         stopButton.setDisable(false);
                     });
 
-                    // Initialize API executor and JSON mapper
                     ApiExecutor apiExecutor = new ApiExecutor();
                     ObjectMapper objectMapper = new ObjectMapper();
                     Map<String, String> envVars = new HashMap<>();
 
-                    // Load environment variables from env.json
                     File envFile = new File("env.json");
                     if (envFile.exists()) {
                         try {
@@ -386,7 +356,6 @@ public class RunApiTest extends Application {
                         System.err.println("env.json not found in project root. Initializing empty environment variables.");
                     }
 
-                    // Process each selected test case
                     for (TestCase testCase : testCases) {
                         if (isCancelled()) {
                             break;
@@ -394,7 +363,6 @@ public class RunApiTest extends Application {
                         if (testCase.runProperty().get()) {
                             Integer testId = Integer.parseInt(testCase.testIdProperty().get());
                             int index = testCases.indexOf(testCase);
-                            // Update UI for current test
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Running...");
                                 table.getSelectionModel().clearAndSelect(index);
@@ -419,7 +387,6 @@ public class RunApiTest extends Application {
                                 table.requestFocus();
                             });
 
-                            // Initialize variables for this test case
                             ApiExecutor.Auth auth = new ApiExecutor.Auth("NONE", null, null, null);
                             String sslValidationStr = null;
                             HashMap<String, Object> testData = testDataMap.get(testId);
@@ -430,23 +397,16 @@ public class RunApiTest extends Application {
                             String expectedStatusStr = (String) testData.get("Expected Status");
                             String verifyResponse = (String) testData.get("Verify Response");
                             sslValidationStr = (String) testData.get("SSL Validation");
-                            String modifiedPayload = payload; // Initialize to original payload
-                            String processedVerifyResponse = null; // Initialize for catch block
-                            StringBuilder captureIssues = new StringBuilder(); // To capture issues
+                            String modifiedPayload = payload;
+                            String processedVerifyResponse = null;
+                            StringBuilder captureIssues = new StringBuilder();
 
-                            // Create a map to store report data for this test case
                             Map<String, Object> reportData = new HashMap<>();
                             reportData.put("testId", testId.toString());
                             reportData.put("description", testCase.testDescriptionProperty().get());
                             reportData.put("request", method);
-                            reportData.put("endpoint", url);
-                            reportData.put("payload", payload);
-                            reportData.put("headers", headersMap.get(testId));
-                            reportData.put("parameters", paramsMap.get(testId));
-                            reportData.put("authentication", authMap.get(testId));
                             reportData.put("verifyResponse", verifyResponse);
 
-                            // Declare responseTimeMs outside try-catch
                             long responseTimeMs = 0L;
 
                             try {
@@ -455,14 +415,13 @@ public class RunApiTest extends Application {
                                 HashMap<String, Object> params = paramsMap.get(testId);
                                 HashMap<String, Object> modifyPayload = modifyPayloadMap.get(testId);
                                 HashMap<String, Object> authDetails = authMap.get(testId);
+                                HashMap<String, Object> responseCapture = responseCaptureMap.get(testId);
 
-                                // Process URL with placeholders
                                 System.out.println("Debug: Replacing placeholders in URL for Test ID " + testId);
                                 String processedUrl = replacePlaceholders(url, envVars, testId);
-                                testData.put("End-Point", processedUrl); // Update testDataMap with processed URL
+                                testData.put("End-Point", processedUrl);
                                 reportData.put("endpoint", processedUrl);
 
-                                // Process headers
                                 System.out.println("Debug: Processing headers for Test ID " + testId);
                                 HashMap<String, Object> processedHeaders = new HashMap<>();
                                 for (Map.Entry<String, Object> entry : headers.entrySet()) {
@@ -471,10 +430,9 @@ public class RunApiTest extends Application {
                                     String processedValue = replacePlaceholders(headerValue, envVars, testId);
                                     processedHeaders.put(headerKey, processedValue);
                                 }
-                                headersMap.put(testId, processedHeaders); // Update headersMap with processed headers
+                                headersMap.put(testId, processedHeaders);
                                 reportData.put("headers", processedHeaders);
 
-                                // Process parameters
                                 System.out.println("Debug: Processing parameters for Test ID " + testId);
                                 HashMap<String, Object> processedParams = new HashMap<>();
                                 for (Map.Entry<String, Object> entry : params.entrySet()) {
@@ -483,10 +441,9 @@ public class RunApiTest extends Application {
                                     String processedValue = replacePlaceholders(paramValue, envVars, testId);
                                     processedParams.put(paramKey, processedValue);
                                 }
-                                paramsMap.put(testId, processedParams); // Update paramsMap with processed parameters
+                                paramsMap.put(testId, processedParams);
                                 reportData.put("parameters", processedParams);
 
-                                // Process payload modifications
                                 System.out.println("Debug: Processing modify payload for Test ID " + testId);
                                 HashMap<String, Object> processedModifyPayload = new HashMap<>();
                                 for (Map.Entry<String, Object> entry : modifyPayload.entrySet()) {
@@ -505,7 +462,6 @@ public class RunApiTest extends Application {
                                     String lowerPayloadType = payloadType != null ? payloadType.toLowerCase() : "";
                                     boolean isJsonPayload = "json".equals(lowerPayloadType);
                                     if (isJsonPayload) {
-                                        // Validate JSON payload before parsing
                                         try {
                                             objectMapper.readTree(modifiedPayload);
                                         } catch (JsonProcessingException ex) {
@@ -537,11 +493,10 @@ public class RunApiTest extends Application {
                                 } else {
                                     System.out.println("Debug: No payload to process for Test ID " + testId);
                                 }
-                                testData.put("Payload", modifiedPayload); // Update testDataMap with modified payload
+                                testData.put("Payload", modifiedPayload);
                                 reportData.put("payload", modifiedPayload);
                                 reportData.put("payloadType", payloadType);
 
-                                // Process authentication
                                 System.out.println("Debug: Processing authorization for Test ID " + testId);
                                 HashMap<String, Object> processedAuthDetails = new HashMap<>();
                                 processedAuthDetails.put("Type", authDetails.get("Type"));
@@ -553,8 +508,8 @@ public class RunApiTest extends Application {
                                         processedAuthDetails.put(key, processedValue);
                                     }
                                 }
-                                authMap.put(testId, processedAuthDetails); // Update authMap with processed auth details
-                                reportData.put("authentication", processedAuthDetails); // Add auth details to report
+                                authMap.put(testId, processedAuthDetails);
+                                reportData.put("authentication", processedAuthDetails);
                                 String authType = (String) processedAuthDetails.get("Type");
                                 if (authType != null && !authType.equals("None")) {
                                     String username = (String) processedAuthDetails.get("Username");
@@ -563,7 +518,6 @@ public class RunApiTest extends Application {
                                     auth = new ApiExecutor.Auth(authType, username, password, token);
                                 }
 
-                                // Process expected status and verify response
                                 System.out.println("Debug: Processing expected status for Test ID " + testId);
                                 String processedExpectedStatusStr = replacePlaceholders(expectedStatusStr, envVars, testId);
                                 processedVerifyResponse = replacePlaceholders(verifyResponse, envVars, testId);
@@ -580,7 +534,6 @@ public class RunApiTest extends Application {
                                         " (after placeholder replacement)", e);
                                 }
 
-                                // Execute the API test
                                 System.out.println("Debug: Payload being sent to executeTest for Test ID " + testId + ": " + modifiedPayload);
                                 long startTime = System.nanoTime();
                                 ApiExecutor.Response response = apiExecutor.executeTest(
@@ -595,22 +548,18 @@ public class RunApiTest extends Application {
                                     sslValidation
                                 );
                                 long endTime = System.nanoTime();
-                                responseTimeMs = (endTime - startTime) / 1_000_000; // Calculate response time
+                                responseTimeMs = (endTime - startTime) / 1_000_000;
                                 System.out.println("Debug: Response time for Test ID " + testId + ": " + responseTimeMs + " ms");
 
-                                // Store response data for report
                                 reportData.put("responseStatus", String.valueOf(response.getStatusCode()));
                                 reportData.put("responseBody", response.getBody());
                                 reportData.put("responseTimeMs", responseTimeMs);
 
-                                // Verify status code
                                 if (response.getStatusCode() != expectedStatus) {
                                     throw new Exception("Status code mismatch for Test ID " + testId +
                                         ": expected " + expectedStatus + ", got " + response.getStatusCode());
                                 }
 
-                                // Process response capture
-                                HashMap<String, Object> responseCapture = responseCaptureMap.get(testId);
                                 if (!responseCapture.isEmpty()) {
                                     System.out.println("Debug: Starting response capture for Test ID " + testId);
                                     Map<String, Object> responseObj;
@@ -633,23 +582,32 @@ public class RunApiTest extends Application {
                                             System.err.println("Warning: Invalid response capture entry for Test ID " + testId + ": path='" + responsePath + "', envVar='" + envVarName + "'");
                                             continue;
                                         }
-                                        // Clean envVarName to remove surrounding {{ }} if present
-                                        Pattern pattern = Pattern.compile("^\\s*\\{\\{(.*?)\\}\\}\\s*$");
-                                        Matcher matcher = pattern.matcher(envVarName);
-                                        if (matcher.matches()) {
-                                            envVarName = matcher.group(1).trim();
-                                            System.out.println("Debug: Cleaned env var name from '" + entry.getValue() + "' to '" + envVarName + "' for Test ID " + testId);
-                                        }
                                         System.out.println("Debug: Attempting to capture value for path '" + responsePath + "' to env var '" + envVarName + "' for Test ID " + testId);
                                         Object capturedValue = getNestedValue(responseObj, responsePath, testId);
                                         if (capturedValue != null) {
                                             String valueStr = capturedValue.toString();
-                                            envVars.put(envVarName, valueStr);
-                                            capturedValues.put(envVarName, valueStr);
+                                            String cleanedValue = valueStr.replaceAll("\\{\\{|}}", "");
+                                            if (!cleanedValue.equals(valueStr)) {
+                                                System.out.println("Debug: Removed braces from captured value '" + valueStr + "' to '" + cleanedValue + "' for env var '" + envVarName + "' in Test ID " + testId);
+                                            }
+                                            if (cleanedValue.contains("{{") || cleanedValue.contains("}}")) {
+                                                captureIssues.append("Captured value for '").append(envVarName)
+                                                    .append("' contains invalid braces after cleaning: '").append(cleanedValue).append("'. ");
+                                                System.err.println("Warning: Captured value for env var '" + envVarName + "' in Test ID " + testId + " contains invalid braces after cleaning: '" + cleanedValue + "'");
+                                                continue;
+                                            }
+                                            if (envVarName.contains("{{") || envVarName.contains("}}")) {
+                                                captureIssues.append("Environment variable name '").append(envVarName)
+                                                    .append("' contains invalid braces. ");
+                                                System.err.println("Warning: Environment variable name '" + envVarName + "' for Test ID " + testId + " contains invalid braces");
+                                                continue;
+                                            }
+                                            envVars.put(envVarName, cleanedValue);
+                                            capturedValues.put(envVarName, cleanedValue);
                                             captureCount++;
                                             captureIssues.append("Captured key '").append(responsePath)
-                                                .append("' as env var '").append(envVarName).append("': ").append(valueStr).append(". ");
-                                            System.out.println("Debug: Captured value '" + valueStr + "' from path '" + responsePath + "' and saved to env var '" + envVarName + "' for Test ID " + testId);
+                                                .append("' as env var '").append(envVarName).append("': ").append(cleanedValue).append(". ");
+                                            System.out.println("Debug: Captured value '" + cleanedValue + "' from path '" + responsePath + "' and saved to env var '" + envVarName + "' for Test ID " + testId);
                                         } else {
                                             captureIssues.append("Key '").append(responsePath)
                                                 .append("' not found in response for env var '").append(envVarName).append("'. ");
@@ -658,7 +616,6 @@ public class RunApiTest extends Application {
                                     }
                                     System.out.println("Debug: Total values captured for Test ID " + testId + ": " + captureCount + " out of " + responseCapture.size() + " entries");
 
-                                    // Save updated envVars back to env.json
                                     try {
                                         objectMapper.writerWithDefaultPrettyPrinter().writeValue(new FileOutputStream(envFile), envVars);
                                         captureIssues.append("Successfully updated env.json with ").append(captureCount).append(" captured values. ");
@@ -673,13 +630,10 @@ public class RunApiTest extends Application {
                                     System.out.println("Debug: No response capture entries defined for Test ID " + testId);
                                 }
 
-                                // Store capture issues in report data
                                 reportData.put("captureIssues", captureIssues.toString());
 
-                                // Initialize verificationPassed to true (passed by default if no verification needed)
                                 boolean verificationPassed = true;
 
-                                // Verify response body if specified
                                 if (processedVerifyResponse != null && !processedVerifyResponse.trim().isEmpty()) {
                                     System.out.println("Debug: Verifying response for Test ID " + testId);
                                     try {
@@ -690,10 +644,8 @@ public class RunApiTest extends Application {
                                     }
                                 }
 
-                                // Store verificationPassed in reportData for success path
                                 reportData.put("verificationPassed", verificationPassed);
 
-                                // Debug output
                                 System.out.println("Test ID: " + testId);
                                 System.out.println("Test Data: " + testData);
                                 System.out.println("Headers: " + processedHeaders);
@@ -733,7 +685,6 @@ public class RunApiTest extends Application {
                         }
                     }
 
-                    // Generate HTML report after all tests are executed
                     Platform.runLater(() -> {
                         runButton.setDisable(false);
                         loadButton.setDisable(false);
@@ -765,7 +716,6 @@ public class RunApiTest extends Application {
         runButton.setOnMouseEntered(e -> runButton.setStyle(RUN_BUTTON_HOVER_STYLE));
         runButton.setOnMouseExited(e -> runButton.setStyle(RUN_BUTTON_STYLE));
 
-        // Stop button setup
         stopButton = new Button("Stop");
         stopButton.setStyle(STOP_BUTTON_STYLE);
         stopButton.setTooltip(new Tooltip("Stop running test cases"));
@@ -782,7 +732,6 @@ public class RunApiTest extends Application {
         stopButton.setOnMouseEntered(e -> stopButton.setStyle(STOP_BUTTON_HOVER_STYLE));
         stopButton.setOnMouseExited(e -> stopButton.setStyle(STOP_BUTTON_STYLE));
 
-        // Refresh button setup
         refreshButton = new Button("Refresh");
         refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
         refreshButton.setTooltip(new Tooltip("Refresh test cases from the last loaded file"));
@@ -790,34 +739,26 @@ public class RunApiTest extends Application {
         refreshButton.setOnMouseEntered(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
         refreshButton.setOnMouseExited(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
 
-        // Button layout
         HBox buttonBox = new HBox(10, loadButton, refreshButton, runButton, stopButton);
         buttonBox.setAlignment(Pos.CENTER);
         buttonBox.setPadding(new Insets(10));
 
-        // Select All layout
         HBox selectAllBox = new HBox(selectAllCheckBox);
         selectAllBox.setAlignment(Pos.CENTER_LEFT);
         selectAllBox.setPadding(new Insets(10));
 
-        // Root layout
         VBox root = new VBox(10, selectAllBox, table, buttonBox);
         root.setPadding(new Insets(10));
         root.setStyle("-fx-background-color: #252525;");
 
-        // Scene setup with inline CSS
         Scene scene = new Scene(root, 800, 600);
         scene.getStylesheets().add("data:text/css," + CSS);
 
-        // Stage setup
         primaryStage.setTitle("API Test Runner");
         primaryStage.setScene(scene);
         primaryStage.show();
     }
 
-    /**
-     * Updates the Select All checkbox state based on the run status of all test cases.
-     */
     private void updateSelectAllState() {
         if (testCases.isEmpty()) {
             selectAllCheckBox.setSelected(false);
@@ -843,15 +784,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Verifies the actual response body against the expected JSON structure.
-     * Supports $any-value placeholders for dynamic value matching.
-     *
-     * @param actualResponseBody the actual response from the API
-     * @param verifyExpression the expected JSON structure as a string
-     * @param testId the ID of the test case
-     * @throws Exception if verification fails
-     */
     private void verifyResponse(String actualResponseBody, String verifyExpression, Integer testId) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         Object actualJson;
@@ -862,14 +794,11 @@ public class RunApiTest extends Application {
             throw new Exception("Failed to parse actual response body as JSON for Test ID " + testId + ": " + e.getMessage(), e);
         }
 
-        // Initialize tempVerifyExpression with the original verifyExpression
         String tempVerifyExpression = verifyExpression;
         Map<String, String> pathToValueMap = new HashMap<>();
 
-        // Handle $any-value replacement if present
         if (verifyExpression != null && verifyExpression.contains("$any-value")) {
             try {
-                // Replace $any-value with "_any_value_" (quoted string) to ensure valid JSON
                 tempVerifyExpression = verifyExpression
                     .replaceAll("\\$any-value\\b(?=\\s*(,|\\}|\\]))", "\"_any_value_\"")
                     .replaceAll("\"\\$any-value\"", "\"_any_value_\"");
@@ -890,16 +819,6 @@ public class RunApiTest extends Application {
         compareJson(actualJson, expectedJson, "", testId);
     }
 
-    /**
-     * Extracts paths where $any-value is used in the expected JSON and maps them to actual values.
-     *
-     * @param expected the expected JSON object (or sub-object)
-     * @param actual the actual JSON object
-     * @param pathToValueMap map to store path-value mappings
-     * @param path current path in the JSON structure
-     * @param testId the test case ID
-     * @throws Exception if extraction fails
-     */
     private void extractAnyValuePathsFromObject(Object expected, Object actual, Map<String, String> pathToValueMap, String path, Integer testId) throws Exception {
         if (expected instanceof Map) {
             extractAnyValuePaths(expected, actual, pathToValueMap, path, testId);
@@ -912,16 +831,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Recursively extracts $any-value paths from maps or lists in the expected JSON.
-     *
-     * @param expected the expected JSON object
-     * @param actual the actual JSON object
-     * @param pathToValueMap map to store path-value mappings
-     * @param path current path
-     * @param testId the test case ID
-     * @throws Exception if extraction fails
-     */
     private void extractAnyValuePaths(Object expected, Object actual, Map<String, String> pathToValueMap, String path, Integer testId) throws Exception {
         if (expected instanceof Map && actual instanceof Map) {
             Map<String, Object> expectedMap = (Map<String, Object>) expected;
@@ -947,14 +856,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Formats a value as a JSON-compatible string.
-     *
-     * @param value the value to format
-     * @param mapper JSON mapper instance
-     * @return formatted string
-     * @throws Exception if formatting fails
-     */
     private String formatJsonValue(Object value, ObjectMapper mapper) throws Exception {
         if (value instanceof String) {
             return "\"" + value + "\"";
@@ -965,15 +866,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Replaces $any-value placeholders in the verify expression with actual values from the map.
-     *
-     * @param verifyExpression the original verify expression
-     * @param pathToValueMap path-value mappings
-     * @param testId the test case ID
-     * @return modified verify expression with actual values
-     * @throws Exception if replacement fails
-     */
     private String replaceAnyValueWithActual(String verifyExpression, Map<String, String> pathToValueMap, Integer testId) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         Object jsonObject;
@@ -987,16 +879,6 @@ public class RunApiTest extends Application {
         return mapper.writeValueAsString(modifiedJson);
     }
 
-    /**
-     * Recursively replaces _any_value_ placeholders in the JSON object with actual values.
-     *
-     * @param jsonObject the JSON object to modify
-     * @param pathToValueMap path-value mappings
-     * @param path current path
-     * @param testId the test case ID
-     * @return modified JSON object
-     * @throws Exception if replacement fails
-     */
     private Object replaceAnyValueInJson(Object jsonObject, Map<String, String> pathToValueMap, String path, Integer testId) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         if (jsonObject instanceof Map) {
@@ -1066,15 +948,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Recursively compares two JSON objects for structural and value equality.
-     *
-     * @param actual the actual JSON object
-     * @param expected the expected JSON object
-     * @param path current path for error reporting
-     * @param testId the test case ID
-     * @throws Exception if comparison fails
-     */
     private void compareJson(Object actual, Object expected, String path, Integer testId) throws Exception {
         if (expected instanceof Map) {
             if (!(actual instanceof Map)) {
@@ -1115,11 +988,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Retrieves the vertical scrollbar from the table for scroll position tracking.
-     *
-     * @return the vertical ScrollBar or null if not found
-     */
     private ScrollBar getVerticalScrollBar() {
         for (javafx.scene.Node node : table.lookupAll(".scroll-bar:vertical")) {
             if (node instanceof ScrollBar) {
@@ -1129,15 +997,6 @@ public class RunApiTest extends Application {
         return null;
     }
 
-    /**
-     * Replaces placeholders in text (e.g., {{var}}) with values from environment variables.
-     * Handles missing or null values by replacing with an empty string.
-     *
-     * @param text the text containing placeholders
-     * @param envVars map of environment variables
-     * @param testId the test case ID for logging
-     * @return text with placeholders replaced
-     */
     private String replacePlaceholders(String text, Map<String, String> envVars, Integer testId) {
         if (text == null || !text.contains("{{")) {
             return text;
@@ -1151,18 +1010,13 @@ public class RunApiTest extends Application {
             while (matcher.find()) {
                 String placeholder = matcher.group(1);
                 String replacement;
-                if (!envVars.containsKey(placeholder)) {
-                    replacement = "";
-                    System.out.println("Debug: Placeholder '" + placeholder + "' not found in env.json for Test ID " + testId + ", replacing with empty string");
+                if (!envVars.containsKey(placeholder) || envVars.get(placeholder) == null || envVars.get(placeholder).trim().isEmpty()) {
+                    replacement = "{{null}}";
+                    System.out.println("Debug: Placeholder '" + placeholder + "' not found or null/empty in env.json for Test ID " + testId + ", replacing with {{null}}");
                 } else {
                     String value = envVars.get(placeholder);
-                    if (value == null || value.trim().isEmpty()) {
-                        replacement = "";
-                        System.out.println("Debug: Placeholder '" + placeholder + "' has null/empty value in env.json for Test ID " + testId + ", replacing with empty string");
-                    } else {
-                        replacement = value;
-                        System.out.println("Debug: Replaced placeholder '" + placeholder + "' with value '" + value + "' for Test ID " + testId);
-                    }
+                    replacement = value;
+                    System.out.println("Debug: Replaced placeholder '" + placeholder + "' with value '" + value + "' for Test ID " + testId);
                 }
                 matcher.appendReplacement(modifiedText, Matcher.quoteReplacement(replacement));
             }
@@ -1174,13 +1028,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Parses a nested key path (e.g., "a.b.c") into a list of parts.
-     * Handles array indices if present.
-     *
-     * @param key the key path string
-     * @return list of path parts
-     */
     private List<String> parseKeyPath(String key) {
         List<String> parts = new ArrayList<>();
         if (key == null || key.trim().isEmpty()) {
@@ -1203,16 +1050,6 @@ public class RunApiTest extends Application {
         return parts;
     }
 
-    /**
-     * Parses a value to match the type of the existing value in the parent object.
-     * Defaults to string if type mismatch or parsing fails.
-     *
-     * @param value the value string to parse
-     * @param parent the parent object
-     * @param finalPart the final key part
-     * @param testId the test case ID
-     * @return parsed object
-     */
     private Object parseValue(String value, Object parent, String finalPart, Integer testId) {
         Object existingValue = null;
         if (parent instanceof Map) {
@@ -1241,16 +1078,6 @@ public class RunApiTest extends Application {
         return value;
     }
 
-    /**
-     * Sets a nested value in a JSON object using a key path (e.g., "a.b.c").
-     * Creates type-compatible values and logs traversal.
-     *
-     * @param jsonObj the JSON object to modify
-     * @param key the nested key path
-     * @param value the value to set
-     * @param testId the test case ID
-     * @return true if successful, false otherwise
-     */
     private boolean setNestedValue(Map<String, Object> jsonObj, String key, String value, Integer testId) {
         try {
             List<String> parts = parseKeyPath(key);
@@ -1298,14 +1125,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Retrieves a nested value from a JSON object using a key path.
-     *
-     * @param jsonObj the JSON object
-     * @param key the nested key path
-     * @param testId the test case ID
-     * @return the value or null if not found
-     */
     private Object getNestedValue(Map<String, Object> jsonObj, String key, Integer testId) {
         List<String> parts = parseKeyPath(key);
         if (parts.isEmpty()) {
@@ -1330,13 +1149,6 @@ public class RunApiTest extends Application {
         return current;
     }
 
-    /**
-     * Loads or refreshes test cases from an Excel file.
-     * Validates headers, parses rows, and populates UI and data maps.
-     *
-     * @param primaryStage the application stage
-     * @param promptForFile true to show file chooser, false to use last loaded file
-     */
     private void loadTestCases(Stage primaryStage, boolean promptForFile) {
         File file = lastLoadedFile;
         if (promptForFile) {
@@ -1353,14 +1165,12 @@ public class RunApiTest extends Application {
                  XSSFWorkbook workbook = new XSSFWorkbook(fileIn)) {
                 Sheet sheet = workbook.getSheetAt(0);
 
-                // Validate header row
                 Row headerRow = sheet.getRow(0);
                 if (headerRow == null) {
                     showError("No header row found in test suite '" + testSuiteName + "'.");
                     return;
                 }
 
-                // Clear existing data
                 testCases.clear();
                 testDataMap.clear();
                 headersMap.clear();
@@ -1369,7 +1179,6 @@ public class RunApiTest extends Application {
                 responseCaptureMap.clear();
                 authMap.clear();
 
-                // Map headers to column indices
                 Map<String, Integer> headerMap = new HashMap<>();
                 int responseTimeIndex = -1;
                 for (int i = 0; i < headerRow.getLastCellNum(); i++) {
@@ -1380,7 +1189,6 @@ public class RunApiTest extends Application {
                     }
                 }
 
-                // Validate required headers
                 for (String requiredHeader : REQUIRED_HEADERS) {
                     if (!headerMap.containsKey(requiredHeader) && !requiredHeader.isEmpty()) {
                         showError("Missing required column '" + requiredHeader + "' in test suite '" + testSuiteName + "'.");
@@ -1388,7 +1196,6 @@ public class RunApiTest extends Application {
                     }
                 }
 
-                // Parse test cases
                 Integer lastTestId = null;
                 HashMap<String, Object> currentTestData = null;
                 HashMap<String, Object> currentHeaders = null;
@@ -1405,9 +1212,7 @@ public class RunApiTest extends Application {
                     Integer testId = testIdStr != null && !testIdStr.trim().isEmpty() ? Integer.parseInt(testIdStr.trim()) : null;
 
                     if (testId != null) {
-                        // New test case
                         if (lastTestId != null && !lastTestId.equals(testId)) {
-                            // Save previous test case data
                             testDataMap.put(lastTestId, currentTestData);
                             headersMap.put(lastTestId, currentHeaders);
                             paramsMap.put(lastTestId, currentParams);
@@ -1420,7 +1225,6 @@ public class RunApiTest extends Application {
                         String testDescription = getCellValue(row, headerMap.get("Test Description"));
                         testCases.add(new TestCase(true, testId.toString(), testDescription, "No Run"));
 
-                        // Initialize maps for new test case
                         currentTestData = new HashMap<>();
                         currentTestData.put("Request", getCellValue(row, headerMap.get("Request")));
                         currentTestData.put("End-Point", getCellValue(row, headerMap.get("End-Point")));
@@ -1437,11 +1241,10 @@ public class RunApiTest extends Application {
                         currentAuthDetails = new HashMap<>();
                         currentAuthDetails.put("Type", getCellValue(row, headerMap.get("Authorization")));
 
-                        // Add header, param, modify payload, response capture, and auth data
                         addMultiColumnData(row, headerMap, "Header (key)", "Header (value)", currentHeaders);
                         addMultiColumnData(row, headerMap, "Parameter (key)", "Parameter (value)", currentParams);
                         addMultiColumnData(row, headerMap, "Modify Payload (key)", "Modify Payload (value)", currentModifyPayload);
-                        addMultiColumnData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture);
+                        addResponseCaptureData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture, testId);
 
                         String username = getCellValue(row, headerMap.get("Username"));
                         String password = getCellValue(row, headerMap.get("Password"));
@@ -1450,15 +1253,13 @@ public class RunApiTest extends Application {
                         if (password != null) currentAuthDetails.put("Password", password);
                         if (token != null) currentAuthDetails.put("Token", token);
                     } else if (lastTestId != null) {
-                        // Continue adding data to the current test case
                         addMultiColumnData(row, headerMap, "Header (key)", "Header (value)", currentHeaders);
                         addMultiColumnData(row, headerMap, "Parameter (key)", "Parameter (value)", currentParams);
                         addMultiColumnData(row, headerMap, "Modify Payload (key)", "Modify Payload (value)", currentModifyPayload);
-                        addMultiColumnData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture);
+                        addResponseCaptureData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture, lastTestId);
                     }
                 }
 
-                // Save the last test case data
                 if (lastTestId != null) {
                     testDataMap.put(lastTestId, currentTestData);
                     headersMap.put(lastTestId, currentHeaders);
@@ -1478,15 +1279,6 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Adds multi-column data (e.g., headers, parameters) to a map.
-     *
-     * @param row the current row
-     * @param headerMap map of headers to column indices
-     * @param keyHeader the header for the key column
-     * @param valueHeader the header for the value column
-     * @param targetMap the map to store key-value pairs
-     */
     private void addMultiColumnData(Row row, Map<String, Integer> headerMap, String keyHeader, String valueHeader, HashMap<String, Object> targetMap) {
         String key = getCellValue(row, headerMap.get(keyHeader));
         String value = getCellValue(row, headerMap.get(valueHeader));
@@ -1495,42 +1287,45 @@ public class RunApiTest extends Application {
         }
     }
 
-    /**
-     * Retrieves the string value of a cell, handling different cell types.
-     *
-     * @param row the row to read from
-     * @param columnIndex the column index
-     * @return the cell value as a string, or null if empty
-     */
+    private void addResponseCaptureData(Row row, Map<String, Integer> headerMap, String keyHeader, String valueHeader, HashMap<String, Object> targetMap, Integer testId) {
+        String key = getCellValue(row, headerMap.get(keyHeader));
+        String value = getCellValue(row, headerMap.get(valueHeader));
+        if (key != null && !key.trim().isEmpty() && value != null && !value.trim().isEmpty()) {
+            String cleanedValue = value.replaceAll("\\{\\{|}}", "");
+            if (!cleanedValue.equals(value)) {
+                System.out.println("Debug: Cleaned environment variable name from '" + value + "' to '" + cleanedValue + "' for Test ID " + testId);
+            }
+            if (cleanedValue.trim().isEmpty()) {
+                System.err.println("Warning: Environment variable name is empty after cleaning for Test ID " + testId + ": original value '" + value + "'");
+            } else {
+                targetMap.put(key, cleanedValue);
+            }
+        }
+    }
+
     private String getCellValue(Row row, Integer columnIndex) {
-        if (row == null || columnIndex == null || columnIndex < 0) {
-            return null;
-        }
+        if (columnIndex == null || row == null) return null;
         var cell = row.getCell(columnIndex);
-        if (cell == null) {
-            return null;
-        }
+        if (cell == null) return null;
         switch (cell.getCellType()) {
             case STRING:
-                return cell.getStringCellValue().trim();
+                return cell.getStringCellValue();
             case NUMERIC:
                 double numericValue = cell.getNumericCellValue();
-                if (numericValue == (int) numericValue) {
+                if (numericValue == Math.floor(numericValue) && !Double.isInfinite(numericValue)) {
                     return String.valueOf((int) numericValue);
+                } else {
+                    return String.valueOf(numericValue);
                 }
-                return String.valueOf(numericValue);
             case BOOLEAN:
                 return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                return cell.getCellFormula();
             default:
                 return null;
         }
     }
 
-    /**
-     * Displays an error alert to the user.
-     *
-     * @param message the error message to display
-     */
     private void showError(String message) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -1541,11 +1336,6 @@ public class RunApiTest extends Application {
         });
     }
 
-    /**
-     * Main method to launch the JavaFX application.
-     *
-     * @param args command-line arguments
-     */
     public static void main(String[] args) {
         launch(args);
     }

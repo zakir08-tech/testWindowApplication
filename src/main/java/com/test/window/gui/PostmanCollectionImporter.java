@@ -26,7 +26,7 @@ public class PostmanCollectionImporter {
         String bodyType; // Type of the payload body (e.g., json, formdata, urlencoded, "")
         String authorization; // Authorization header value or ""
 
-        public RequestInfo(String name, String url, String method, Map<String, String> headers, 
+        public RequestInfo(String name, String url, String method, Map<String, String> headers,
                            Map<String, String> queryParams, Object body, String bodyType, String authorization) {
             this.name = name;
             this.url = url;
@@ -210,7 +210,7 @@ public class PostmanCollectionImporter {
         for (RequestInfo request : requests) {
             int headerCount = request.headers.size();
             int paramCount = request.queryParams.size();
-            int totalRows = Math.max(1, headerCount + paramCount); // At least one row, plus rows for headers and params
+            int totalRows = Math.max(1, Math.max(headerCount, paramCount)); // Changed to max for pairing
 
             // Use sequential Test ID
             int testId = currentTestId++;
@@ -245,7 +245,7 @@ public class PostmanCollectionImporter {
                     }
 
                     // Parameter (key) and Parameter (value)
-                    if (paramIndex < paramCount && headerIndex >= headerCount) {
+                    if (paramIndex < paramCount) {
                         Map.Entry<String, String> param = request.queryParams.entrySet().toArray(new Map.Entry[0])[paramIndex];
                         row[5] = param.getKey();
                         row[6] = param.getValue();
@@ -340,8 +340,8 @@ public class PostmanCollectionImporter {
                         row[4] = header.getValue();
                         headerIndex++;
                     }
-                    // Additional rows for parameters (after headers are exhausted)
-                    else if (paramIndex < paramCount) {
+                    // Additional rows for parameters (changed from else if to if for pairing)
+                    if (paramIndex < paramCount) {
                         Map.Entry<String, String> param = request.queryParams.entrySet().toArray(new Map.Entry[0])[paramIndex];
                         row[5] = param.getKey();
                         row[6] = param.getValue();

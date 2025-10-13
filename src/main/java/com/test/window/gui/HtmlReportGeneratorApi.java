@@ -348,15 +348,16 @@ public class HtmlReportGeneratorApi {
                 .append(status).append("</td>\n");
 
             html.append("<td>").append(safeToString(reportData.get("request"))).append("</td>\n");
-            String endpointRaw = String.valueOf(reportData.get("endpoint"));
-            String endpointEscaped = escapeHtml(endpointRaw);
-            String endpointHighlighted = highlightPlaceholders(endpointEscaped);
+            String endpointRaw = safeToString(reportData.get("endpoint"));
             String endpointContent;
             if (endpointRaw.length() > 100) {
-                String endpointWrapped = wrapLongLines(endpointEscaped, 100);
+                String endpointWrapped = wrapEndpoint(endpointRaw, 100);
+                String endpointEscaped = escapeHtml(endpointWrapped);
+                String endpointHighlighted = highlightPlaceholders(endpointEscaped);
                 endpointContent = endpointHighlighted.replace("\n", "<br>");
             } else {
-                endpointContent = endpointHighlighted;
+                String endpointEscaped = escapeHtml(endpointRaw);
+                endpointContent = highlightPlaceholders(endpointEscaped);
             }
             html.append("<td>").append(endpointContent).append("</td>\n");
 
@@ -529,8 +530,8 @@ public class HtmlReportGeneratorApi {
         html.append(" }\n");
         html.append("});\n");
         html.append("</script>\n");
-        html.append("</body>\n");
-        html.append("</html>");
+        html.append("</body>\n")
+            .append("</html>");
 
         try (FileWriter fileWriter = new FileWriter("report.html")) {
             fileWriter.write(html.toString());
@@ -539,6 +540,30 @@ public class HtmlReportGeneratorApi {
             System.err.println("Error writing HTML report: " + e.getMessage());
             throw new RuntimeException("Failed to write HTML report", e);
         }
+    }
+
+    private String wrapEndpoint(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+        StringBuilder wrapped = new StringBuilder();
+        int index = 0;
+        while (index < text.length()) {
+            int end = Math.min(index + maxLength, text.length());
+            wrapped.append(text.substring(index, end));
+            if (end < text.length()) {
+                wrapped.append("\n");
+                // Prefer breaking at / or ? or & if possible, else any char
+                if (end < text.length()) {
+                    char nextChar = text.charAt(end);
+                    if (nextChar != '/' && nextChar != '?' && nextChar != '&' && nextChar != '=') {
+                        // If not a good break point, but since we break at char level, it's fine
+                    }
+                }
+            }
+            index = end;
+        }
+        return wrapped.toString();
     }
 
     private String wrapLongLines(String text, int maxLength) {

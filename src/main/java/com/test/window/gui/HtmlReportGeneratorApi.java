@@ -348,7 +348,17 @@ public class HtmlReportGeneratorApi {
                 .append(status).append("</td>\n");
 
             html.append("<td>").append(safeToString(reportData.get("request"))).append("</td>\n");
-            html.append("<td>").append(highlightPlaceholders(safeToString(reportData.get("endpoint")))).append("</td>\n");
+            String endpointRaw = String.valueOf(reportData.get("endpoint"));
+            String endpointEscaped = escapeHtml(endpointRaw);
+            String endpointHighlighted = highlightPlaceholders(endpointEscaped);
+            String endpointContent;
+            if (endpointRaw.length() > 100) {
+                String endpointWrapped = wrapLongLines(endpointEscaped, 100);
+                endpointContent = endpointHighlighted.replace("\n", "<br>");
+            } else {
+                endpointContent = endpointHighlighted;
+            }
+            html.append("<td>").append(endpointContent).append("</td>\n");
 
             String payloadStr = reportData.get("payload") != null ? String.valueOf(reportData.get("payload")) : "";
             html.append("<td>").append(formatJsonContent(payloadStr, objectMapper, "payload")).append("</td>\n");

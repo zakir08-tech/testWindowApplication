@@ -174,13 +174,14 @@ public class HtmlReportGeneratorApi {
              font-size: 10px;
          }
          .map-content {
-             white-space: pre;
+             white-space: pre-wrap;
              padding: 10px;
              border-radius: 4px;
              margin: 0;
              background-color: #F8F9FA;
              color: #000000;
              font-size: 10px;
+             font-family: 'Courier New', monospace;
          }
          .not-available {
              color: #6c757d !important;
@@ -270,6 +271,9 @@ public class HtmlReportGeneratorApi {
              background-color: #0d6efd !important;
              border-color: #0d6efd !important;
              color: white !important;
+         }
+         .placeholder {
+             color: #FF0000;
          }
          """;
 
@@ -365,10 +369,10 @@ public class HtmlReportGeneratorApi {
             html.append("<td>").append(formatJsonContent(payloadStr, objectMapper, "payload")).append("</td>\n");
 
             String headersContent = formatMap(reportData.get("headers"), objectMapper, false);
-            html.append("<td>").append(headersContent.startsWith("<span") ? headersContent : "<pre class='map-content'>" + highlightPlaceholders(headersContent) + "</pre>").append("</td>\n");
+            html.append("<td>").append(headersContent.startsWith("<span") ? headersContent : "<div class='map-content'>" + headersContent + "</div>").append("</td>\n");
 
             String parametersContent = formatMap(reportData.get("parameters"), objectMapper, false);
-            html.append("<td>").append(parametersContent.startsWith("<span") ? parametersContent : "<pre class='map-content'>" + highlightPlaceholders(parametersContent) + "</pre>").append("</td>\n");
+            html.append("<td>").append(parametersContent.startsWith("<span") ? parametersContent : "<div class='map-content'>" + parametersContent + "</div>").append("</td>\n");
 
             String authContent;
             Object authObj = reportData.get("authentication");
@@ -380,7 +384,7 @@ public class HtmlReportGeneratorApi {
             } else {
                 authContent = formatMap(authObj, objectMapper, true);
             }
-            html.append("<td>").append(authContent.startsWith("<span") ? authContent : "<pre class='map-content'>" + highlightPlaceholders(authContent) + "</pre>").append("</td>\n");
+            html.append("<td>").append(authContent.startsWith("<span") ? authContent : "<div class='map-content'>" + authContent + "</div>").append("</td>\n");
 
             html.append("<td>").append(safeToString(reportData.get("responseStatus"))).append("</td>\n");
 
@@ -800,14 +804,14 @@ public class HtmlReportGeneratorApi {
             String placeholder = matcher.group();
             String escapedPlaceholder = escapeHtml(placeholder);
             String quotedPlaceholder = Matcher.quoteReplacement(escapedPlaceholder);
-            matcher.appendReplacement(result, "<span style=\"color: #FF0000;\">" + quotedPlaceholder + "</span>");
+            matcher.appendReplacement(result, "<span class=\"placeholder\">" + quotedPlaceholder + "</span>");
         }
         matcher.appendTail(result);
         return result.toString();
     }
 
     private String safeToString(Object obj) {
-        return obj != null ? escapeHtml(String.valueOf(obj)) : "";
+        return obj != null ? String.valueOf(obj).replace("<", "&lt;").replace(">", "&gt;") : "";
     }
 
     private String formatMap(Object mapObj, ObjectMapper objectMapper, boolean isAuthentication) {

@@ -26,8 +26,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 
+/**
+ * Manages a customizable TableView for editing API test steps.
+ * Handles column configuration, editing behavior, validation, and UI updates.
+ * Supports single-row selection and custom cell editing with keyboard navigation.
+ */
 public class TableManager {
 
+    /**
+     * Enum defining the indices of columns in the table.
+     * Each entry corresponds to a specific field in an API test step (e.g., TEST_ID at index 0).
+     */
     private enum ColumnIndex {
         TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
         PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
@@ -40,14 +49,30 @@ public class TableManager {
         public int getIndex() { return index; }
     }
 
+    /**
+     * Observable list of supported HTTP methods for the request column.
+     * Includes an empty option for no method selection.
+     */
     private static final ObservableList<String> HTTP_METHODS = 
         FXCollections.observableArrayList("", "GET", "POST", "PUT", "PATCH", "DELETE");
 
+    /** The main TableView instance managed by this class. */
     private final TableView<String[]> table;
+    /** Label used to display status messages, errors, or suggestions. */
     private final Label statusLabel;
+    /** Array of column names for header labels. */
     private final String[] columnNames;
+    /** Reference to the parent application for modification tracking and utilities. */
     private final CreateEditAPITest app;
 
+    /**
+     * Constructs a TableManager with the given column names, status label, and application reference.
+     * Initializes the table with columns, editing policies, and event handlers.
+     *
+     * @param columnNames Array of strings for column headers.
+     * @param statusLabel Label for displaying feedback messages.
+     * @param app Reference to the CreateEditAPITest application.
+     */
     public TableManager(String[] columnNames, Label statusLabel, CreateEditAPITest app) {
         this.columnNames = columnNames;
         this.statusLabel = statusLabel;
@@ -55,28 +80,43 @@ public class TableManager {
         this.table = createTable();
     }
 
+    /**
+     * Returns the underlying TableView instance.
+     *
+     * @return The configured TableView.
+     */
     public TableView<String[]> getTable() {
         return table;
     }
 
+    /**
+     * Creates and configures a new TableView for API test steps.
+     * Sets up columns, editing, selection, styling, and event listeners.
+     *
+     * @return The fully configured TableView.
+     */
     private TableView<String[]> createTable() {
         TableView<String[]> table = new TableView<>();
         table.setEditable(true);
         table.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+        // Apply dark theme styling to the table
         table.setStyle("-fx-background-color: #2E2E2E; -fx-table-cell-border-color: transparent; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-hbar-policy: as-needed; -fx-scrollbar-color: #4A90E2; -fx-scrollbar-background: #3C3F41;");
         table.setPrefWidth(480);
 
+        // Custom placeholder for empty table
         Label placeholderLabel = new Label("No steps defined");
         placeholderLabel.setStyle("-fx-text-fill: white;");
         table.setPlaceholder(placeholderLabel);
 
+        // Configure each column
         for (int i = 0; i < columnNames.length; i++) {
             final int index = i;
             TableColumn<String[], String> column = new TableColumn<>();
             column.setText(""); // Prevent default text to avoid duplication
+            // Bind cell value to the corresponding array element
             column.setCellValueFactory(cellData -> new SimpleStringProperty(cellData.getValue()[index]));
             
-            // Disable editing for specified columns, including Request
+            // Disable editing for data columns (e.g., keys/values that should not be directly edited in place)
             column.setEditable(!(index == ColumnIndex.REQUEST.getIndex() ||
                                  index == ColumnIndex.END_POINT.getIndex() ||
                                  index == ColumnIndex.HEADER_KEY.getIndex() ||
@@ -91,11 +131,14 @@ public class TableManager {
                                  index == ColumnIndex.AUTHORIZATION.getIndex() ||
                                  index == ColumnIndex.VERIFY_RESPONSE.getIndex()));
             
+            // Use custom cell factory for enhanced editing
             column.setCellFactory(col -> new CustomTextFieldTableCell(table, index, statusLabel, app));
+            // Handle edit commit: validate and update data
             column.setOnEditCommit(event -> {
                 String newValue = event.getNewValue() != null ? event.getNewValue() : "";
                 int colIndex = event.getTablePosition().getColumn();
                 int rowIndex = event.getTablePosition().getRow();
+                // Validate expected status code
                 if (colIndex == ColumnIndex.EXPECTED_STATUS.getIndex() && !newValue.matches("\\d+|^$")) {
                     statusLabel.setText("Status must be a number");
                     return;
@@ -107,19 +150,22 @@ public class TableManager {
                 updateAuthFieldHeaders(rowIndex);
             });
             
+            // Set header label with tooltip
             column.setGraphic(new Label(columnNames[i]) {{
                 setTooltip(new Tooltip("Click to edit"));
             }});
+            // Calculate column width based on header text length
             double charWidth = 7.0;
             double headerBasedWidth = columnNames[i].length() * charWidth + 20;
             column.setMinWidth(headerBasedWidth);
             column.setPrefWidth(headerBasedWidth);
-            column.setStyle("-fx-text-fill: white;");
+            column.setStyle("-fx-text-fill: white;"); // Style header text
             table.getColumns().add(column);
         }
 
         table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
 
+        // Custom row factory for selection-based styling
         table.setRowFactory(tv -> new TableRow<String[]>() {
             @Override
             protected void updateItem(String[] item, boolean empty) {
@@ -141,6 +187,7 @@ public class TableManager {
             }
         });
 
+        // Listen for selection changes to update auth fields
         table.getSelectionModel().selectedIndexProperty().addListener((obs, oldVal, newVal) -> {
             table.refresh();
             if (newVal != null && newVal.intValue() >= 0) {
@@ -148,6 +195,7 @@ public class TableManager {
             }
         });
 
+        // Handle single-click to start editing on editable cells
         table.setOnMouseClicked(event -> {
             if (event.getClickCount() == 1 && event.getButton() == MouseButton.PRIMARY && !table.getSelectionModel().isEmpty()) {
                 TablePosition<String[], ?> pos = table.getFocusModel().getFocusedCell();
@@ -161,6 +209,12 @@ public class TableManager {
         return table;
     }
 
+    /**
+     * Updates the header labels for authorization fields based on the selected row's auth type.
+     * Dynamically changes labels for Basic Auth or Bearer Token.
+     *
+     * @param rowIndex The index of the row to update headers for.
+     */
     public void updateAuthFieldHeaders(int rowIndex) {
         if (rowIndex < 0 || rowIndex >= table.getItems().size()) {
             return;
@@ -185,14 +239,34 @@ public class TableManager {
         table.refresh();
     }
 
+    /**
+     * Custom table cell extending TextFieldTableCell for advanced editing features.
+     * Handles validation, keyboard navigation (Tab/Enter/Esc), duplicate detection for Test IDs,
+     * and JSON formatting for payload fields.
+     */
     private class CustomTextFieldTableCell extends TextFieldTableCell<String[], String> {
+        /** Reference to the parent table. */
         private final TableView<String[]> table;
+        /** Index of the column this cell belongs to. */
         private final int columnIndex;
+        /** Status label for feedback. */
         private final Label statusLabel;
+        /** Set of existing Test IDs to check for duplicates. */
         private final Set<String> testIds = new HashSet<>();
+        /** Original value before editing starts. */
         private String originalValue;
+        /** Reference to the parent application. */
         private final CreateEditAPITest app;
 
+        /**
+         * Constructs a custom cell with table, column index, status label, and app reference.
+         * Sets up item listener to track Test IDs.
+         *
+         * @param table The parent TableView.
+         * @param columnIndex The column index.
+         * @param statusLabel Status feedback label.
+         * @param app Application reference.
+         */
         public CustomTextFieldTableCell(TableView<String[]> table, int columnIndex, Label statusLabel, CreateEditAPITest app) {
             super(new StringConverter<String>() {
                 @Override
@@ -208,12 +282,14 @@ public class TableManager {
             this.columnIndex = columnIndex;
             this.statusLabel = statusLabel;
             this.app = app;
+            // Listen for table item changes to update Test ID set
             table.getItems().addListener((javafx.collections.ListChangeListener<String[]>) c -> {
                 updateTestIds();
             });
             updateTestIds();
         }
 
+        /** Updates the set of existing Test IDs from table rows. */
         private void updateTestIds() {
             testIds.clear();
             for (String[] row : table.getItems()) {
@@ -224,6 +300,13 @@ public class TableManager {
             }
         }
 
+        /**
+         * Suggests a unique Test ID based on user input.
+         * Ensures it's numeric and not already in use.
+         *
+         * @param input The user's input string.
+         * @return A suggested unique numeric Test ID.
+         */
         private String suggestUniqueTestId(String input) {
             if (input == null || input.isEmpty() || !input.matches("[0-9]+")) {
                 return generateUniqueId("0");
@@ -235,6 +318,12 @@ public class TableManager {
             return generateUniqueId(base);
         }
 
+        /**
+         * Generates a unique numeric ID starting from a base value.
+         *
+         * @param base The base string to derive from.
+         * @return A unique numeric ID (up to 5 digits).
+         */
         private String generateUniqueId(String base) {
             String candidate = base;
             int suffix = 0;
@@ -248,6 +337,11 @@ public class TableManager {
             return candidate;
         }
 
+        /**
+         * Temporarily highlights rows with duplicate Test IDs.
+         *
+         * @param testId The Test ID to check for duplicates.
+         */
         private void highlightDuplicateRow(String testId) {
             for (int index = 0; index < table.getItems().size(); index++) {
                 String[] row = table.getItems().get(index);
@@ -260,6 +354,7 @@ public class TableManager {
             }
         }
 
+        /** Clears all duplicate highlights and restores normal styling. */
         private void clearDuplicateHighlights() {
             table.getItems().forEach((row) -> {
                 int index = table.getItems().indexOf(row);
@@ -274,6 +369,11 @@ public class TableManager {
             });
         }
 
+        /**
+         * Clears all data in a row except the Test ID.
+         *
+         * @param rowIndex The row index to clear.
+         */
         private void clearRowData(int rowIndex) {
             String[] row = table.getItems().get(rowIndex);
             for (int i = 1; i < row.length; i++) {
@@ -289,6 +389,7 @@ public class TableManager {
                 TextField textField = (TextField) getGraphic();
                 originalValue = getItem() != null ? getItem() : "";
                 if (columnIndex == ColumnIndex.TEST_ID.getIndex()) {
+                    // Filter for numeric Test ID input with duplicate check
                     UnaryOperator<TextFormatter.Change> filter = change -> {
                         String newText = change.getControlNewText();
                         if (newText.length() > 5) {
@@ -309,6 +410,7 @@ public class TableManager {
                     };
                     textField.setTextFormatter(new TextFormatter<>(filter));
                 } else if (columnIndex == ColumnIndex.EXPECTED_STATUS.getIndex()) {
+                    // Filter for numeric status code
                     UnaryOperator<TextFormatter.Change> filter = change -> {
                         String newText = change.getControlNewText();
                         if (newText.matches("\\d*")) {
@@ -318,11 +420,13 @@ public class TableManager {
                     };
                     textField.setTextFormatter(new TextFormatter<>(filter));
                 }
+                // Handle key presses for navigation and commit
                 textField.setOnKeyPressed(e -> {
                     if (e.getCode() == KeyCode.TAB) {
                         String text = textField.getText() != null ? textField.getText() : "";
                         int rowIndex = getTableRow().getIndex();
                         int newColumn = (columnIndex + 1) % table.getColumns().size();
+                        // Validate Test ID before committing on Tab
                         if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !text.isEmpty() && !CreateEditAPITest.isValidTestId(text, testIds, originalValue)) {
                             CreateEditAPITest.showError("Cannot commit invalid Test ID: " + text + ". Use only 0-9.");
                             cancelEdit();
@@ -330,6 +434,7 @@ public class TableManager {
                             setGraphic(null);
                             table.refresh();
                         } else if (columnIndex == ColumnIndex.TEST_ID.getIndex() && text.isEmpty() && originalValue != null && !originalValue.isEmpty()) {
+                            // Confirm deletion of row data on empty Test ID
                             Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
                             confirmation.setTitle("Confirm Delete Test ID");
                             confirmation.setHeaderText("Delete Test Step Data");
@@ -347,6 +452,7 @@ public class TableManager {
                         } else {
                             commitEdit(CreateEditAPITest.formatJson(text, statusLabel));
                         }
+                        // Move focus to next cell and start editing
                         table.getFocusModel().focus(rowIndex, table.getColumns().get(newColumn));
                         table.getSelectionModel().select(rowIndex);
                         table.edit(rowIndex, table.getColumns().get(newColumn));
@@ -371,6 +477,7 @@ public class TableManager {
                         table.scrollToColumn(table.getColumns().get(newColumn));
                         e.consume();
                     } else if (e.getCode() == KeyCode.ENTER) {
+                        // Commit on Enter with validation
                         String text = textField.getText() != null ? textField.getText() : "";
                         if (columnIndex == ColumnIndex.TEST_ID.getIndex()) {
                             if (!text.isEmpty() && !CreateEditAPITest.isValidTestId(text, testIds, originalValue)) {
@@ -412,7 +519,7 @@ public class TableManager {
                 setGraphic(null);
                 setStyle(""); // Let row factory handle empty cells
             } else {
-                // Apply uniform cell style with left alignment for view mode
+                // Apply cell styling based on selection
                 if (getTableRow() != null && getTableRow().isSelected()) {
                     setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-table-cell-border-color: #3C3F41; -fx-table-cell-border-width: 1px; -fx-padding: 2px; -fx-alignment: center-left;");
                 } else {
@@ -423,6 +530,7 @@ public class TableManager {
 
         @Override
         public void commitEdit(String newValue) {
+            // Final validation for Test ID
             if (columnIndex == ColumnIndex.TEST_ID.getIndex() && !newValue.isEmpty() && !CreateEditAPITest.isValidTestId(newValue, testIds, originalValue)) {
                 return;
             }
@@ -433,6 +541,7 @@ public class TableManager {
                 updateTestIds();
                 int rowIndex = getTableRow().getIndex();
                 String[] row = table.getItems().get(rowIndex);
+                // Set default headers if not present
                 if (row[ColumnIndex.HEADER_KEY.getIndex()] == null || row[ColumnIndex.HEADER_KEY.getIndex()].isEmpty()) {
                     row[ColumnIndex.HEADER_KEY.getIndex()] = "Content-Type";
                 }
@@ -444,6 +553,7 @@ public class TableManager {
                 table.getSelectionModel().clearSelection();
                 table.getSelectionModel().select(currentIndex);
             } else if (columnIndex == ColumnIndex.AUTHORIZATION.getIndex()) {
+                // Update auth headers on change
                 int rowIndex = getTableRow().getIndex();
                 updateAuthFieldHeaders(rowIndex);
             }

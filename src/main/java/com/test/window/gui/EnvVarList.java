@@ -37,26 +37,50 @@ import java.io.IOException;
 import java.util.*;
 import java.util.function.UnaryOperator;
 
+/**
+ * A JavaFX application for managing environment variables in a tabular GUI.
+ * Allows adding, editing, deleting, and saving environment variables to/from env.json.
+ * Features validation for variable names (alphanumeric starting with letter, unique case-insensitively).
+ * Includes custom table cells for inline editing with real-time feedback.
+ */
 public class EnvVarList extends Application {
 
+    /**
+     * Array of column names for the environment variables table.
+     */
     private static final String[] COLUMN_NAMES = {
         "Variable Name", "Value"
     };
 
+    /**
+     * CSS style for unfocused text fields in the table cells.
+     */
     private static final String FIELD_STYLE_UNFOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #888888; -fx-border-radius: 5px;";
 
+    /**
+     * CSS style for focused text fields in the table cells.
+     */
     private static final String FIELD_STYLE_FOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #888888; -fx-border-radius: 5px;";
 
+    /**
+     * Base CSS style for buttons.
+     */
     private static final String BUTTON_STYLE = 
         "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px; -fx-pref-height: 30px;";
 
+    /**
+     * Hover CSS style for buttons.
+     */
     private static final String BUTTON_HOVER_STYLE = 
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px; -fx-pref-height: 30px;";
 
+    /**
+     * Inline CSS styles for customizing the table view's appearance, including scroll bars and rows.
+     */
     private static final String CSS = """
         .table-view .scroll-bar:vertical,
         .table-view .scroll-bar:horizontal {
@@ -114,12 +138,34 @@ public class EnvVarList extends Application {
         }
         """;
 
+    /**
+     * Jackson ObjectMapper configured for pretty-printing JSON output.
+     */
     private static final ObjectMapper objectMapper = new ObjectMapper()
         .enable(SerializationFeature.INDENT_OUTPUT);
 
+    /**
+     * Label for displaying status messages, such as validation errors.
+     */
     private Label statusLabel;
+    /**
+     * The main table view for displaying and editing environment variables.
+     */
     private TableView<String[]> table;
 
+    /**
+     * Validates an environment variable name.
+     * - Allows empty names (for clearing).
+     * - Ensures uniqueness (case-insensitive, excluding current row).
+     * - Enforces pattern: starts with letter, followed by alphanumeric or underscore.
+     *
+     * @param name the proposed variable name
+     * @param nameSet the set of existing names (lowercased)
+     * @param currentId the original name in the current row
+     * @param rowIndex the current row index
+     * @param table the table view
+     * @return true if valid, false otherwise
+     */
     private boolean isValidEnvName(String name, Set<String> nameSet, String currentId, int rowIndex, TableView<String[]> table) {
         if (name == null || name.isEmpty()) {
             return true; // Allow empty names to clear the cell
@@ -133,6 +179,9 @@ public class EnvVarList extends Application {
         return true;
     }
 
+    /**
+     * Stops any ongoing editing in the table, committing or canceling based on validation.
+     */
     private void stopEditing() {
         if (table.getEditingCell() != null) {
             TablePosition<String[], ?> editingCell = table.getEditingCell();
@@ -155,6 +204,13 @@ public class EnvVarList extends Application {
         }
     }
 
+    /**
+     * Retrieves the table cell at the specified row and column index.
+     *
+     * @param rowIndex the row index
+     * @param columnIndex the column index
+     * @return the table cell, or null if not found
+     */
     private TableCell<String[], String> getTableCellAt(int rowIndex, int columnIndex) {
         for (Node node : table.lookupAll(".table-cell")) {
             if (node instanceof TableCell) {
@@ -167,6 +223,11 @@ public class EnvVarList extends Application {
         return null;
     }
 
+    /**
+     * Reloads environment variables from env.json into the table.
+     * Clears existing items and populates from the JSON map.
+     * Selects and focuses the first row if not empty.
+     */
     private void reloadEnvJson() {
         try {
             File file = new File("env.json");
@@ -190,6 +251,12 @@ public class EnvVarList extends Application {
         }
     }
 
+    /**
+     * Entry point for the JavaFX application.
+     * Sets up the UI, loads data, and configures event handlers.
+     *
+     * @param primaryStage the primary stage for this application
+     */
     @Override
     public void start(Stage primaryStage) {
         table = createTable();
@@ -312,6 +379,12 @@ public class EnvVarList extends Application {
         primaryStage.show();
     }
 
+    /**
+     * Creates and configures the TableView for environment variables.
+     * Includes columns, custom cells, row factory, and resize policy.
+     *
+     * @return the configured TableView
+     */
     private TableView<String[]> createTable() {
         TableView<String[]> table = new TableView<>();
         table.setEditable(true);
@@ -365,11 +438,20 @@ public class EnvVarList extends Application {
         return table;
     }
 
+    /**
+     * Displays an error alert dialog.
+     *
+     * @param message the error message
+     */
     private static void showError(String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR, message);
         alert.showAndWait();
     }
 
+    /**
+     * Custom table cell extending TextFieldTableCell for environment variable editing.
+     * Handles validation, filtering, keyboard navigation (Tab/Enter/Esc), and real-time feedback.
+     */
     private class CustomTextFieldTableCell extends TextFieldTableCell<String[], String> {
         private final TableView<String[]> table;
         private final int columnIndex;
@@ -377,6 +459,13 @@ public class EnvVarList extends Application {
         private final Set<String> nameSet = new HashSet<>();
         private String originalValue;
 
+        /**
+         * Constructor for the custom table cell.
+         *
+         * @param table the parent table view
+         * @param columnIndex the column index (0 for name, 1 for value)
+         * @param statusLabel the status label for feedback
+         */
         public CustomTextFieldTableCell(TableView<String[]> table, int columnIndex, Label statusLabel) {
             super(new StringConverter<String>() {
                 @Override
@@ -407,6 +496,9 @@ public class EnvVarList extends Application {
             });
         }
 
+        /**
+         * Updates the set of existing variable names for validation.
+         */
         private void updateNameSet() {
             nameSet.clear();
             for (String[] row : table.getItems()) {
@@ -417,6 +509,12 @@ public class EnvVarList extends Application {
             }
         }
 
+        /**
+         * Suggests a unique variable name based on input.
+         *
+         * @param input the base input string
+         * @return a unique name suggestion
+         */
         private String suggestUniqueName(String input) {
             if (input == null || input.isEmpty()) {
                 return generateUniqueId("var");
@@ -428,6 +526,12 @@ public class EnvVarList extends Application {
             return generateUniqueId(base);
         }
 
+        /**
+         * Generates a unique ID by appending suffixes if needed.
+         *
+         * @param base the base name
+         * @return a unique candidate name
+         */
         private String generateUniqueId(String base) {
             String candidate = base;
             int suffix = 1;
@@ -438,6 +542,11 @@ public class EnvVarList extends Application {
             return candidate;
         }
 
+        /**
+         * Highlights the row with a duplicate name for visual feedback.
+         *
+         * @param name the duplicate name
+         */
         private void highlightDuplicateRow(String name) {
             for (int index = 0; index < table.getItems().size(); index++) {
                 String[] row = table.getItems().get(index);
@@ -450,6 +559,9 @@ public class EnvVarList extends Application {
             }
         }
 
+        /**
+         * Clears all duplicate highlights and resets status.
+         */
         private void clearDuplicateHighlights() {
             table.getItems().forEach((row) -> {
                 int index = table.getItems().indexOf(row);
@@ -463,6 +575,9 @@ public class EnvVarList extends Application {
             }
         }
 
+        /**
+         * Starts editing the cell with custom text field setup and event handlers.
+         */
         @Override
         public void startEdit() {
             if (table.getItems().isEmpty() || isEditing()) {
@@ -555,6 +670,11 @@ public class EnvVarList extends Application {
             }
         }
 
+        /**
+         * Commits the edit after validation for the name column.
+         *
+         * @param newValue the new value to commit
+         */
         @Override
         public void commitEdit(String newValue) {
             if (columnIndex == 0 && !newValue.isEmpty()) {
@@ -574,6 +694,9 @@ public class EnvVarList extends Application {
             }
         }
 
+        /**
+         * Cancels the edit and resets the cell display.
+         */
         @Override
         public void cancelEdit() {
             super.cancelEdit();
@@ -586,6 +709,11 @@ public class EnvVarList extends Application {
         }
     }
 
+    /**
+     * Launches the JavaFX application.
+     *
+     * @param args command-line arguments
+     */
     public static void main(String[] args) {
         launch(args);
     }

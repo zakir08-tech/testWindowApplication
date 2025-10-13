@@ -32,7 +32,7 @@ import org.xml.sax.SAXException;
 public class HtmlReportGeneratorApi {
 
     private static final String BOOTSTRAP_CSS = """
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07v4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         """;
 
     private static final String BOOTSTRAP_ICONS_CSS = """
@@ -60,6 +60,7 @@ public class HtmlReportGeneratorApi {
         }
         .report-container h1 {
             font-size: 1.5rem;
+            text-align: center;
         }
         .table-container {
             overflow-x: auto;
@@ -71,6 +72,7 @@ public class HtmlReportGeneratorApi {
             position: relative;
             border: 2px solid #dee2e6;
             background-color: #F8F9FA;
+            margin-top: 20px;
         }
         table {
             table-layout: auto;
@@ -109,6 +111,7 @@ public class HtmlReportGeneratorApi {
         }
         .pass {
             color: #008000 !important;
+            vertical-align: middle;
             font-weight: bold;
         }
         .fail {
@@ -200,26 +203,67 @@ public class HtmlReportGeneratorApi {
             word-wrap: break-word !important;
             overflow-wrap: break-word !important;
         }
-        .summary-buttons .btn {
-            margin: 0 5px;
+        .summary-buttons {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .summary-buttons .count-btn {
+            margin: 0;
+            padding: 0.125rem 0.375rem;
+            border: 1px solid transparent;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: bold;
+            color: white;
+            min-width: 1.5rem;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .date-line {
+            text-align: center;
+            margin-bottom: 10px;
         }
         .scroll-to-top button {
             position: fixed;
             bottom: 20px;
             right: 20px;
             z-index: 1000;
-            padding: 5px 10px;
+            padding: 0.25rem 0.5rem;
             border: none !important;
             border-width: 0 !important;
             border-style: none !important;
             outline: none !important;
+            border-radius: 0.375rem;
+            height: 2rem;
+            width: 2rem;
         }
         .scroll-to-top .bi {
-            font-size: 1.2rem;
+            font-size: 1rem;
         }
         pre:hover {
             z-index: 10;
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        /* Button backgrounds */
+        #filterAllBtn {
+            background-color: #0d6efd !important;
+            border-color: #0d6efd !important;
+        }
+        #filterPassBtn {
+            background-color: #198754 !important;
+            border-color: #198754 !important;
+        }
+        #filterFailBtn {
+            background-color: #dc3545 !important;
+            border-color: #dc3545 !important;
+        }
+        #scrollToTopBtn {
+            background-color: #0d6efd !important;
+            border-color: #0d6efd !important;
+            color: white !important;
         }
         """;
 
@@ -229,12 +273,15 @@ public class HtmlReportGeneratorApi {
         int failCount = 0;
         for (Map<String, Object> reportData : reportDataList) {
             String status = safeToString(reportData.get("status"));
-            if (status.equalsIgnoreCase("Pass")) {
+            // Handle common variants explicitly for robustness
+            if (status.equalsIgnoreCase("Pass") || status.equalsIgnoreCase("passed")) {
                 passCount++;
-            } else if (status.equalsIgnoreCase("Fail")) {
+            } else if (status.equalsIgnoreCase("Fail") || status.equalsIgnoreCase("failed")) {
                 failCount++;
             }
         }
+        // DEBUG: Log counts (remove after testing)
+        System.out.println("DEBUG - Total: " + totalTests + ", Pass: " + passCount + ", Fail: " + failCount);
 
         ZonedDateTime now = ZonedDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss z");
@@ -255,11 +302,13 @@ public class HtmlReportGeneratorApi {
         html.append("<div class='report-container'>\n");
         html.append("<h1 class='display-6 text-center mb-4'>API Test Execution Report</h1>\n");
         html.append("<div class='text-center mb-3'>\n");
-        html.append("<p>Generated on: ").append(escapeHtml(dateTime)).append("</p>\n");
+        // Wrapped date in div with class for explicit centering
+        html.append("<div class='date-line'><p>Generated on: ").append(escapeHtml(dateTime)).append("</p></div>\n");
         html.append("<div class='summary-buttons'>\n");
-        html.append("Total Tests: <button id='filterAllBtn' class='btn btn-primary btn-sm'>").append(totalTests).append("</button> | ");
-        html.append("Passed: <button id='filterPassBtn' class='btn btn-success btn-sm'>").append(passCount).append("</button> | ");
-        html.append("Failed: <button id='filterFailBtn' class='btn btn-danger btn-sm'>").append(failCount).append("</button>\n");
+        // Simple labels and small buttons to match image
+        html.append("Total Tests: <button id='filterAllBtn' class='count-btn'>").append(String.valueOf(totalTests)).append("</button> | ");
+        html.append("Passed: <button id='filterPassBtn' class='count-btn'>").append(String.valueOf(passCount)).append("</button> | ");
+        html.append("Failed: <button id='filterFailBtn' class='count-btn'>").append(String.valueOf(failCount)).append("</button>\n");
         html.append("</div>\n");
         html.append("</div>\n");
         html.append("<div class='table-container' id='tableContainer'>\n");
@@ -363,11 +412,12 @@ public class HtmlReportGeneratorApi {
         html.append(" const filterFailBtn = document.getElementById('filterFailBtn');\n");
         html.append(" const scrollToTopBtn = document.getElementById('scrollToTopBtn');\n");
         html.append(" function wrapLongContent() {\n");
+        html.append(" if (!testReportTable) return;\n");  // Null check
         html.append(" document.querySelectorAll('#testReportTable tbody td.description').forEach(cell => {\n");
         html.append(" const span = cell.querySelector('span');\n");
         html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
         html.append(" if (rawText.includes('{{')) {\n");
-        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\"color: #FF0000;\">${match}</span>`);\n");
+        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\\\"color: #FF0000;\\\">${match}</span>`);\n");
         html.append(" if (span) span.innerHTML = highlightedText;\n");
         html.append(" else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
         html.append(" }\n");
@@ -380,7 +430,7 @@ public class HtmlReportGeneratorApi {
         html.append(" const span = cell.querySelector('span');\n");
         html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
         html.append(" if (rawText.includes('{{')) {\n");
-        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\"color: #FF0000;\">${match}</span>`);\n");
+        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\\\"color: #FF0000;\\\">${match}</span>`);\n");
         html.append(" if (span) span.innerHTML = highlightedText;\n");
         html.append(" else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
         html.append(" }\n");
@@ -389,7 +439,7 @@ public class HtmlReportGeneratorApi {
         html.append(" if (span) span.classList.add('wrap-long');\n");
         html.append(" }\n");
         html.append(" });\n");
-        html.append(" });\n");
+        html.append(" }\n");
         html.append(" try {\n");
         html.append(" wrapLongContent();\n");
         html.append(" } catch (e) {\n");
@@ -440,24 +490,22 @@ public class HtmlReportGeneratorApi {
         html.append(" console.error('Error in wrapLongContent after filter: ', e);\n");
         html.append(" }\n");
         html.append(" }\n");
+        // Always attempt scroll to top (removed no-op checks); added window fallback
         html.append(" function scrollToTop() {\n");
         html.append(" const container = document.getElementById('tableContainer');\n");
-        html.append(" if (!container) {\n");
-        html.append(" return;\n");
-        html.append(" }\n");
-        html.append(" const scrollHeight = container.scrollHeight;\n");
-        html.append(" const clientHeight = container.clientHeight;\n");
-        html.append(" const scrollTop = container.scrollTop;\n");
-        html.append(" if (scrollHeight <= clientHeight) {\n");
-        html.append(" return;\n");
-        html.append(" }\n");
-        html.append(" if (scrollTop === 0) {\n");
-        html.append(" return;\n");
-        html.append(" }\n");
+        html.append(" if (container) {\n");
         html.append(" try {\n");
         html.append(" container.scrollTo({ top: 0, behavior: 'smooth' });\n");
         html.append(" } catch (e) {\n");
         html.append(" container.scrollTop = 0;\n");
+        html.append(" }\n");
+        html.append(" } else {\n");
+        html.append(" // Fallback to window scroll if container missing\n");
+        html.append(" try {\n");
+        html.append(" window.scrollTo({ top: 0, behavior: 'smooth' });\n");
+        html.append(" } catch (e) {\n");
+        html.append(" window.scrollTop = 0;\n");
+        html.append(" }\n");
         html.append(" }\n");
         html.append(" }\n");
         html.append("});\n");
@@ -514,7 +562,7 @@ public class HtmlReportGeneratorApi {
         return wrapped.toString();
     }
 
-    // CHANGE: Made public to allow reuse in RunApiTest without duplication (was private)
+    // Made public to allow reuse in RunApiTest without duplication (was private)
     public boolean isNoValidationFailure(String verifyResponse, String responseBody, ObjectMapper objectMapper) {
         String verifyValue = verifyResponse != null ? verifyResponse.trim() : "";
         String responseValue = responseBody != null ? responseBody.trim() : "";
@@ -668,7 +716,7 @@ public class HtmlReportGeneratorApi {
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
             String anyValue = matcher.group();
-            // FIXED: Quote dynamic part for safe appendReplacement
+            // Quote dynamic part for safe appendReplacement
             String quotedAnyValue = Matcher.quoteReplacement(anyValue);
             matcher.appendReplacement(result, "<span style=\"color: #000000;\">" + quotedAnyValue + "</span>");
         }
@@ -680,7 +728,7 @@ public class HtmlReportGeneratorApi {
         if (original == null || original.trim().isEmpty()) {
             return "<span class='not-available'>None</span>";
         }
-        String text = highlightPlaceholders(original);
+        String text = original;
         // Handle expected <value>,
         Pattern expPattern = Pattern.compile("expected\\s+([^,]+?)\\s*,\\s*");
         Matcher matcher = expPattern.matcher(text);
@@ -688,7 +736,7 @@ public class HtmlReportGeneratorApi {
         while (matcher.find()) {
             String value = matcher.group(1).trim();
             String escapedValue = escapeHtml(value);
-            // FIXED: Quote dynamic part for safe appendReplacement
+            // Quote dynamic part for safe appendReplacement
             String quotedValue = Matcher.quoteReplacement(escapedValue);
             String replacement = "expected <span style=\"color: #008000;\">" + quotedValue + "</span>, ";
             matcher.appendReplacement(sb, replacement);
@@ -702,13 +750,13 @@ public class HtmlReportGeneratorApi {
         while (matcher.find()) {
             String value = matcher.group(1).trim();
             String escapedValue = escapeHtml(value);
-            // FIXED: Quote dynamic part for safe appendReplacement
+            // Quote dynamic part for safe appendReplacement
             String quotedValue = Matcher.quoteReplacement(escapedValue);
             String replacement = "got <span style=\"color: #FF0000;\">" + quotedValue + "</span>";
             matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);
-        return sb.toString();
+        return highlightPlaceholders(sb.toString());
     }
 
     private String highlightPlaceholders(String text) {
@@ -721,7 +769,7 @@ public class HtmlReportGeneratorApi {
         while (matcher.find()) {
             String placeholder = matcher.group();
             String escapedPlaceholder = escapeHtml(placeholder);
-            // FIXED: Quote dynamic part for safe appendReplacement
+            // Quote dynamic part for safe appendReplacement
             String quotedPlaceholder = Matcher.quoteReplacement(escapedPlaceholder);
             matcher.appendReplacement(result, "<span style=\"color: #FF0000;\">" + quotedPlaceholder + "</span>");
         }

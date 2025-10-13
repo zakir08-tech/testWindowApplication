@@ -34,8 +34,19 @@ import java.util.ArrayList;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 
+/**
+ * A JavaFX application for creating and editing API test cases.
+ * It provides a table-based interface to manage test data, supports JSON payload editing
+ * with syntax highlighting for placeholders (e.g., {{variable}}), Excel file import/export,
+ * and integration with environment variables via env.json updates.
+ */
 public class CreateEditAPITest extends Application {
 
+    /**
+     * Array of column names for the test data table.
+     * These columns represent various aspects of an API test case, such as requests, parameters,
+     * payloads, and verification criteria.
+     */
     private static final String[] COLUMN_NAMES = {
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
@@ -44,23 +55,47 @@ public class CreateEditAPITest extends Application {
         "SSL Validation", "Expected Status", "Verify Response", "Test Description"
     };
 
+    /**
+     * CSS style for unfocused text fields and areas.
+     * Defines a dark theme with white text, subtle borders, and rounded corners.
+     */
     private static final String FIELD_STYLE_UNFOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #888888; -fx-border-radius: 5px;";
 
+    /**
+     * CSS style for focused text fields and areas.
+     * Similar to unfocused but with a blue border to indicate focus.
+     */
     private static final String FIELD_STYLE_FOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #888888; -fx-border-radius: 5px;";
 
+    /**
+     * Base CSS style for buttons.
+     * Blue background with white text and rounded corners.
+     */
     private static final String BUTTON_STYLE = 
         "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * Hover style for buttons.
+     * Lighter blue background on hover.
+     */
     private static final String BUTTON_HOVER_STYLE = 
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * CSS style for highlighting placeholders like {{variable}}.
+     * Uses an orange fill color.
+     */
     private static final String HIGHLIGHT_STYLE = 
         "-fx-fill: #FF8C00;"; // Orange color for {{anytext}}
 
+    /**
+     * Inline CSS stylesheet for custom styling of table views, scroll panes, text areas,
+     * combo boxes, and other UI components. Applies a dark theme with custom scroll bars.
+     */
     private static final String CSS = """
         .table-view .scroll-bar:vertical,
         .table-view .scroll-bar:horizontal,
@@ -165,40 +200,97 @@ public class CreateEditAPITest extends Application {
         }
         """;
 
+    /**
+     * Fixed height for text fields in the UI.
+     */
     private static final double TEXT_FIELD_HEIGHT = 30.0;
+
+    /**
+     * ObjectMapper instance configured for pretty-printing JSON with ordered keys.
+     * Used for formatting and parsing JSON payloads.
+     */
     private static final ObjectMapper objectMapper = new ObjectMapper()
         .enable(SerializationFeature.INDENT_OUTPUT)
         .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
 
-    // Define key order for payload JSON
+    /**
+     * Defines the preferred order of top-level keys in the JSON payload.
+     * Ensures consistent formatting when serializing.
+     */
     private static final String[] PAYLOAD_TOP_LEVEL_KEY_ORDER = {"client_timestamp", "fields"};
+
+    /**
+     * Defines the preferred order of keys within each field object in the JSON payload.
+     * Ensures consistent formatting for field properties.
+     */
     private static final String[] PAYLOAD_FIELDS_KEY_ORDER = {
         "page_number", "role", "name", "width", "x", "y", "type", "required", "height"
     };
 
+    // UI and state management fields
+    /**
+     * Label used to display status messages and errors in the UI.
+     */
     private Label statusLabel;
+
+    /**
+     * Main vertical layout container for the application UI.
+     */
     private VBox mainLayout;
+
+    /**
+     * The currently loaded file, if any.
+     */
     private File loadedFile;
+
+    /**
+     * Flag indicating whether the current document has unsaved modifications.
+     */
     private boolean isModified;
+
+    /**
+     * Manager for the test data table, handling row additions, deletions, and data validation.
+     */
     private TableManager tableManager;
+
+    /**
+     * Manager for additional UI components like buttons, text fields, and JSON viewers.
+     */
     private UIComponentsManager uiComponents;
     
-    // Getter method to access HIGHLIGHT_STYLE
+    /**
+     * Getter method to access the HIGHLIGHT_STYLE constant.
+     * Used by UI components for applying placeholder highlighting.
+     * 
+     * @return The CSS style string for highlighting.
+     */
     public static String getHighlightStyle() {
         return HIGHLIGHT_STYLE;
     }
     
+    /**
+     * Entry point for the JavaFX application.
+     * Initializes the UI components, sets up the scene with custom CSS,
+     * and displays the main window.
+     * 
+     * @param primaryStage The primary stage for the application.
+     */
     @Override
     public void start(Stage primaryStage) {
         try {
+            // Initialize status label for displaying messages
             statusLabel = new Label();
             statusLabel.setStyle("-fx-text-fill: #FF5555;");
             statusLabel.setWrapText(true);
 
+            // Create managers for table and UI components
             tableManager = new TableManager(COLUMN_NAMES, statusLabel, this);
             uiComponents = new UIComponentsManager(tableManager.getTable(), statusLabel, COLUMN_NAMES, tableManager, this);
 
+            // Get the main table view
             TableView<String[]> table = tableManager.getTable();
+            
+            // Create button layout and combine with table
             VBox buttonsVBox = uiComponents.createButtonsVBox(primaryStage, this::checkUnsavedChanges, this::saveToFile, this::saveAsToFile);
             HBox tableWithButtons = new HBox(10, table, buttonsVBox);
             tableWithButtons.setStyle("-fx-background-color: #2E2E2E;");
@@ -208,20 +300,25 @@ public class CreateEditAPITest extends Application {
             VBox.setVgrow(tableWithButtons, Priority.NEVER);
             table.prefHeightProperty().bind(primaryStage.heightProperty().multiply(0.66));
 
+            // Create additional content area (e.g., JSON viewer)
             VBox additionalContent = uiComponents.createAdditionalContent();
             ScrollPane scrollPane = new ScrollPane(additionalContent);
             scrollPane.setFitToWidth(true);
             scrollPane.setStyle("-fx-background-color: #2E2E2E;");
 
+            // Create text fields box for quick input
             HBox textFieldsBox = uiComponents.createTextFieldsBox();
 
+            // Assemble main layout
             mainLayout = new VBox(10, tableWithButtons, textFieldsBox, scrollPane);
             mainLayout.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 10px; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
             mainLayout.setAlignment(Pos.TOP_CENTER);
             VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
+            // Update initial button states
             uiComponents.updateButtonStates();
 
+            // Set up scene with inline CSS
             Scene scene = new Scene(mainLayout);
             scene.getStylesheets().add("data:text/css," + CSS.replaceAll("\n", "%0A"));
             primaryStage.setScene(scene);
@@ -231,6 +328,7 @@ public class CreateEditAPITest extends Application {
             primaryStage.setTitle("Table with JSON Viewer");
             primaryStage.show();
 
+            // Listener for CSS loading issues
             scene.getStylesheets().addListener((javafx.collections.ListChangeListener<String>) change -> {
                 if (scene.getStylesheets().isEmpty()) {
                     System.err.println("CSS loading failed, falling back to default style.");
@@ -239,26 +337,50 @@ public class CreateEditAPITest extends Application {
             });
 
         } catch (Exception e) {
+            // Handle startup exceptions
             System.err.println("Application startup failed: " + e.getMessage());
             e.printStackTrace();
             showError("Failed to start application: " + e.getMessage());
         }
     }
 
+    /**
+     * Returns the currently loaded file.
+     * 
+     * @return The loaded File object, or null if none.
+     */
     public File getLoadedFile() {
         return loadedFile;
     }
 
+    /**
+     * Sets the currently loaded file.
+     * 
+     * @param file The File to set as loaded.
+     */
     public void setLoadedFile(File file) {
         this.loadedFile = file;
     }
 
+    /**
+     * Sets the modification flag for the document.
+     * 
+     * @param modified True if the document has unsaved changes.
+     */
     public void setModified(boolean modified) {
         this.isModified = modified;
     }
 
+    /**
+     * Checks for unsaved changes and prompts the user if necessary.
+     * Allows saving, discarding, or canceling the operation.
+     * 
+     * @param primaryStage The main stage for dialog display.
+     * @return True if changes are handled and operation can proceed, false otherwise.
+     */
     private boolean checkUnsavedChanges(Stage primaryStage) {
         if (isModified) {
+            // Create confirmation dialog with multiple options
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
             alert.setTitle("Unsaved Changes");
             alert.setHeaderText("You have unsaved changes");
@@ -271,42 +393,57 @@ public class CreateEditAPITest extends Application {
             Optional<ButtonType> result = alert.showAndWait();
             if (result.isPresent()) {
                 if (result.get() == saveButton) {
+                    // Save to existing file if loaded
                     if (loadedFile != null) {
                         return saveToFile(loadedFile, primaryStage);
                     } else {
                         return saveAsToFile(primaryStage);
                     }
                 } else if (result.get() == saveAsButton) {
+                    // Prompt for new file location
                     return saveAsToFile(primaryStage);
                 } else if (result.get() == discardButton) {
+                    // Discard changes
                     isModified = false;
                     return true;
                 } else {
+                    // Cancel operation
                     return false;
                 }
             }
             return false;
         }
-        return true;
+        return true; // No changes, proceed
     }
 
+    /**
+     * Saves the current table data to an Excel file.
+     * Updates env.json if successful and shows confirmation.
+     * 
+     * @param file The target file to save to.
+     * @param primaryStage The main stage for dialog display.
+     * @return True if save was successful, false otherwise.
+     */
     private boolean saveToFile(File file, Stage primaryStage) {
         TableView<String[]> table = tableManager.getTable();
         File targetFile = (file != null) ? file : loadedFile;
         if (targetFile == null) {
             return false;
         }
+        // Check write permissions
         if (!targetFile.exists() && !targetFile.getParentFile().canWrite()) {
             showError("Cannot write to directory: " + targetFile.getParentFile().getAbsolutePath());
             return false;
         }
         try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            // Create sheet and header row
             Sheet sheet = workbook.createSheet("Test Data");
             Row headerRow = sheet.createRow(0);
             for (int i = 0; i < COLUMN_NAMES.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(COLUMN_NAMES[i]);
             }
+            // Populate data rows
             for (int i = 0; i < table.getItems().size(); i++) {
                 Row row = sheet.createRow(i + 1);
                 String[] data = table.getItems().get(i);
@@ -315,13 +452,16 @@ public class CreateEditAPITest extends Application {
                     cell.setCellValue(data[j] != null ? data[j] : "");
                 }
             }
+            // Auto-size columns
             for (int i = 0; i < COLUMN_NAMES.length; i++) {
                 sheet.autoSizeColumn(i);
             }
+            // Write to file
             try (FileOutputStream fileOut = new FileOutputStream(targetFile)) {
                 workbook.write(fileOut);
                 fileOut.flush();
             } catch (IOException ex) {
+                // Handle specific IO exceptions
                 String message = "Failed to save file: " + ex.getMessage();
                 if (ex instanceof java.nio.file.AccessDeniedException) {
                     message = "Permission denied while saving file: " + targetFile.getAbsolutePath();
@@ -331,6 +471,7 @@ public class CreateEditAPITest extends Application {
                 showError(message);
                 return false;
             }
+            // Update state and show success
             isModified = false;
             loadedFile = targetFile;
             Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -338,6 +479,7 @@ public class CreateEditAPITest extends Application {
             alert.setHeaderText("File Saved");
             alert.setContentText("Test case saved successfully to " + targetFile.getAbsolutePath());
             alert.showAndWait();
+            // Update environment JSON
             try {
                 EnvJsonUpdater.updateEnvJsonFromTable(tableManager.getTable());
             } catch (IOException ex) {
@@ -350,6 +492,12 @@ public class CreateEditAPITest extends Application {
         }
     }
 
+    /**
+     * Prompts the user to select a new file location and saves the data there.
+     * 
+     * @param primaryStage The main stage for the file chooser dialog.
+     * @return True if save was successful, false otherwise.
+     */
     private boolean saveAsToFile(Stage primaryStage) {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Save Test Case");
@@ -363,6 +511,14 @@ public class CreateEditAPITest extends Application {
         return false;
     }
 
+    /**
+     * Formats a JSON string with pretty-printing and enforces key ordering for payloads.
+     * Handles top-level keys and nested 'fields' array keys specifically.
+     * 
+     * @param input The raw JSON string to format.
+     * @param statusLabel Label to update with error messages if parsing fails.
+     * @return The formatted JSON string, or original input on error.
+     */
     public static String formatJson(String input, Label statusLabel) {
         if (input == null || input.trim().isEmpty()) {
             return input != null ? input : "";
@@ -414,11 +570,20 @@ public class CreateEditAPITest extends Application {
             // Fallback for non-map JSON (e.g., arrays, primitives)
             return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(parsedJson);
         } catch (Exception e) {
+            // Report error on UI thread
             Platform.runLater(() -> statusLabel.setText("Invalid JSON: " + e.getMessage()));
             return input;
         }
     }
 
+    /**
+     * Validates a Test ID string against rules: unique, numeric, <=5 digits.
+     * 
+     * @param testId The ID to validate.
+     * @param testIds Set of existing IDs for uniqueness check.
+     * @param currentId The current row's ID (to allow self-validation).
+     * @return True if valid, false otherwise.
+     */
     public static boolean isValidTestId(String testId, Set<String> testIds, String currentId) {
         if (testId == null || testId.isEmpty()) {
             return false;
@@ -435,11 +600,22 @@ public class CreateEditAPITest extends Application {
         return true;
     }
 
+    /**
+     * Displays an error dialog to the user.
+     * 
+     * @param message The error message to show.
+     */
     public static void showError(String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR, message);
         alert.showAndWait();
     }
 
+    /**
+     * Applies real-time syntax highlighting to a TextField for placeholders like {{variable}}.
+     * Updates style on text changes and focus events.
+     * 
+     * @param textField The TextField to enhance.
+     */
     public static void applyHighlighting(TextField textField) {
         textField.textProperty().addListener((obs, oldVal, newVal) -> {
             TextFlow textFlow = new TextFlow();
@@ -447,6 +623,7 @@ public class CreateEditAPITest extends Application {
                 textField.setText(newVal);
                 return;
             }
+            // Split text around placeholders and apply styles
             String[] parts = newVal.split("(\\{\\{[^\\}]+\\}\\})");
             for (String part : parts) {
                 Text text = new Text(part);
@@ -457,14 +634,22 @@ public class CreateEditAPITest extends Application {
                 }
                 textFlow.getChildren().add(text);
             }
+            // Update field style based on presence of pattern
             textField.setStyle(partContainsPattern(newVal) ? HIGHLIGHT_STYLE : FIELD_STYLE_UNFOCUSED);
         });
+        // Handle focus changes
         textField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             textField.setStyle(newVal ? FIELD_STYLE_FOCUSED : 
                 (partContainsPattern(textField.getText()) ? HIGHLIGHT_STYLE : FIELD_STYLE_UNFOCUSED));
         });
     }
 
+    /**
+     * Applies real-time syntax highlighting to a TextArea for placeholders like {{variable}}.
+     * Updates style on text changes and focus events.
+     * 
+     * @param textArea The TextArea to enhance.
+     */
     public static void applyHighlighting(TextArea textArea) {
         textArea.textProperty().addListener((obs, oldVal, newVal) -> {
             TextFlow textFlow = new TextFlow();
@@ -472,6 +657,7 @@ public class CreateEditAPITest extends Application {
                 textArea.setText(newVal);
                 return;
             }
+            // Split text around placeholders and apply styles
             String[] parts = newVal.split("(\\{\\{[^\\}]+\\}\\})");
             for (String part : parts) {
                 Text text = new Text(part);
@@ -482,18 +668,31 @@ public class CreateEditAPITest extends Application {
                 }
                 textFlow.getChildren().add(text);
             }
+            // Update area style based on presence of pattern
             textArea.setStyle(partContainsPattern(newVal) ? HIGHLIGHT_STYLE : "-fx-text-fill: white;");
         });
+        // Handle focus changes
         textArea.focusedProperty().addListener((obs, oldVal, newVal) -> {
             textArea.setStyle(newVal ? FIELD_STYLE_FOCUSED : 
                 (partContainsPattern(textArea.getText()) ? HIGHLIGHT_STYLE : "-fx-text-fill: white;"));
         });
     }
 
+    /**
+     * Checks if the given text contains any placeholder pattern like {{...}}.
+     * 
+     * @param text The text to check.
+     * @return True if a pattern is found.
+     */
     private static boolean partContainsPattern(String text) {
         return text != null && text.matches(".*\\{\\{[^\\}]+\\}\\}.*");
     }
 
+    /**
+     * Launches the JavaFX application.
+     * 
+     * @param args Command-line arguments (unused).
+     */
     public static void main(String[] args) {
         launch(args);
     }

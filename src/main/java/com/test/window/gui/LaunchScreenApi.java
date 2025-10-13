@@ -24,6 +24,12 @@ import java.util.List;
 
 import com.test.window.app.UIConstants;
 
+/**
+ * LaunchScreenApi is the main entry point for the Phantom API Test Accelerator application.
+ * It creates a launch window with a background image, title, subtitle, and buttons to open
+ * the Create/Edit Test and Run Test windows. The window is non-resizable and sized based
+ * on screen dimensions. It handles cleanup of child windows on close.
+ */
 public class LaunchScreenApi extends Application {
 
     // List to track all open stages for proper cleanup
@@ -32,6 +38,12 @@ public class LaunchScreenApi extends Application {
     private Stage testCreateEditApiTest = null;
     private Stage testRunApiTest = null;
 
+    /**
+     * Entry point for the JavaFX application. Initializes the primary stage with the launch screen UI.
+     * Calculates window size, loads background image, sets up effects and animations, and configures buttons.
+     * 
+     * @param primaryStage The primary stage for this application.
+     */
     @Override
     public void start(Stage primaryStage) {
         try {
@@ -157,6 +169,7 @@ public class LaunchScreenApi extends Application {
             createEditButton.setOnAction(e -> {
                 try {
                     if (testCreateEditApiTest == null || !testCreateEditApiTest.isShowing()) {
+                        // Create a new stage if none exists or it's not showing
                     	testCreateEditApiTest = new Stage();
                         CreateEditAPITest testManagerApp = new CreateEditAPITest();
                         testManagerApp.start(testCreateEditApiTest);
@@ -173,6 +186,7 @@ public class LaunchScreenApi extends Application {
             runTestButton.setOnAction(e -> {
                 try {
                     if (testRunApiTest == null || !testRunApiTest.isShowing()) {
+                        // Create a new stage if none exists or it's not showing
                     	testRunApiTest = new Stage();
                         RunApiTest testRunner = new RunApiTest();
                         testRunner.start(testRunApiTest);
@@ -227,6 +241,11 @@ public class LaunchScreenApi extends Application {
         }
     }
 
+    /**
+     * Main method to launch the JavaFX application.
+     * 
+     * @param args Command-line arguments (not used).
+     */
     public static void main(String[] args) {
         // Launch the JavaFX application
         launch(args);

@@ -45,8 +45,16 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+/**
+ * Manages the creation and configuration of UI components for the API test editor application.
+ * This class handles the dynamic generation of text fields, combo boxes, buttons, and scrollable areas
+ * for editing test steps, including headers, parameters, payloads, and response verifications.
+ */
 public class UIComponentsManager {
 
+    /**
+     * Enum defining the column indices in the test table for easy reference.
+     */
     private enum ColumnIndex {
         TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
         PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
@@ -59,47 +67,122 @@ public class UIComponentsManager {
         public int getIndex() { return index; }
     }
 
+    /**
+     * Observable list of authorization options for the auth combo box.
+     */
     private static final ObservableList<String> AUTH_OPTIONS = 
         FXCollections.observableArrayList("", "Basic Auth", "Bearer Token");
 
+    /**
+     * Observable list of HTTP methods for the request combo box.
+     */
     private static final ObservableList<String> HTTP_METHODS = 
         FXCollections.observableArrayList("", "GET", "POST", "PUT", "PATCH", "DELETE");
 
+    /**
+     * Observable list of payload types for the payload type combo box.
+     */
     private static final ObservableList<String> PAYLOAD_TYPES = 
         FXCollections.observableArrayList("", "json", "form-data", "urlencoded");
 
+    /**
+     * CSS style for unfocused text fields and combo boxes.
+     */
     private static final String FIELD_STYLE_UNFOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
+    /**
+     * CSS style for focused text fields and combo boxes.
+     */
     private static final String FIELD_STYLE_FOCUSED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
+    /**
+     * CSS style for disabled text fields and combo boxes.
+     */
     private static final String FIELD_STYLE_DISABLED = 
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: #888888; " +
         "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
+    /**
+     * CSS style for buttons in their default state.
+     */
     private static final String BUTTON_STYLE = 
         "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * CSS style for buttons on hover.
+     */
     private static final String BUTTON_HOVER_STYLE = 
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * Standard height for text fields.
+     */
     private static final double TEXT_FIELD_HEIGHT = 30.0;
 
+    /**
+     * Reference to the main table view displaying test steps.
+     */
     private final TableView<String[]> table;
+
+    /**
+     * Label for displaying status messages.
+     */
     private final Label statusLabel;
+
+    /**
+     * Array of column names for the table.
+     */
     private final String[] columnNames;
+
+    /**
+     * Manager for table operations.
+     */
     private final TableManager tableManager;
+
+    /**
+     * Reference to the main application instance.
+     */
     private final CreateEditAPITest app;
+
+    /**
+     * Text area for editing payload content.
+     */
     private TextArea payloadField;
+
+    /**
+     * Text area for verifying response content.
+     */
     private TextArea verifyResponseField;
+
+    /**
+     * Scroll pane containing header fields.
+     */
     private ScrollPane headerFieldsScroll;
+
+    /**
+     * Button for adding a step above the selected row.
+     */
     private Button addAboveButton, addBelowButton, moveUpButton, moveDownButton, 
                    deleteStepButton, deleteTestCaseButton, saveTestButton, createNewTestButton;
+
+    /**
+     * Static reference to the environment variables stage to ensure only one instance.
+     */
     private static Stage envVarStage; // Track single EnvVarList window
 
+    /**
+     * Constructs a UIComponentsManager instance.
+     *
+     * @param table the table view for test steps
+     * @param statusLabel label for status updates
+     * @param columnNames array of column names
+     * @param tableManager manager for table operations
+     * @param app the main application instance
+     */
     public UIComponentsManager(TableView<String[]> table, Label statusLabel, String[] columnNames, TableManager tableManager, CreateEditAPITest app) {
         this.table = table;
         this.statusLabel = statusLabel;
@@ -108,8 +191,15 @@ public class UIComponentsManager {
         this.app = app;
     }
 
+    /**
+     * Creates an HBox containing text fields and combo boxes for basic test step editing
+     * (request method, endpoint, status, payload type, authorization).
+     *
+     * @return HBox containing the input fields
+     */
     public HBox createTextFieldsBox() {
-    	ComboBox<String> requestComboBox = new ComboBox<>(HTTP_METHODS);
+        // Create combo box for HTTP request methods
+        ComboBox<String> requestComboBox = new ComboBox<>(HTTP_METHODS);
         requestComboBox.setPromptText("Request");
         requestComboBox.setButtonCell(new ListCell<String>() {
             @Override
@@ -134,6 +224,7 @@ public class UIComponentsManager {
         requestComboBox.maxWidthProperty().bind(requestComboBox.prefWidthProperty());
         requestComboBox.minWidthProperty().bind(requestComboBox.prefWidthProperty());
 
+        // Create text field for endpoint URL
         TextField endpointField = new TextField();
         endpointField.setPromptText("End-Point");
         endpointField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -146,6 +237,7 @@ public class UIComponentsManager {
         endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
         endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
 
+        // Create text field for expected status code
         TextField statusField = new TextField();
         statusField.setPromptText("Status");
         statusField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -158,6 +250,7 @@ public class UIComponentsManager {
         statusField.maxWidthProperty().bind(statusField.prefWidthProperty());
         statusField.minWidthProperty().bind(statusField.prefWidthProperty());
 
+        // Create combo box for payload types
         ComboBox<String> payloadTypeComboBox = new ComboBox<>(PAYLOAD_TYPES);
         payloadTypeComboBox.setPromptText("Payload Type");
         payloadTypeComboBox.setButtonCell(new ListCell<String>() {
@@ -183,6 +276,7 @@ public class UIComponentsManager {
         payloadTypeComboBox.maxWidthProperty().bind(payloadTypeComboBox.prefWidthProperty());
         payloadTypeComboBox.minWidthProperty().bind(payloadTypeComboBox.prefWidthProperty());
 
+        // Create combo box for authorization types
         ComboBox<String> authComboBox = new ComboBox<>(AUTH_OPTIONS);
         authComboBox.setPromptText("Authorization");
         authComboBox.setButtonCell(new ListCell<String>() {
@@ -208,6 +302,7 @@ public class UIComponentsManager {
         authComboBox.maxWidthProperty().bind(authComboBox.prefWidthProperty());
         authComboBox.minWidthProperty().bind(authComboBox.prefWidthProperty());
 
+        // Create text field for username or token (depending on auth type)
         TextField usernameTokenField = new TextField();
         usernameTokenField.setPromptText("Username/Token");
         usernameTokenField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -221,6 +316,7 @@ public class UIComponentsManager {
         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
 
+        // Create text field for password (for Basic Auth)
         TextField passwordField = new TextField();
         passwordField.setPromptText("Password");
         passwordField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -234,6 +330,7 @@ public class UIComponentsManager {
         passwordField.maxWidthProperty().bind(passwordField.prefWidthProperty());
         passwordField.minWidthProperty().bind(passwordField.prefWidthProperty());
 
+        // Create HBox to hold all fields with spacing
         HBox textFieldsBox = new HBox(10);
         textFieldsBox.setStyle("-fx-background-color: #2E2E2E;");
         textFieldsBox.getChildren().addAll(requestComboBox, endpointField, statusField, payloadTypeComboBox, authComboBox, usernameTokenField, passwordField);
@@ -245,6 +342,7 @@ public class UIComponentsManager {
         HBox.setHgrow(usernameTokenField, Priority.NEVER);
         HBox.setHgrow(passwordField, Priority.NEVER);
 
+        // Listener for table selection changes to populate and enable/disable fields based on valid Test ID
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
             if (newItem != null) {
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
@@ -327,6 +425,7 @@ public class UIComponentsManager {
                     passwordField.setDisable(true);
                 }
             } else {
+                // Clear fields when no selection
                 requestComboBox.setValue(null);
                 requestComboBox.getSelectionModel().clearSelection();
                 requestComboBox.setStyle(FIELD_STYLE_DISABLED);
@@ -357,6 +456,7 @@ public class UIComponentsManager {
             updateButtonStates();
         });
 
+        // Listener for auth combo box changes to update auth fields visibility and update table
         authComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -406,6 +506,7 @@ public class UIComponentsManager {
             }
         });
 
+        // Listener for request combo box changes to update table
         requestComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -415,6 +516,7 @@ public class UIComponentsManager {
             }
         });
 
+        // Listener for endpoint field changes to update table
         endpointField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -424,6 +526,7 @@ public class UIComponentsManager {
             }
         });
 
+        // Listener for status field changes to update table
         statusField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -433,6 +536,7 @@ public class UIComponentsManager {
             }
         });
 
+        // Listener for payload type combo box changes to update table
         payloadTypeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -442,6 +546,7 @@ public class UIComponentsManager {
             }
         });
 
+        // Listener for username/token field changes to update table
         usernameTokenField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -451,6 +556,7 @@ public class UIComponentsManager {
             }
         });
 
+        // Listener for password field changes to update table
         passwordField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -463,11 +569,19 @@ public class UIComponentsManager {
         return textFieldsBox;
     }
 
+    /**
+     * Creates a VBox containing additional content areas for headers, parameters, payload modifications,
+     * response captures, payload editing, and response verification.
+     *
+     * @return VBox containing the additional UI components
+     */
     public VBox createAdditionalContent() {
+        // Main container for additional content
         VBox additionalContent = new VBox(10);
         additionalContent.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         additionalContent.setAlignment(Pos.CENTER_LEFT);
 
+        // VBox and ScrollPane for header key-value pairs
         VBox headerFieldsVBox = new VBox(5);
         headerFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         headerFieldsScroll = new ScrollPane(headerFieldsVBox);
@@ -479,6 +593,7 @@ public class UIComponentsManager {
         headerFieldsScroll.setMinHeight(200);
         headerFieldsVBox.setMaxHeight(190);
         
+        // VBox and ScrollPane for parameter key-value pairs
         VBox paramFieldsVBox = new VBox(5);
         paramFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         ScrollPane paramListField = new ScrollPane(paramFieldsVBox);
@@ -490,6 +605,7 @@ public class UIComponentsManager {
         paramListField.setMinHeight(200);
         paramFieldsVBox.setMaxHeight(190);
 
+        // VBox and ScrollPane for modify payload key-value pairs
         VBox modifyPayloadVBox = new VBox(5);
         modifyPayloadVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         ScrollPane modifyPayloadScroll = new ScrollPane(modifyPayloadVBox);
@@ -501,6 +617,7 @@ public class UIComponentsManager {
         modifyPayloadScroll.setMinHeight(200);
         modifyPayloadVBox.setMaxHeight(190);
 
+        // VBox and ScrollPane for response capture key-value pairs
         VBox responseCaptureVBox = new VBox(5);
         responseCaptureVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         ScrollPane responseCaptureScroll = new ScrollPane(responseCaptureVBox);
@@ -512,6 +629,7 @@ public class UIComponentsManager {
         responseCaptureScroll.setMinHeight(200);
         responseCaptureVBox.setMaxHeight(190);
 
+        // Text area for payload editing with JSON formatting support
         payloadField = new TextArea();
         payloadField.setPromptText("Payload");
         payloadField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -524,6 +642,7 @@ public class UIComponentsManager {
             payloadField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
 
+        // Handle TAB key in payload field for focus traversal (no tab insertion)
         payloadField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
                 event.consume(); // Prevent tab character insertion
@@ -538,6 +657,7 @@ public class UIComponentsManager {
             }
         });
 
+        // Text area for response verification with JSON formatting support
         verifyResponseField = new TextArea();
         verifyResponseField.setPromptText("Verify Response");
         verifyResponseField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -550,6 +670,7 @@ public class UIComponentsManager {
             verifyResponseField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
 
+        // Handle TAB key in verify response field for focus traversal
         verifyResponseField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
                 event.consume(); // Prevent tab character insertion
@@ -564,6 +685,7 @@ public class UIComponentsManager {
             }
         });
 
+        // GridPane to layout the scroll panes and text areas in a 3-column grid
         GridPane additionalFields = new GridPane();
         additionalFields.setHgap(10);
         additionalFields.setVgap(10);
@@ -581,6 +703,7 @@ public class UIComponentsManager {
         additionalFields.add(verifyResponseField, 2, 1);
         GridPane.setValignment(verifyResponseField, VPos.TOP);
 
+        // Set column widths for the grid
         ColumnConstraints col1 = new ColumnConstraints();
         col1.setPercentWidth(26.73);
         ColumnConstraints col2 = new ColumnConstraints();
@@ -590,7 +713,9 @@ public class UIComponentsManager {
         additionalFields.getColumnConstraints().addAll(col1, col2, col3);
         additionalContent.getChildren().add(additionalFields);
 
+        // Listener for table selection to populate dynamic fields (headers, params, etc.) for test steps
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
+            // Clear all dynamic field containers
             headerFieldsVBox.getChildren().clear();
             modifyPayloadVBox.getChildren().clear();
             paramFieldsVBox.getChildren().clear();
@@ -616,6 +741,7 @@ public class UIComponentsManager {
                     return;
                 }
 
+                // Find start of current test case block
                 int start = selectedIndex;
                 while (start >= 0 && (table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()] == null || 
                         table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
@@ -623,6 +749,7 @@ public class UIComponentsManager {
                 }
                 if (start < 0) start = 0;
 
+                // Collect all row indices for the current test case
                 List<Integer> rowIndices = new ArrayList<>();
                 for (int i = start; i < table.getItems().size(); i++) {
                     String[] r = table.getItems().get(i);
@@ -631,8 +758,11 @@ public class UIComponentsManager {
                     rowIndices.add(i);
                 }
 
+                // Dynamically create and add fields for each row in the test case
                 for (Integer rowIndex : rowIndices) {
                     String[] row = table.getItems().get(rowIndex);
+
+                    // Header key-value pair
                     TextField headerKeyField = new TextField(row[ColumnIndex.HEADER_KEY.getIndex()] != null ? 
                             row[ColumnIndex.HEADER_KEY.getIndex()] : "");
                     headerKeyField.setPromptText("Header Key");
@@ -674,6 +804,7 @@ public class UIComponentsManager {
 
                     headerFieldsVBox.getChildren().add(headerPair);
 
+                    // Modify payload key-value pair
                     TextField modifyKeyField = new TextField(row[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] != null ? 
                             row[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] : "");
                     modifyKeyField.setPromptText("Modify Payload Key");
@@ -715,6 +846,7 @@ public class UIComponentsManager {
 
                     modifyPayloadVBox.getChildren().add(modifyPair);
 
+                    // Parameter key-value pair
                     TextField paramKeyField = new TextField(row[ColumnIndex.PARAM_KEY.getIndex()] != null ? 
                             row[ColumnIndex.PARAM_KEY.getIndex()] : "");
                     paramKeyField.setPromptText("Parameter Key");
@@ -756,6 +888,7 @@ public class UIComponentsManager {
 
                     paramFieldsVBox.getChildren().add(paramPair);
 
+                    // Response key-capture value pair
                     TextField responseKeyField = new TextField(row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] != null ? 
                             row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] : "");
                     responseKeyField.setPromptText("Response Key Name");
@@ -798,11 +931,13 @@ public class UIComponentsManager {
                     responseCaptureVBox.getChildren().add(responsePair);
                 }
 
+                // Populate payload and verify response fields with formatted JSON
                 String payload = newItem[ColumnIndex.PAYLOAD.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD.getIndex()] : "";
                 payloadField.setText(CreateEditAPITest.formatJson(payload, statusLabel));
                 String verify = newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] != null ? newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] : "";
                 verifyResponseField.setText(CreateEditAPITest.formatJson(verify, statusLabel));
             } else {
+                // Disable and clear payload and verify fields when no selection
                 payloadField.clear();
                 payloadField.setDisable(false);
                 payloadField.setEditable(false);
@@ -815,13 +950,24 @@ public class UIComponentsManager {
         return additionalContent;
     }
 
+    /**
+     * Creates a VBox containing action buttons for managing test steps and files.
+     *
+     * @param primaryStage the primary application stage
+     * @param checkUnsavedChanges function to check for unsaved changes
+     * @param saveToFile function to save to a specific file
+     * @param saveAsToFile function to save as a new file
+     * @return VBox containing the buttons
+     */
     public VBox createButtonsVBox(Stage primaryStage, Function<Stage, Boolean> checkUnsavedChanges, 
                                   BiFunction<File, Stage, Boolean> saveToFile, 
                                   Function<Stage, Boolean> saveAsToFile) {
+        // Main container for buttons
         VBox buttonsVBox = new VBox(10);
         buttonsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 10px;");
         buttonsVBox.setAlignment(Pos.TOP_CENTER);
 
+        // Button to add a new test step at the end
         Button addStepButton = new Button("Add Step");
         addStepButton.setStyle(BUTTON_STYLE);
         addStepButton.setTooltip(new Tooltip("Add a new test step to the table"));
@@ -835,6 +981,7 @@ public class UIComponentsManager {
         addStepButton.setOnMouseEntered(e -> addStepButton.setStyle(BUTTON_HOVER_STYLE));
         addStepButton.setOnMouseExited(e -> addStepButton.setStyle(BUTTON_STYLE));
 
+        // Button to add a step above the selected row
         addAboveButton = new Button("Add Above");
         addAboveButton.setStyle(BUTTON_STYLE);
         addAboveButton.setTooltip(new Tooltip("Add a new step above the selected row"));
@@ -851,6 +998,7 @@ public class UIComponentsManager {
         addAboveButton.setOnMouseEntered(e -> addAboveButton.setStyle(BUTTON_HOVER_STYLE));
         addAboveButton.setOnMouseExited(e -> addAboveButton.setStyle(BUTTON_STYLE));
 
+        // Button to add a step below the selected row
         addBelowButton = new Button("Add Below");
         addBelowButton.setStyle(BUTTON_STYLE);
         addBelowButton.setTooltip(new Tooltip("Add a new step below the selected row"));
@@ -867,6 +1015,7 @@ public class UIComponentsManager {
         addBelowButton.setOnMouseEntered(e -> addBelowButton.setStyle(BUTTON_HOVER_STYLE));
         addBelowButton.setOnMouseExited(e -> addBelowButton.setStyle(BUTTON_STYLE));
 
+        // Button to move selected step up
         moveUpButton = new Button("Move Up");
         moveUpButton.setStyle(BUTTON_STYLE);
         moveUpButton.setTooltip(new Tooltip("Move the selected step up"));
@@ -886,6 +1035,7 @@ public class UIComponentsManager {
         moveUpButton.setOnMouseEntered(e -> moveUpButton.setStyle(BUTTON_HOVER_STYLE));
         moveUpButton.setOnMouseExited(e -> moveUpButton.setStyle(BUTTON_STYLE));
 
+        // Button to move selected step down
         moveDownButton = new Button("Move Down");
         moveDownButton.setStyle(BUTTON_STYLE);
         moveDownButton.setTooltip(new Tooltip("Move the selected step down"));
@@ -905,6 +1055,7 @@ public class UIComponentsManager {
         moveDownButton.setOnMouseEntered(e -> moveDownButton.setStyle(BUTTON_HOVER_STYLE));
         moveDownButton.setOnMouseExited(e -> moveDownButton.setStyle(BUTTON_STYLE));
 
+        // Button to delete the selected step
         deleteStepButton = new Button("Delete Step");
         deleteStepButton.setStyle(BUTTON_STYLE);
         deleteStepButton.setTooltip(new Tooltip("Delete the selected step"));
@@ -914,6 +1065,7 @@ public class UIComponentsManager {
                 String[] selectedRow = table.getItems().get(selectedIndex);
                 String testId = selectedRow[ColumnIndex.TEST_ID.getIndex()];
                 if (testId != null && !testId.isEmpty()) {
+                    // Confirmation dialog for steps with Test ID
                     Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
                     confirmation.setTitle("Confirm Delete");
                     confirmation.setHeaderText("Delete Test Step");
@@ -925,6 +1077,7 @@ public class UIComponentsManager {
                         app.setModified(true);
                     }
                 } else {
+                    // Direct delete for non-Test ID steps
                     table.getItems().remove(selectedIndex);
                     table.refresh();
                     app.setModified(true);
@@ -935,6 +1088,7 @@ public class UIComponentsManager {
         deleteStepButton.setOnMouseEntered(e -> deleteStepButton.setStyle(BUTTON_HOVER_STYLE));
         deleteStepButton.setOnMouseExited(e -> deleteStepButton.setStyle(BUTTON_STYLE));
 
+        // Button to delete the entire test case
         deleteTestCaseButton = new Button("Delete Test Case");
         deleteTestCaseButton.setStyle(BUTTON_STYLE);
         deleteTestCaseButton.setTooltip(new Tooltip("Delete all steps for the selected test case"));
@@ -947,12 +1101,14 @@ public class UIComponentsManager {
                     CreateEditAPITest.showError("Please select a row with a valid Test ID to delete the test case.");
                     return;
                 }
+                // Confirmation dialog for test case deletion
                 Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION);
                 confirmation.setTitle("Confirm Delete Test Case");
                 confirmation.setHeaderText("Delete Test Case: " + testId);
                 confirmation.setContentText("Are you sure you want to delete all steps for Test ID: " + testId + "?");
                 Optional<ButtonType> result = confirmation.showAndWait();
                 if (result.isPresent() && result.get() == ButtonType.OK) {
+                    // Find start and end of test case block
                     int startIndex = selectedIndex;
                     while (startIndex > 0 && (table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()] == null || 
                             table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
@@ -984,10 +1140,12 @@ public class UIComponentsManager {
         deleteTestCaseButton.setOnMouseEntered(e -> deleteTestCaseButton.setStyle(BUTTON_HOVER_STYLE));
         deleteTestCaseButton.setOnMouseExited(e -> deleteTestCaseButton.setStyle(BUTTON_STYLE));
 
+        // Button to save the test case (Save or Save As)
         saveTestButton = new Button("Save Test");
         saveTestButton.setStyle(BUTTON_STYLE);
         saveTestButton.setTooltip(new Tooltip("Save the test case to an Excel file"));
         saveTestButton.setOnAction(e -> {
+            // Dialog to choose Save or Save As
             Alert saveOptionAlert = new Alert(Alert.AlertType.CONFIRMATION);
             saveOptionAlert.setTitle("Save Options");
             saveOptionAlert.setHeaderText("Save Test Case");
@@ -1013,6 +1171,7 @@ public class UIComponentsManager {
         saveTestButton.setOnMouseEntered(e -> saveTestButton.setStyle(BUTTON_HOVER_STYLE));
         saveTestButton.setOnMouseExited(e -> saveTestButton.setStyle(BUTTON_STYLE));
 
+        // Button to load a test case from Excel file
         Button loadTestButton = new Button("Load Test");
         loadTestButton.setStyle(BUTTON_STYLE);
         loadTestButton.setTooltip(new Tooltip("Load a test case from an Excel file"));
@@ -1030,6 +1189,7 @@ public class UIComponentsManager {
                      XSSFWorkbook workbook = new XSSFWorkbook(fileIn)) {
                     Sheet sheet = workbook.getSheetAt(0);
                     Row headerRow = sheet.getRow(0);
+                    // Validate headers
                     boolean headersValid = headerRow != null && headerRow.getPhysicalNumberOfCells() == columnNames.length;
                     if (headersValid) {
                         for (int i = 0; i < columnNames.length; i++) {
@@ -1047,6 +1207,7 @@ public class UIComponentsManager {
                         return;
                     }
 
+                    // Load data rows and validate Test IDs
                     table.getItems().clear();
                     Set<String> testIds = new HashSet<>();
                     List<String[]> validRows = new ArrayList<>();
@@ -1087,6 +1248,7 @@ public class UIComponentsManager {
                     }
                     app.setModified(false);
                     app.setLoadedFile(file);
+                    // Success message
                     Alert alert = new Alert(Alert.AlertType.INFORMATION);
                     alert.setTitle("Success");
                     alert.setHeaderText("File Loaded");
@@ -1107,6 +1269,7 @@ public class UIComponentsManager {
         loadTestButton.setOnMouseEntered(e -> loadTestButton.setStyle(BUTTON_HOVER_STYLE));
         loadTestButton.setOnMouseExited(e -> loadTestButton.setStyle(BUTTON_STYLE));
 
+        // Button to create a new empty test case
         createNewTestButton = new Button("Create New Test");
         createNewTestButton.setStyle(BUTTON_STYLE);
         createNewTestButton.setTooltip(new Tooltip("Start a new test case"));
@@ -1123,6 +1286,7 @@ public class UIComponentsManager {
         createNewTestButton.setOnMouseEntered(e -> createNewTestButton.setStyle(BUTTON_HOVER_STYLE));
         createNewTestButton.setOnMouseExited(e -> createNewTestButton.setStyle(BUTTON_STYLE));
 
+        // Button to open environment variables editor
         Button addEditEnvVarButton = new Button("Add/Edit Env Var");
         addEditEnvVarButton.setStyle(BUTTON_STYLE);
         addEditEnvVarButton.setTooltip(new Tooltip("Add or edit environment variables"));
@@ -1145,6 +1309,7 @@ public class UIComponentsManager {
         addEditEnvVarButton.setOnMouseEntered(e -> addEditEnvVarButton.setStyle(BUTTON_HOVER_STYLE));
         addEditEnvVarButton.setOnMouseExited(e -> addEditEnvVarButton.setStyle(BUTTON_STYLE));
 
+        // Button to import Postman collection
         Button importCollectionButton = new Button("Import Collection");
         importCollectionButton.setStyle(BUTTON_STYLE);
         importCollectionButton.setTooltip(new Tooltip("Import a collection of test cases"));
@@ -1171,6 +1336,7 @@ public class UIComponentsManager {
                     }
                     app.setModified(false);
                     app.setLoadedFile(null); // Imported from JSON, not XLSX
+                    // Success message
                     Alert alert = new Alert(Alert.AlertType.INFORMATION);
                     alert.setTitle("Success");
                     alert.setHeaderText("Collection Imported");
@@ -1184,6 +1350,7 @@ public class UIComponentsManager {
             updateButtonStates();
         });
 
+        // Add all buttons to the VBox
         buttonsVBox.getChildren().addAll(
             addStepButton, addAboveButton, addBelowButton, moveUpButton, moveDownButton,
             deleteStepButton, deleteTestCaseButton, saveTestButton, loadTestButton,
@@ -1193,6 +1360,9 @@ public class UIComponentsManager {
         return buttonsVBox;
     }
 
+    /**
+     * Updates the enabled/disabled state of action buttons based on current table selection and content.
+     */
     public void updateButtonStates() {
         int selectedIndex = table.getSelectionModel().getSelectedIndex();
         boolean hasSelection = selectedIndex >= 0;
@@ -1208,6 +1378,12 @@ public class UIComponentsManager {
         createNewTestButton.setDisable(false);
     }
     
+    /**
+     * Moves focus to the next or previous traversable node in the scene.
+     *
+     * @param fromNode the current focused node
+     * @param next true for next node, false for previous
+     */
     private void moveFocus(Node fromNode, boolean next) {
         List<Node> traversables = new ArrayList<>();
         addTraversableNodes(fromNode.getScene().getRoot(), traversables);
@@ -1223,6 +1399,12 @@ public class UIComponentsManager {
         }
     }
 
+    /**
+     * Recursively collects all focus-traversable, visible, and enabled nodes in the scene hierarchy.
+     *
+     * @param node the root node to start traversal
+     * @param list the list to add traversable nodes to
+     */
     private void addTraversableNodes(Node node, List<Node> list) {
         if (node.isFocusTraversable() && node.isVisible() && !node.isDisabled()) {
             list.add(node);

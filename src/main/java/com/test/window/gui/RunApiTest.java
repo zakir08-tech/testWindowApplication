@@ -34,30 +34,59 @@ import java.util.*;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
+/**
+ * Main application class for the API Test Runner GUI.
+ * This JavaFX application allows users to load API test cases from an Excel file,
+ * select and run tests, monitor status, and generate HTML reports.
+ */
 public class RunApiTest extends Application {
 
+    /**
+     * CSS style for unfocused input fields, defining dark theme appearance.
+     */
     private static final String FIELD_STYLE_UNFOCUSED =
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
+    /**
+     * CSS style for the Run button in its default state.
+     */
     private static final String RUN_BUTTON_STYLE =
         "-fx-background-color: #90EE90; -fx-text-fill: black; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * CSS style for the Run button on hover.
+     */
     private static final String RUN_BUTTON_HOVER_STYLE =
         "-fx-background-color: #98FB98; -fx-text-fill: black; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * CSS style for the Stop button in its default state.
+     */
     private static final String STOP_BUTTON_STYLE =
         "-fx-background-color: #FFB6C1; -fx-text-fill: black; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * CSS style for the Stop button on hover.
+     */
     private static final String STOP_BUTTON_HOVER_STYLE =
         "-fx-background-color: #FFC1CC; -fx-text-fill: black; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * CSS style for Load and Refresh buttons in their default state.
+     */
     private static final String LOAD_REFRESH_BUTTON_STYLE =
         "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * CSS style for Load and Refresh buttons on hover.
+     */
     private static final String LOAD_REFRESH_BUTTON_HOVER_STYLE =
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
+    /**
+     * Inline CSS styles for customizing the table view's appearance, including scroll bars and row styling.
+     */
     private static final String CSS = """
         .table-view .scroll-bar:vertical,
         .table-view .scroll-bar:horizontal {
@@ -117,12 +146,23 @@ public class RunApiTest extends Application {
         }
         """;
 
+    /**
+     * Inner class representing a single test case model with observable properties for UI binding.
+     */
     private static class TestCase {
-        private final BooleanProperty run;
-        private final StringProperty testId;
-        private final StringProperty testDescription;
-        private final StringProperty status;
+        private final BooleanProperty run; // Whether to run this test case
+        private final StringProperty testId; // Unique ID of the test case
+        private final StringProperty testDescription; // Description of the test case
+        private final StringProperty status; // Current status of the test (e.g., "No Run", "Running...", "Pass", "Fail")
 
+        /**
+         * Constructor to initialize a TestCase with initial values.
+         *
+         * @param run initial run flag
+         * @param testId initial test ID
+         * @param testDescription initial description
+         * @param status initial status
+         */
         public TestCase(boolean run, String testId, String testDescription, String status) {
             this.run = new SimpleBooleanProperty(run);
             this.testId = new SimpleStringProperty(testId);
@@ -147,25 +187,30 @@ public class RunApiTest extends Application {
         }
     }
 
-    private TableView<TestCase> table;
-    private ObservableList<TestCase> testCases;
-    private CheckBox selectAllCheckBox;
-    private Button loadButton;
-    private Button runButton;
-    private Button stopButton;
-    private Button refreshButton;
-    private File lastLoadedFile;
-    private Task<Void> runTask;
-    private double lastScrollPosition = 0.0;
+    // UI Components
+    private TableView<TestCase> table; // Table to display test cases
+    private ObservableList<TestCase> testCases; // Observable list of test cases
+    private CheckBox selectAllCheckBox; // Checkbox to select/deselect all test cases
+    private Button loadButton; // Button to load a new Excel file
+    private Button runButton; // Button to start running selected tests
+    private Button stopButton; // Button to stop running tests
+    private Button refreshButton; // Button to reload from the last loaded file
+    private File lastLoadedFile; // Reference to the last loaded Excel file
+    private Task<Void> runTask; // Background task for running tests
+    private double lastScrollPosition = 0.0; // Last scroll position to maintain focus
 
-    private HashMap<Integer, HashMap<String, Object>> testDataMap = new HashMap<>();
-    private HashMap<Integer, HashMap<String, Object>> headersMap = new HashMap<>();
-    private HashMap<Integer, HashMap<String, Object>> paramsMap = new HashMap<>();
-    private HashMap<Integer, HashMap<String, Object>> modifyPayloadMap = new HashMap<>();
-    private HashMap<Integer, HashMap<String, Object>> responseCaptureMap = new HashMap<>();
-    private HashMap<Integer, HashMap<String, Object>> authMap = new HashMap<>();
-    private List<Map<String, Object>> reportDataList = new ArrayList<>();
+    // Data storage for test configurations
+    private HashMap<Integer, HashMap<String, Object>> testDataMap = new HashMap<>(); // Test-specific data like endpoint, payload
+    private HashMap<Integer, HashMap<String, Object>> headersMap = new HashMap<>(); // Headers for each test
+    private HashMap<Integer, HashMap<String, Object>> paramsMap = new HashMap<>(); // Query parameters for each test
+    private HashMap<Integer, HashMap<String, Object>> modifyPayloadMap = new HashMap<>(); // Modifications to payload for each test
+    private HashMap<Integer, HashMap<String, Object>> responseCaptureMap = new HashMap<>(); // Response capture configurations
+    private HashMap<Integer, HashMap<String, Object>> authMap = new HashMap<>(); // Authentication details for each test
+    private List<Map<String, Object>> reportDataList = new ArrayList<>(); // List to hold report data for all tests
 
+    /**
+     * Set of required column headers in the Excel file for validation.
+     */
     private static final Set<String> REQUIRED_HEADERS = new HashSet<>(Arrays.asList(
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
@@ -175,18 +220,27 @@ public class RunApiTest extends Application {
         "Test Description"
     ));
 
+    /**
+     * Entry point for the JavaFX application.
+     * Sets up the UI, table columns, event handlers, and displays the stage.
+     *
+     * @param primaryStage the primary stage for this application
+     */
     @Override
     public void start(Stage primaryStage) {
         testCases = FXCollections.observableArrayList();
         table = new TableView<>(testCases);
+        // Apply dark theme styling to the table
         table.setStyle("-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; -fx-table-cell-border-color: #3C3F41; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
 
+        // Calculate column widths based on character estimates
         final double CHAR_WIDTH = 8.0;
         final double RUN_COL_WIDTH = 5 * CHAR_WIDTH;
         final double TEST_ID_COL_WIDTH = 8 * CHAR_WIDTH;
         final double STATUS_COL_WIDTH = 12 * CHAR_WIDTH;
         final double TEST_DESC_MIN_WIDTH = 300.0;
 
+        // Run column with checkbox cells
         TableColumn<TestCase, Boolean> runColumn = new TableColumn<>("Run");
         runColumn.setCellValueFactory(cellData -> cellData.getValue().runProperty());
         runColumn.setCellFactory(col -> {
@@ -208,6 +262,7 @@ public class RunApiTest extends Application {
         runColumn.setResizable(false);
         runColumn.setStyle("-fx-alignment: CENTER;");
 
+        // Test ID column
         TableColumn<TestCase, String> testIdColumn = new TableColumn<>("Test ID");
         testIdColumn.setCellValueFactory(cellData -> cellData.getValue().testIdProperty());
         testIdColumn.setMinWidth(TEST_ID_COL_WIDTH);
@@ -216,11 +271,13 @@ public class RunApiTest extends Application {
         testIdColumn.setResizable(false);
         testIdColumn.setStyle("-fx-alignment: CENTER;");
 
+        // Test Description column (flexible width)
         TableColumn<TestCase, String> testDescriptionColumn = new TableColumn<>("Test Description");
         testDescriptionColumn.setCellValueFactory(cellData -> cellData.getValue().testDescriptionProperty());
         testDescriptionColumn.setMinWidth(TEST_DESC_MIN_WIDTH);
         testDescriptionColumn.setPrefWidth(TEST_DESC_MIN_WIDTH);
 
+        // Status column with color-coded text
         TableColumn<TestCase, String> statusColumn = new TableColumn<>("Status");
         statusColumn.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusColumn.setCellFactory(column -> new TableCell<TestCase, String>() {
@@ -248,13 +305,16 @@ public class RunApiTest extends Application {
         statusColumn.setPrefWidth(STATUS_COL_WIDTH);
         statusColumn.setResizable(false);
 
+        // Add columns to table and set resize policy
         table.getColumns().addAll(runColumn, testIdColumn, testDescriptionColumn, statusColumn);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setEditable(true);
 
+        // Set layout priorities for table
         HBox.setHgrow(table, Priority.ALWAYS);
         VBox.setVgrow(table, Priority.ALWAYS);
 
+        // Select All checkbox with event handler
         selectAllCheckBox = new CheckBox("Select All");
         selectAllCheckBox.setStyle(FIELD_STYLE_UNFOCUSED);
         selectAllCheckBox.setSelected(false);
@@ -265,6 +325,7 @@ public class RunApiTest extends Application {
             }
         });
 
+        // Listener for test cases list changes to update Select All state
         testCases.addListener((ListChangeListener<TestCase>) change -> {
             while (change.next()) {
                 if (change.wasAdded()) {
@@ -276,6 +337,7 @@ public class RunApiTest extends Application {
             updateSelectAllState();
         });
 
+        // Scroll event listener to track vertical scroll position
         table.setOnScroll(event -> {
             ScrollBar verticalScrollBar = getVerticalScrollBar();
             if (verticalScrollBar != null && verticalScrollBar.isVisible()) {
@@ -283,6 +345,7 @@ public class RunApiTest extends Application {
             }
         });
 
+        // Load button setup
         loadButton = new Button("Load");
         loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
         loadButton.setTooltip(new Tooltip("Load test cases from an Excel test suite"));
@@ -290,6 +353,7 @@ public class RunApiTest extends Application {
         loadButton.setOnMouseEntered(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
         loadButton.setOnMouseExited(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
 
+        // Run button setup with background task
         runButton = new Button("Run");
         runButton.setStyle(RUN_BUTTON_STYLE);
         runButton.setTooltip(new Tooltip("Run selected test cases"));
@@ -298,6 +362,7 @@ public class RunApiTest extends Application {
             runTask = new Task<Void>() {
                 @Override
                 protected Void call() throws Exception {
+                    // Disable UI controls during execution
                     Platform.runLater(() -> {
                         runButton.setDisable(true);
                         loadButton.setDisable(true);
@@ -305,10 +370,12 @@ public class RunApiTest extends Application {
                         stopButton.setDisable(false);
                     });
 
+                    // Initialize API executor and JSON mapper
                     ApiExecutor apiExecutor = new ApiExecutor();
                     ObjectMapper objectMapper = new ObjectMapper();
                     Map<String, String> envVars = new HashMap<>();
 
+                    // Load environment variables from env.json
                     File envFile = new File("env.json");
                     if (envFile.exists()) {
                         try {
@@ -321,6 +388,7 @@ public class RunApiTest extends Application {
                         System.err.println("env.json not found in project root. Initializing empty environment variables.");
                     }
 
+                    // Process each selected test case
                     for (TestCase testCase : testCases) {
                         if (isCancelled()) {
                             break;
@@ -328,6 +396,7 @@ public class RunApiTest extends Application {
                         if (testCase.runProperty().get()) {
                             Integer testId = Integer.parseInt(testCase.testIdProperty().get());
                             int index = testCases.indexOf(testCase);
+                            // Update UI for current test
                             Platform.runLater(() -> {
                                 testCase.statusProperty().set("Running...");
                                 table.getSelectionModel().clearAndSelect(index);
@@ -352,7 +421,7 @@ public class RunApiTest extends Application {
                                 table.requestFocus();
                             });
 
-                            // Initialize variables outside try block to ensure availability in catch block
+                            // Initialize variables for this test case
                             ApiExecutor.Auth auth = new ApiExecutor.Auth("NONE", null, null, null);
                             String sslValidationStr = null;
                             HashMap<String, Object> testData = testDataMap.get(testId);
@@ -382,11 +451,13 @@ public class RunApiTest extends Application {
                                 HashMap<String, Object> authDetails = authMap.get(testId);
                                 HashMap<String, Object> responseCapture = responseCaptureMap.get(testId);
 
+                                // Process URL with placeholders
                                 System.out.println("Debug: Replacing placeholders in URL for Test ID " + testId);
                                 String processedUrl = replacePlaceholders(url, envVars, testId);
                                 testData.put("End-Point", processedUrl); // Update testDataMap with processed URL
                                 reportData.put("endpoint", processedUrl);
 
+                                // Process headers
                                 System.out.println("Debug: Processing headers for Test ID " + testId);
                                 HashMap<String, Object> processedHeaders = new HashMap<>();
                                 for (Map.Entry<String, Object> entry : headers.entrySet()) {
@@ -398,6 +469,7 @@ public class RunApiTest extends Application {
                                 headersMap.put(testId, processedHeaders); // Update headersMap with processed headers
                                 reportData.put("headers", processedHeaders);
 
+                                // Process parameters
                                 System.out.println("Debug: Processing parameters for Test ID " + testId);
                                 HashMap<String, Object> processedParams = new HashMap<>();
                                 for (Map.Entry<String, Object> entry : params.entrySet()) {
@@ -409,6 +481,7 @@ public class RunApiTest extends Application {
                                 paramsMap.put(testId, processedParams); // Update paramsMap with processed parameters
                                 reportData.put("parameters", processedParams);
 
+                                // Process payload modifications
                                 System.out.println("Debug: Processing modify payload for Test ID " + testId);
                                 HashMap<String, Object> processedModifyPayload = new HashMap<>();
                                 for (Map.Entry<String, Object> entry : modifyPayload.entrySet()) {
@@ -463,6 +536,7 @@ public class RunApiTest extends Application {
                                 reportData.put("payload", modifiedPayload);
                                 reportData.put("payloadType", payloadType);
 
+                                // Process authentication
                                 System.out.println("Debug: Processing authorization for Test ID " + testId);
                                 HashMap<String, Object> processedAuthDetails = new HashMap<>();
                                 processedAuthDetails.put("Type", authDetails.get("Type"));
@@ -484,6 +558,7 @@ public class RunApiTest extends Application {
                                     auth = new ApiExecutor.Auth(authType, username, password, token);
                                 }
 
+                                // Process expected status and verify response
                                 System.out.println("Debug: Processing expected status for Test ID " + testId);
                                 String processedExpectedStatusStr = replacePlaceholders(expectedStatusStr, envVars, testId);
                                 processedVerifyResponse = replacePlaceholders(verifyResponse, envVars, testId);
@@ -500,6 +575,7 @@ public class RunApiTest extends Application {
                                         " (after placeholder replacement)", e);
                                 }
 
+                                // Execute the API test
                                 System.out.println("Debug: Payload being sent to executeTest for Test ID " + testId + ": " + modifiedPayload);
                                 ApiExecutor.Response response = apiExecutor.executeTest(
                                     method,
@@ -599,6 +675,7 @@ public class RunApiTest extends Application {
                                 // NEW: Store verificationPassed in reportData for success path
                                 reportData.put("verificationPassed", verificationPassed);
 
+                                // Debug output for test execution
                                 System.out.println("Test ID: " + testId);
                                 System.out.println("Test Data: " + testData);
                                 System.out.println("Headers: " + processedHeaders);
@@ -674,6 +751,7 @@ public class RunApiTest extends Application {
         runButton.setOnMouseEntered(e -> runButton.setStyle(RUN_BUTTON_HOVER_STYLE));
         runButton.setOnMouseExited(e -> runButton.setStyle(RUN_BUTTON_STYLE));
 
+        // Stop button setup
         stopButton = new Button("Stop");
         stopButton.setStyle(STOP_BUTTON_STYLE);
         stopButton.setTooltip(new Tooltip("Stop running test cases"));
@@ -690,6 +768,7 @@ public class RunApiTest extends Application {
         stopButton.setOnMouseEntered(e -> stopButton.setStyle(STOP_BUTTON_HOVER_STYLE));
         stopButton.setOnMouseExited(e -> stopButton.setStyle(STOP_BUTTON_STYLE));
 
+        // Refresh button setup
         refreshButton = new Button("Refresh");
         refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
         refreshButton.setTooltip(new Tooltip("Refresh test cases from the last loaded file"));
@@ -697,26 +776,40 @@ public class RunApiTest extends Application {
         refreshButton.setOnMouseEntered(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
         refreshButton.setOnMouseExited(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
 
+        // Button layout
         HBox buttonBox = new HBox(10, loadButton, refreshButton, runButton, stopButton);
         buttonBox.setAlignment(Pos.CENTER);
         buttonBox.setPadding(new Insets(10));
 
+        // Select All layout
         HBox selectAllBox = new HBox(selectAllCheckBox);
         selectAllBox.setAlignment(Pos.CENTER_LEFT);
         selectAllBox.setPadding(new Insets(10));
 
+        // Root layout
         VBox root = new VBox(10, selectAllBox, table, buttonBox);
         root.setPadding(new Insets(10));
         root.setStyle("-fx-background-color: #252525;");
 
+        // Scene setup with inline CSS
         Scene scene = new Scene(root, 800, 600);
         scene.getStylesheets().add("data:text/css," + CSS);
 
+        // Stage setup
         primaryStage.setTitle("API Test Runner");
         primaryStage.setScene(scene);
         primaryStage.show();
     }
 
+    /**
+     * Verifies the actual response body against the expected JSON structure.
+     * Supports $any-value placeholders for dynamic value matching.
+     *
+     * @param actualResponseBody the actual response from the API
+     * @param verifyExpression the expected JSON structure as a string
+     * @param testId the ID of the test case
+     * @throws Exception if verification fails
+     */
     private void verifyResponse(String actualResponseBody, String verifyExpression, Integer testId) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         Object actualJson;
@@ -755,6 +848,16 @@ public class RunApiTest extends Application {
         compareJson(actualJson, expectedJson, "", testId);
     }
 
+    /**
+     * Extracts paths where $any-value is used in the expected JSON and maps them to actual values.
+     *
+     * @param expected the expected JSON object (or sub-object)
+     * @param actual the actual JSON object
+     * @param pathToValueMap map to store path-value mappings
+     * @param path current path in the JSON structure
+     * @param testId the test case ID
+     * @throws Exception if extraction fails
+     */
     private void extractAnyValuePathsFromObject(Object expected, Object actual, Map<String, String> pathToValueMap, String path, Integer testId) throws Exception {
         if (expected instanceof Map) {
             extractAnyValuePaths(expected, actual, pathToValueMap, path, testId);
@@ -767,6 +870,16 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Recursively extracts $any-value paths from maps or lists in the expected JSON.
+     *
+     * @param expected the expected JSON object
+     * @param actual the actual JSON object
+     * @param pathToValueMap map to store path-value mappings
+     * @param path current path
+     * @param testId the test case ID
+     * @throws Exception if extraction fails
+     */
     private void extractAnyValuePaths(Object expected, Object actual, Map<String, String> pathToValueMap, String path, Integer testId) throws Exception {
         if (expected instanceof Map && actual instanceof Map) {
             Map<String, Object> expectedMap = (Map<String, Object>) expected;
@@ -792,6 +905,14 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Formats a value as a JSON-compatible string.
+     *
+     * @param value the value to format
+     * @param mapper JSON mapper instance
+     * @return formatted string
+     * @throws Exception if formatting fails
+     */
     private String formatJsonValue(Object value, ObjectMapper mapper) throws Exception {
         if (value instanceof String) {
             return "\"" + value + "\"";
@@ -802,6 +923,15 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Replaces $any-value placeholders in the verify expression with actual values from the map.
+     *
+     * @param verifyExpression the original verify expression
+     * @param pathToValueMap path-value mappings
+     * @param testId the test case ID
+     * @return modified verify expression with actual values
+     * @throws Exception if replacement fails
+     */
     private String replaceAnyValueWithActual(String verifyExpression, Map<String, String> pathToValueMap, Integer testId) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         Object jsonObject;
@@ -815,6 +945,16 @@ public class RunApiTest extends Application {
         return mapper.writeValueAsString(modifiedJson);
     }
 
+    /**
+     * Recursively replaces _any_value_ placeholders in the JSON object with actual values.
+     *
+     * @param jsonObject the JSON object to modify
+     * @param pathToValueMap path-value mappings
+     * @param path current path
+     * @param testId the test case ID
+     * @return modified JSON object
+     * @throws Exception if replacement fails
+     */
     private Object replaceAnyValueInJson(Object jsonObject, Map<String, String> pathToValueMap, String path, Integer testId) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         if (jsonObject instanceof Map) {
@@ -884,6 +1024,15 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Recursively compares two JSON objects for structural and value equality.
+     *
+     * @param actual the actual JSON object
+     * @param expected the expected JSON object
+     * @param path current path for error reporting
+     * @param testId the test case ID
+     * @throws Exception if comparison fails
+     */
     private void compareJson(Object actual, Object expected, String path, Integer testId) throws Exception {
         if (expected instanceof Map) {
             if (!(actual instanceof Map)) {
@@ -924,6 +1073,11 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Retrieves the vertical scrollbar from the table for scroll position tracking.
+     *
+     * @return the vertical ScrollBar or null if not found
+     */
     private ScrollBar getVerticalScrollBar() {
         for (javafx.scene.Node node : table.lookupAll(".scroll-bar:vertical")) {
             if (node instanceof ScrollBar) {
@@ -933,6 +1087,15 @@ public class RunApiTest extends Application {
         return null;
     }
 
+    /**
+     * Replaces placeholders in text (e.g., {{var}}) with values from environment variables.
+     * Handles missing or null values gracefully.
+     *
+     * @param text the text containing placeholders
+     * @param envVars map of environment variables
+     * @param testId the test case ID for logging
+     * @return text with placeholders replaced
+     */
     private String replacePlaceholders(String text, Map<String, String> envVars, Integer testId) {
         if (text == null || !text.contains("{{")) {
             return text;
@@ -969,6 +1132,13 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Parses a nested key path (e.g., "a.b.c") into a list of parts.
+     * Handles array indices if present.
+     *
+     * @param key the key path string
+     * @return list of path parts
+     */
     private List<String> parseKeyPath(String key) {
         List<String> parts = new ArrayList<>();
         if (key == null || key.trim().isEmpty()) {
@@ -991,6 +1161,16 @@ public class RunApiTest extends Application {
         return parts;
     }
 
+    /**
+     * Parses a value to match the type of the existing value in the parent object.
+     * Defaults to string if type mismatch or parsing fails.
+     *
+     * @param value the value string to parse
+     * @param parent the parent object
+     * @param finalPart the final key part
+     * @param testId the test case ID
+     * @return parsed object
+     */
     private Object parseValue(String value, Object parent, String finalPart, Integer testId) {
         Object existingValue = null;
         if (parent instanceof Map) {
@@ -1019,6 +1199,16 @@ public class RunApiTest extends Application {
         return value;
     }
 
+    /**
+     * Sets a nested value in a JSON object using a key path (e.g., "a.b.c").
+     * Creates type-compatible values and logs traversal.
+     *
+     * @param jsonObj the JSON object to modify
+     * @param key the nested key path
+     * @param value the value to set
+     * @param testId the test case ID
+     * @return true if successful, false otherwise
+     */
     private boolean setNestedValue(Map<String, Object> jsonObj, String key, String value, Integer testId) {
         try {
             List<String> parts = parseKeyPath(key);
@@ -1066,6 +1256,14 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Retrieves a nested value from a JSON object using a key path.
+     *
+     * @param jsonObj the JSON object
+     * @param key the nested key path
+     * @param testId the test case ID
+     * @return the value or null if not found
+     */
     private Object getNestedValue(Map<String, Object> jsonObj, String key, Integer testId) {
         List<String> parts = parseKeyPath(key);
         if (parts.isEmpty()) {
@@ -1090,6 +1288,13 @@ public class RunApiTest extends Application {
         return current;
     }
 
+    /**
+     * Loads or refreshes test cases from an Excel file.
+     * Validates headers, parses rows, and populates UI and data maps.
+     *
+     * @param primaryStage the application stage
+     * @param promptForFile true to show file chooser, false to use last loaded file
+     */
     private void loadTestCases(Stage primaryStage, boolean promptForFile) {
         File file = lastLoadedFile;
         if (promptForFile) {
@@ -1106,6 +1311,7 @@ public class RunApiTest extends Application {
                  XSSFWorkbook workbook = new XSSFWorkbook(fileIn)) {
                 Sheet sheet = workbook.getSheetAt(0);
 
+                // Validate header row
                 Row headerRow = sheet.getRow(0);
                 if (headerRow == null) {
                     showError("No header row found in test suite '" + testSuiteName + "'.");
@@ -1118,6 +1324,7 @@ public class RunApiTest extends Application {
                     actualHeaders.add(header);
                 }
 
+                // Check for required headers
                 for (String reqHeader : REQUIRED_HEADERS) {
                     if (!reqHeader.isEmpty() && !actualHeaders.contains(reqHeader)) {
                         showError("Missing required header '" + reqHeader + "' in test suite '" + testSuiteName + "'.");
@@ -1130,6 +1337,7 @@ public class RunApiTest extends Application {
                     return;
                 }
 
+                // Clear existing data
                 testCases.clear();
                 testDataMap.clear();
                 headersMap.clear();
@@ -1138,6 +1346,7 @@ public class RunApiTest extends Application {
                 responseCaptureMap.clear();
                 authMap.clear();
 
+                // Find column indices
                 int testIdIndex = -1, requestIndex = -1, endPointIndex = -1, headerKeyIndex = -1, headerValueIndex = -1;
                 int paramKeyIndex = -1, paramValueIndex = -1, payloadIndex = -1, payloadTypeIndex = -1;
                 int modifyPayloadKeyIndex = -1, modifyPayloadValueIndex = -1, responseKeyNameIndex = -1;
@@ -1185,6 +1394,7 @@ public class RunApiTest extends Application {
                     return;
                 }
 
+                // Group rows by Test ID
                 Map<Integer, List<Row>> rowsByTestId = new HashMap<>();
                 Integer currentTestId = null;
                 for (int i = 1; i <= sheet.getLastRowNum(); i++) {
@@ -1205,6 +1415,7 @@ public class RunApiTest extends Application {
                 }
 
                 boolean hasValidRows = false;
+                // Process each test case group
                 for (Map.Entry<Integer, List<Row>> entry : rowsByTestId.entrySet()) {
                     Integer testId = entry.getKey();
                     List<Row> rows = entry.getValue();
@@ -1218,6 +1429,7 @@ public class RunApiTest extends Application {
                     HashMap<String, Object> authDetails = new HashMap<>();
                     String testDescription = "";
 
+                    // Parse data from rows
                     for (Row row : rows) {
                         if (row.getCell(requestIndex) != null && !row.getCell(requestIndex).toString().trim().isEmpty()) {
                             testData.put("Request", row.getCell(requestIndex).toString().trim());
@@ -1245,6 +1457,7 @@ public class RunApiTest extends Application {
                             testData.put("SSL Validation", row.getCell(sslValidationIndex).toString().trim());
                         }
 
+                        // Parse headers
                         if (row.getCell(headerKeyIndex) != null && row.getCell(headerValueIndex) != null) {
                             String headerKey = row.getCell(headerKeyIndex).toString().trim();
                             String headerValue = row.getCell(headerValueIndex).toString().trim();
@@ -1253,6 +1466,7 @@ public class RunApiTest extends Application {
                             }
                         }
 
+                        // Parse parameters
                         if (row.getCell(paramKeyIndex) != null && row.getCell(paramValueIndex) != null) {
                             String paramKey = row.getCell(paramKeyIndex).toString().trim();
                             String paramValue = row.getCell(paramValueIndex).toString().trim();
@@ -1261,6 +1475,7 @@ public class RunApiTest extends Application {
                             }
                         }
 
+                        // Parse payload modifications
                         if (row.getCell(modifyPayloadKeyIndex) != null && row.getCell(modifyPayloadValueIndex) != null) {
                             String modifyKey = row.getCell(modifyPayloadKeyIndex).toString().trim();
                             String modifyValue = row.getCell(modifyPayloadValueIndex).toString().trim();
@@ -1269,6 +1484,7 @@ public class RunApiTest extends Application {
                             }
                         }
 
+                        // Parse response captures
                         if (row.getCell(responseKeyNameIndex) != null && row.getCell(captureKeyValueIndex) != null) {
                             String responseKey = row.getCell(responseKeyNameIndex).toString().trim();
                             String captureValue = row.getCell(captureKeyValueIndex) != null ? row.getCell(captureKeyValueIndex).toString().trim() : "";
@@ -1283,6 +1499,7 @@ public class RunApiTest extends Application {
                             }
                         }
 
+                        // Parse authorization
                         if (row.getCell(authorizationIndex) != null && !row.getCell(authorizationIndex).toString().trim().isEmpty()) {
                             String authType = row.getCell(authorizationIndex).toString().trim();
                             String authField1 = row.getCell(authField1Index) != null ? row.getCell(authField1Index).toString().trim() : "";
@@ -1299,6 +1516,7 @@ public class RunApiTest extends Application {
                         }
                     }
 
+                    // Store parsed data
                     testDataMap.put(testId, testData);
                     headersMap.put(testId, headers);
                     paramsMap.put(testId, params);
@@ -1306,6 +1524,7 @@ public class RunApiTest extends Application {
                     responseCaptureMap.put(testId, responseCapture);
                     authMap.put(testId, authDetails);
 
+                    // Add to UI table
                     testCases.add(new TestCase(true, testId.toString(), testDescription, "No Run"));
                 }
 
@@ -1314,6 +1533,7 @@ public class RunApiTest extends Application {
                     return;
                 }
 
+                // Update UI state
                 lastLoadedFile = file;
                 runButton.setDisable(false);
                 loadButton.setDisable(false);
@@ -1333,11 +1553,19 @@ public class RunApiTest extends Application {
         }
     }
 
+    /**
+     * Updates the Select All checkbox state based on individual checkboxes.
+     */
     private void updateSelectAllState() {
         boolean allSelected = testCases.stream().allMatch(testCase -> testCase.runProperty().get());
         selectAllCheckBox.setSelected(allSelected);
     }
 
+    /**
+     * Displays an error alert dialog.
+     *
+     * @param message the error message
+     */
     private void showError(String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Error");
@@ -1346,6 +1574,11 @@ public class RunApiTest extends Application {
         alert.showAndWait();
     }
 
+    /**
+     * Launches the JavaFX application.
+     *
+     * @param args command-line arguments
+     */
     public static void main(String[] args) {
         launch(args);
     }

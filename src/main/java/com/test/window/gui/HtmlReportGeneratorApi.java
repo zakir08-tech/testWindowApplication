@@ -348,10 +348,10 @@ public class HtmlReportGeneratorApi {
                 .append(status).append("</td>\n");
 
             html.append("<td>").append(safeToString(reportData.get("request"))).append("</td>\n");
-            String endpointRaw = safeToString(reportData.get("endpoint"));
+            String endpointRaw = reportData.get("endpoint") != null ? String.valueOf(reportData.get("endpoint")) : "";
             String endpointContent;
             if (endpointRaw.length() > 100) {
-                String endpointWrapped = wrapEndpoint(endpointRaw, 100);
+                String endpointWrapped = wrapLongValue(endpointRaw, 100);
                 String endpointEscaped = escapeHtml(endpointWrapped);
                 String endpointHighlighted = highlightPlaceholders(endpointEscaped);
                 endpointContent = endpointHighlighted.replace("\n", "<br>");
@@ -542,7 +542,7 @@ public class HtmlReportGeneratorApi {
         }
     }
 
-    private String wrapEndpoint(String text, int maxLength) {
+    private String wrapLongValue(String text, int maxLength) {
         if (text == null || text.length() <= maxLength) {
             return text;
         }
@@ -553,13 +553,6 @@ public class HtmlReportGeneratorApi {
             wrapped.append(text.substring(index, end));
             if (end < text.length()) {
                 wrapped.append("\n");
-                // Prefer breaking at / or ? or & if possible, else any char
-                if (end < text.length()) {
-                    char nextChar = text.charAt(end);
-                    if (nextChar != '/' && nextChar != '?' && nextChar != '&' && nextChar != '=') {
-                        // If not a good break point, but since we break at char level, it's fine
-                    }
-                }
             }
             index = end;
         }
@@ -814,7 +807,7 @@ public class HtmlReportGeneratorApi {
     }
 
     private String safeToString(Object obj) {
-        return obj != null ? String.valueOf(obj).replace("<", "&lt;").replace(">", "&gt;") : "";
+        return obj != null ? escapeHtml(String.valueOf(obj)) : "";
     }
 
     private String formatMap(Object mapObj, ObjectMapper objectMapper, boolean isAuthentication) {
@@ -835,7 +828,12 @@ public class HtmlReportGeneratorApi {
             try {
                 ObjectNode jsonNode = objectMapper.createObjectNode();
                 for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    jsonNode.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                    String keyStr = String.valueOf(entry.getKey());
+                    String valStr = String.valueOf(entry.getValue());
+                    if (valStr.length() > 100) {
+                        valStr = wrapLongValue(valStr, 100);
+                    }
+                    jsonNode.put(keyStr, valStr);
                 }
                 String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonNode);
                 return highlightPlaceholders(escapeHtml(jsonString));

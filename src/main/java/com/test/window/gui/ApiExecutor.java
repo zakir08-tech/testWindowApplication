@@ -5,7 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.*;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpDelete;
+import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
@@ -28,16 +34,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * ApiExecutor is a utility class for executing HTTP requests to APIs.
- * It supports various HTTP methods (GET, POST, PUT, DELETE), authentication,
- * different payload types (JSON, XML, URL-encoded, multipart form data),
- * and optional SSL validation disabling.
+ * Utility class for executing HTTP requests to APIs. Supports various HTTP methods
+ * (GET, POST, PUT, DELETE), authentication, different payload types (JSON, XML,
+ * URL-encoded, multipart form data), and optional SSL validation disabling.
  */
 public class ApiExecutor {
 
     /**
-     * Inner class representing authentication credentials.
-     * Supports Basic Auth (username/password) or Bearer Token.
+     * Inner class representing authentication credentials. Supports Basic Auth
+     * (username/password) or Bearer Token.
      */
     public static class Auth {
         private final String type;      // Authentication type: "Basic Auth" or "Bearer Token"
@@ -48,10 +53,10 @@ public class ApiExecutor {
         /**
          * Constructor for Auth object.
          *
-         * @param type     The type of authentication.
-         * @param username The username (for Basic Auth).
-         * @param password The password (for Basic Auth).
-         * @param token    The bearer token (for Bearer Token auth).
+         * @param type     The type of authentication
+         * @param username The username (for Basic Auth)
+         * @param password The password (for Basic Auth)
+         * @param token    The bearer token (for Bearer Token auth)
          */
         public Auth(String type, String username, String password, String token) {
             this.type = type;
@@ -81,18 +86,21 @@ public class ApiExecutor {
      * Inner class representing the response from an HTTP request.
      */
     public static class Response {
-        private final int statusCode;   // HTTP status code of the response
-        private final String body;      // Response body as a string
+        private final int statusCode;    // HTTP status code of the response
+        private final String body;       // Response body as a string
+        private final long responseTime; // Response time in milliseconds
 
         /**
          * Constructor for Response object.
          *
-         * @param statusCode The HTTP status code.
-         * @param body       The response body content.
+         * @param statusCode   The HTTP status code
+         * @param body         The response body content
+         * @param responseTime The response time in milliseconds
          */
-        public Response(int statusCode, String body) {
+        public Response(int statusCode, String body, long responseTime) {
             this.statusCode = statusCode;
             this.body = body;
+            this.responseTime = responseTime;
         }
 
         public int getStatusCode() {
@@ -102,23 +110,27 @@ public class ApiExecutor {
         public String getBody() {
             return body;
         }
+
+        public long getResponseTime() {
+            return responseTime;
+        }
     }
 
     /**
-     * Wrapper method for executing API tests.
-     * This method logs the incoming payload for debugging and delegates to executeRequest.
+     * Wrapper method for executing API tests. Logs the incoming payload for debugging
+     * and delegates to executeRequest.
      *
-     * @param method         HTTP method (GET, POST, PUT, DELETE).
-     * @param url            The target URL.
-     * @param headers        Map of HTTP headers.
-     * @param params         Map of URL query parameters.
-     * @param payload        The request payload/body.
-     * @param payloadType    Type of payload (json, xml, text, urlencoded, formdata, multipart).
-     * @param modifyPayload  Not used in current implementation (placeholder for future modifications).
-     * @param auth           Authentication details.
-     * @param sslValidation  Flag to disable SSL certificate validation (for testing self-signed certs).
-     * @return Response object containing status code and body.
-     * @throws Exception If any error occurs during execution.
+     * @param method         HTTP method (GET, POST, PUT, DELETE)
+     * @param url            The target URL
+     * @param headers        Map of HTTP headers
+     * @param params         Map of URL query parameters
+     * @param payload        The request payload/body
+     * @param payloadType    Type of payload (json, xml, text, urlencoded, formdata, multipart)
+     * @param modifyPayload  Not used in current implementation (placeholder for future modifications)
+     * @param auth           Authentication details
+     * @param sslValidation  Flag to disable SSL certificate validation (for testing self-signed certs)
+     * @return Response object containing status code and body
+     * @throws Exception If any error occurs during execution
      */
     public Response executeTest(
             String method,
@@ -130,9 +142,8 @@ public class ApiExecutor {
             HashMap<String, Object> modifyPayload,
             Auth auth,
             boolean sslValidation) throws Exception {
-
         System.out.println("Debug: Inside executeTest - Payload received: " + payload);
-        // Note: modifyPayload parameter is currently unused; it may be intended for runtime payload modifications.
+        // Note: modifyPayload parameter is currently unused; it may be intended for runtime payload modifications
         return executeRequest(method, url, headers, params, payload, payloadType, auth, sslValidation);
     }
 
@@ -140,9 +151,9 @@ public class ApiExecutor {
      * Parses a URL-encoded string into a list of NameValuePair objects.
      * Handles decoding of keys and values from UTF-8.
      *
-     * @param encodedPayload The URL-encoded payload string (e.g., "key1=value1&key2=value2").
-     * @return List of parsed NameValuePair objects.
-     * @throws Exception If decoding fails.
+     * @param encodedPayload The URL-encoded payload string (e.g., "key1=value1&key2=value2")
+     * @return List of parsed NameValuePair objects
+     * @throws Exception If decoding fails
      */
     private List<NameValuePair> parseUrlEncodedString(String encodedPayload) throws Exception {
         List<NameValuePair> params = new ArrayList<>();
@@ -151,7 +162,9 @@ public class ApiExecutor {
         }
         String[] pairs = encodedPayload.split("&");
         for (String pairStr : pairs) {
-            if (pairStr.isEmpty()) continue;
+            if (pairStr.isEmpty()) {
+                continue;
+            }
             int idx = pairStr.indexOf('=');
             if (idx == -1) {
                 // Key without value
@@ -166,19 +179,19 @@ public class ApiExecutor {
     }
 
     /**
-     * Core method to execute an HTTP request.
-     * Handles building the request, adding headers/auth/payload, and processing the response.
+     * Core method to execute an HTTP request. Handles building the request, adding
+     * headers/auth/payload, and processing the response.
      *
-     * @param method         HTTP method (GET, POST, PUT, DELETE).
-     * @param url            The target URL.
-     * @param headers        Map of HTTP headers.
-     * @param params         Map of URL query parameters.
-     * @param payload        The request payload/body.
-     * @param payloadType    Type of payload (json, xml, text, urlencoded, formdata, multipart).
-     * @param auth           Authentication details.
-     * @param sslValidation  Flag to disable SSL certificate validation.
-     * @return Response object containing status code and body.
-     * @throws Exception If any error occurs during execution.
+     * @param method         HTTP method (GET, POST, PUT, DELETE)
+     * @param url            The target URL
+     * @param headers        Map of HTTP headers
+     * @param params         Map of URL query parameters
+     * @param payload        The request payload/body
+     * @param payloadType    Type of payload (json, xml, text, urlencoded, formdata, multipart)
+     * @param auth           Authentication details
+     * @param sslValidation  Flag to disable SSL certificate validation
+     * @return Response object containing status code and body
+     * @throws Exception If any error occurs during execution
      */
     public Response executeRequest(
             String method,
@@ -189,7 +202,6 @@ public class ApiExecutor {
             String payloadType,
             Auth auth,
             boolean sslValidation) throws Exception {
-
         System.out.println("Debug: Inside executeRequest - Payload being sent: " + payload);
 
         // Create HTTP client, optionally disabling SSL validation for self-signed certificates
@@ -197,13 +209,17 @@ public class ApiExecutor {
         if (!sslValidation) {
             // Disable SSL validation: Trust all certificates (use only for testing!)
             SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, new TrustManager[]{new X509TrustManager() {
-                public X509Certificate[] getAcceptedIssuers() {
-                    return new X509Certificate[0];
+            sslContext.init(null, new TrustManager[] {
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return new X509Certificate[0];
+                    }
+
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
                 }
-                public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-                public void checkServerTrusted(X509Certificate[] certs, String authType) {}
-            }}, new SecureRandom());
+            }, new SecureRandom());
             client = HttpClients.custom().setSSLContext(sslContext).build();
         } else {
             client = HttpClients.createDefault();
@@ -293,7 +309,7 @@ public class ApiExecutor {
                         contentType = ContentType.TEXT_PLAIN;
                         break;
                     default:
-                        contentType = ContentType.APPLICATION_JSON;  // Default to JSON
+                        contentType = ContentType.APPLICATION_JSON; // Default to JSON
                         break;
                 }
                 entityRequest.setEntity(new StringEntity(payload, contentType));
@@ -304,11 +320,14 @@ public class ApiExecutor {
         }
 
         // Execute the request and capture response
+        long startTime = System.currentTimeMillis();
         try (CloseableHttpResponse response = client.execute(request)) {
             int statusCode = response.getStatusLine().getStatusCode();
             HttpEntity entity = response.getEntity();
             String responseBody = entity != null ? EntityUtils.toString(entity) : "";
-            return new Response(statusCode, responseBody);
+            long endTime = System.currentTimeMillis();
+            long responseTime = endTime - startTime;
+            return new Response(statusCode, responseBody, responseTime);
         } finally {
             // Ensure client is closed to release resources
             client.close();
@@ -316,12 +335,12 @@ public class ApiExecutor {
     }
 
     /**
-     * Utility method to pretty-print JSON response bodies.
-     * Attempts to parse and reformat the body as pretty JSON; falls back to raw string if invalid JSON.
+     * Utility method to pretty-print JSON response bodies. Attempts to parse and
+     * reformat the body as pretty JSON; falls back to raw string if invalid JSON.
      *
-     * @param response The Response object to format.
-     * @return Pretty-printed JSON string or raw body if not JSON.
-     * @throws IOException If Jackson processing fails unexpectedly.
+     * @param response The Response object to format
+     * @return Pretty-printed JSON string or raw body if not JSON
+     * @throws IOException If Jackson processing fails unexpectedly
      */
     public static String toPrettyJson(Response response) throws IOException {
         ObjectMapper mapper = new ObjectMapper();

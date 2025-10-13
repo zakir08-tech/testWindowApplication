@@ -31,8 +31,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Main application class for the API Test Runner GUI.
@@ -230,17 +230,15 @@ public class RunApiTest extends Application {
     public void start(Stage primaryStage) {
         testCases = FXCollections.observableArrayList();
         table = new TableView<>(testCases);
-        // Apply dark theme styling to the table
-        table.setStyle("-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; -fx-table-cell-border-color: #3C3F41; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
+        table.setStyle("-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
+                "-fx-table-cell-border-color: #3C3F41; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
 
-        // Calculate column widths based on character estimates
         final double CHAR_WIDTH = 8.0;
         final double RUN_COL_WIDTH = 5 * CHAR_WIDTH;
         final double TEST_ID_COL_WIDTH = 8 * CHAR_WIDTH;
         final double STATUS_COL_WIDTH = 12 * CHAR_WIDTH;
         final double TEST_DESC_MIN_WIDTH = 300.0;
 
-        // Run column with checkbox cells
         TableColumn<TestCase, Boolean> runColumn = new TableColumn<>("Run");
         runColumn.setCellValueFactory(cellData -> cellData.getValue().runProperty());
         runColumn.setCellFactory(col -> {
@@ -441,7 +439,15 @@ public class RunApiTest extends Application {
                             reportData.put("testId", testId.toString());
                             reportData.put("description", testCase.testDescriptionProperty().get());
                             reportData.put("request", method);
+                            reportData.put("endpoint", url);
+                            reportData.put("payload", payload);
+                            reportData.put("headers", headersMap.get(testId));
+                            reportData.put("parameters", paramsMap.get(testId));
+                            reportData.put("authentication", authMap.get(testId));
                             reportData.put("verifyResponse", verifyResponse);
+
+                            // Declare responseTimeMs outside try-catch
+                            long responseTimeMs = 0L;
 
                             try {
                                 System.out.println("Debug: Starting processing for Test ID " + testId);
@@ -449,7 +455,6 @@ public class RunApiTest extends Application {
                                 HashMap<String, Object> params = paramsMap.get(testId);
                                 HashMap<String, Object> modifyPayload = modifyPayloadMap.get(testId);
                                 HashMap<String, Object> authDetails = authMap.get(testId);
-                                HashMap<String, Object> responseCapture = responseCaptureMap.get(testId);
 
                                 // Process URL with placeholders
                                 System.out.println("Debug: Replacing placeholders in URL for Test ID " + testId);
@@ -577,6 +582,7 @@ public class RunApiTest extends Application {
 
                                 // Execute the API test
                                 System.out.println("Debug: Payload being sent to executeTest for Test ID " + testId + ": " + modifiedPayload);
+                                long startTime = System.nanoTime();
                                 ApiExecutor.Response response = apiExecutor.executeTest(
                                     method,
                                     processedUrl,
@@ -588,10 +594,14 @@ public class RunApiTest extends Application {
                                     auth,
                                     sslValidation
                                 );
+                                long endTime = System.nanoTime();
+                                responseTimeMs = (endTime - startTime) / 1_000_000; // Calculate response time
+                                System.out.println("Debug: Response time for Test ID " + testId + ": " + responseTimeMs + " ms");
 
                                 // Store response data for report
                                 reportData.put("responseStatus", String.valueOf(response.getStatusCode()));
                                 reportData.put("responseBody", response.getBody());
+                                reportData.put("responseTimeMs", responseTimeMs);
 
                                 // Verify status code
                                 if (response.getStatusCode() != expectedStatus) {
@@ -600,6 +610,7 @@ public class RunApiTest extends Application {
                                 }
 
                                 // Process response capture
+                                HashMap<String, Object> responseCapture = responseCaptureMap.get(testId);
                                 if (!responseCapture.isEmpty()) {
                                     System.out.println("Debug: Starting response capture for Test ID " + testId);
                                     Map<String, Object> responseObj;
@@ -621,6 +632,13 @@ public class RunApiTest extends Application {
                                                 .append("', envVar='").append(envVarName).append("'. ");
                                             System.err.println("Warning: Invalid response capture entry for Test ID " + testId + ": path='" + responsePath + "', envVar='" + envVarName + "'");
                                             continue;
+                                        }
+                                        // Clean envVarName to remove surrounding {{ }} if present
+                                        Pattern pattern = Pattern.compile("^\\s*\\{\\{(.*?)\\}\\}\\s*$");
+                                        Matcher matcher = pattern.matcher(envVarName);
+                                        if (matcher.matches()) {
+                                            envVarName = matcher.group(1).trim();
+                                            System.out.println("Debug: Cleaned env var name from '" + entry.getValue() + "' to '" + envVarName + "' for Test ID " + testId);
                                         }
                                         System.out.println("Debug: Attempting to capture value for path '" + responsePath + "' to env var '" + envVarName + "' for Test ID " + testId);
                                         Object capturedValue = getNestedValue(responseObj, responsePath, testId);
@@ -658,7 +676,7 @@ public class RunApiTest extends Application {
                                 // Store capture issues in report data
                                 reportData.put("captureIssues", captureIssues.toString());
 
-                                // NEW: Initialize verificationPassed to true (passed by default if no verification needed)
+                                // Initialize verificationPassed to true (passed by default if no verification needed)
                                 boolean verificationPassed = true;
 
                                 // Verify response body if specified
@@ -672,10 +690,10 @@ public class RunApiTest extends Application {
                                     }
                                 }
 
-                                // NEW: Store verificationPassed in reportData for success path
+                                // Store verificationPassed in reportData for success path
                                 reportData.put("verificationPassed", verificationPassed);
 
-                                // Debug output for test execution
+                                // Debug output
                                 System.out.println("Test ID: " + testId);
                                 System.out.println("Test Data: " + testData);
                                 System.out.println("Headers: " + processedHeaders);
@@ -685,7 +703,7 @@ public class RunApiTest extends Application {
                                 System.out.println("Response Capture: " + responseCapture);
                                 System.out.println("Authorization: " + processedAuthDetails);
                                 System.out.println("Expected Status: " + processedExpectedStatusStr);
-                                System.out.println("Response Status: " + response.getStatusCode());
+                                System.out.println("Response Time (ms): " + responseTimeMs);
                                 try {
                                     System.out.println("Response Body (Pretty JSON):\n" + ApiExecutor.toPrettyJson(response));
                                 } catch (IOException ex) {
@@ -694,25 +712,21 @@ public class RunApiTest extends Application {
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Pass");
                                     reportData.put("status", "Pass");
-                                    reportData.put("failureReason", ""); // No failure reason for passing tests
+                                    reportData.put("failureReason", "");
                                     reportDataList.add(reportData);
                                 });
                             } catch (Exception ex) {
                                 String failureReason = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
                                 System.err.println("Error executing Test ID " + testId + ": " + failureReason);
                                 ex.printStackTrace();
-                                reportData.put("captureIssues", captureIssues.toString()); // Ensure capture issues are stored even on failure
-                                // NEW: Determine verificationPassed based on failure type
-                                boolean verificationPassed = true;
-                                if (failureReason.startsWith("Response verification failed")) {
-                                    verificationPassed = false;
-                                }
-                                // For other failures (status, capture, etc.), verificationPassed remains true (no verification performed or failed)
+                                reportData.put("captureIssues", captureIssues.toString());
+                                boolean verificationPassed = !failureReason.startsWith("Response verification failed");
                                 reportData.put("verificationPassed", verificationPassed);
+                                reportData.put("responseTimeMs", responseTimeMs);
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Fail");
                                     reportData.put("status", "Fail");
-                                    reportData.put("failureReason", failureReason); // Store failure reason
+                                    reportData.put("failureReason", failureReason);
                                     reportDataList.add(reportData);
                                 });
                             }
@@ -799,6 +813,34 @@ public class RunApiTest extends Application {
         primaryStage.setTitle("API Test Runner");
         primaryStage.setScene(scene);
         primaryStage.show();
+    }
+
+    /**
+     * Updates the Select All checkbox state based on the run status of all test cases.
+     */
+    private void updateSelectAllState() {
+        if (testCases.isEmpty()) {
+            selectAllCheckBox.setSelected(false);
+            selectAllCheckBox.setIndeterminate(false);
+            return;
+        }
+        boolean allSelected = true;
+        boolean anySelected = false;
+        for (TestCase testCase : testCases) {
+            boolean isSelected = testCase.runProperty().get();
+            allSelected &= isSelected;
+            anySelected |= isSelected;
+        }
+        if (allSelected) {
+            selectAllCheckBox.setSelected(true);
+            selectAllCheckBox.setIndeterminate(false);
+        } else if (anySelected) {
+            selectAllCheckBox.setSelected(false);
+            selectAllCheckBox.setIndeterminate(true);
+        } else {
+            selectAllCheckBox.setSelected(false);
+            selectAllCheckBox.setIndeterminate(false);
+        }
     }
 
     /**
@@ -1089,7 +1131,7 @@ public class RunApiTest extends Application {
 
     /**
      * Replaces placeholders in text (e.g., {{var}}) with values from environment variables.
-     * Handles missing or null values gracefully.
+     * Handles missing or null values by replacing with an empty string.
      *
      * @param text the text containing placeholders
      * @param envVars map of environment variables
@@ -1110,13 +1152,13 @@ public class RunApiTest extends Application {
                 String placeholder = matcher.group(1);
                 String replacement;
                 if (!envVars.containsKey(placeholder)) {
-                    replacement = "{{" + placeholder + "{not-found}}}";
-                    System.out.println("Debug: Placeholder '" + placeholder + "' not found in env.json for Test ID " + testId + ", using '" + replacement + "'");
+                    replacement = "";
+                    System.out.println("Debug: Placeholder '" + placeholder + "' not found in env.json for Test ID " + testId + ", replacing with empty string");
                 } else {
                     String value = envVars.get(placeholder);
                     if (value == null || value.trim().isEmpty()) {
-                        replacement = "{{" + placeholder + "{null}}}";
-                        System.out.println("Debug: Placeholder '" + placeholder + "' has null/empty value in env.json for Test ID " + testId + ", using '" + replacement + "'");
+                        replacement = "";
+                        System.out.println("Debug: Placeholder '" + placeholder + "' has null/empty value in env.json for Test ID " + testId + ", replacing with empty string");
                     } else {
                         replacement = value;
                         System.out.println("Debug: Replaced placeholder '" + placeholder + "' with value '" + value + "' for Test ID " + testId);
@@ -1318,25 +1360,6 @@ public class RunApiTest extends Application {
                     return;
                 }
 
-                Set<String> actualHeaders = new HashSet<>();
-                for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-                    String header = headerRow.getCell(i) != null ? headerRow.getCell(i).getStringCellValue().trim() : "";
-                    actualHeaders.add(header);
-                }
-
-                // Check for required headers
-                for (String reqHeader : REQUIRED_HEADERS) {
-                    if (!reqHeader.isEmpty() && !actualHeaders.contains(reqHeader)) {
-                        showError("Missing required header '" + reqHeader + "' in test suite '" + testSuiteName + "'.");
-                        return;
-                    }
-                }
-
-                if (sheet.getLastRowNum() < 1) {
-                    showError("No data rows found in test suite '" + testSuiteName + "'.");
-                    return;
-                }
-
                 // Clear existing data
                 testCases.clear();
                 testDataMap.clear();
@@ -1346,236 +1369,180 @@ public class RunApiTest extends Application {
                 responseCaptureMap.clear();
                 authMap.clear();
 
-                // Find column indices
-                int testIdIndex = -1, requestIndex = -1, endPointIndex = -1, headerKeyIndex = -1, headerValueIndex = -1;
-                int paramKeyIndex = -1, paramValueIndex = -1, payloadIndex = -1, payloadTypeIndex = -1;
-                int modifyPayloadKeyIndex = -1, modifyPayloadValueIndex = -1, responseKeyNameIndex = -1;
-                int captureKeyValueIndex = -1, authorizationIndex = -1, authField1Index = -1, authField2Index = -1;
-                int sslValidationIndex = -1, expectedStatusIndex = -1, verifyResponseIndex = -1, testDescriptionIndex = -1;
-
-                int emptyHeaderCount = 0;
+                // Map headers to column indices
+                Map<String, Integer> headerMap = new HashMap<>();
+                int responseTimeIndex = -1;
                 for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                     String header = headerRow.getCell(i) != null ? headerRow.getCell(i).getStringCellValue().trim() : "";
-                    switch (header) {
-                        case "Test ID": testIdIndex = i; break;
-                        case "Request": requestIndex = i; break;
-                        case "End-Point": endPointIndex = i; break;
-                        case "Header (key)": headerKeyIndex = i; break;
-                        case "Header (value)": headerValueIndex = i; break;
-                        case "Parameter (key)": paramKeyIndex = i; break;
-                        case "Parameter (value)": paramValueIndex = i; break;
-                        case "Payload": payloadIndex = i; break;
-                        case "Payload Type": payloadTypeIndex = i; break;
-                        case "Modify Payload (key)": modifyPayloadKeyIndex = i; break;
-                        case "Modify Payload (value)": modifyPayloadValueIndex = i; break;
-                        case "Response (key) Name": responseKeyNameIndex = i; break;
-                        case "Capture (key) Value (env var)": captureKeyValueIndex = i; break;
-                        case "Authorization":
-                            authorizationIndex = i;
-                            if (i + 1 < headerRow.getLastCellNum() &&
-                                (headerRow.getCell(i + 1) == null || headerRow.getCell(i + 1).getStringCellValue().trim().isEmpty())) {
-                                authField1Index = i + 1;
-                            }
-                            if (i + 2 < headerRow.getLastCellNum() &&
-                                (headerRow.getCell(i + 2) == null || headerRow.getCell(i + 2).getStringCellValue().trim().isEmpty())) {
-                                authField2Index = i + 2;
-                            }
-                            break;
-                        case "SSL Validation": sslValidationIndex = i; break;
-                        case "Expected Status": expectedStatusIndex = i; break;
-                        case "Verify Response": verifyResponseIndex = i; break;
-                        case "Test Description": testDescriptionIndex = i; break;
-                        case "": emptyHeaderCount++; break;
+                    headerMap.put(header, i);
+                    if ("Response Time (ms)".equalsIgnoreCase(header)) {
+                        responseTimeIndex = i;
                     }
                 }
 
-                if (authField1Index == -1 || authField2Index == -1) {
-                    showError("Invalid headers in test suite '" + testSuiteName + "'. Missing empty headers after Authorization.");
-                    return;
-                }
-
-                // Group rows by Test ID
-                Map<Integer, List<Row>> rowsByTestId = new HashMap<>();
-                Integer currentTestId = null;
-                for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                    Row row = sheet.getRow(i);
-                    if (row != null) {
-                        String testIdStr = row.getCell(testIdIndex) != null ? row.getCell(testIdIndex).toString().trim() : "";
-                        if (!testIdStr.isEmpty()) {
-                            try {
-                                currentTestId = Integer.parseInt(testIdStr);
-                                rowsByTestId.computeIfAbsent(currentTestId, k -> new ArrayList<>()).add(row);
-                            } catch (NumberFormatException e) {
-                                continue;
-                            }
-                        } else if (currentTestId != null) {
-                            rowsByTestId.computeIfAbsent(currentTestId, k -> new ArrayList<>()).add(row);
-                        }
+                // Validate required headers
+                for (String requiredHeader : REQUIRED_HEADERS) {
+                    if (!headerMap.containsKey(requiredHeader) && !requiredHeader.isEmpty()) {
+                        showError("Missing required column '" + requiredHeader + "' in test suite '" + testSuiteName + "'.");
+                        return;
                     }
                 }
 
-                boolean hasValidRows = false;
-                // Process each test case group
-                for (Map.Entry<Integer, List<Row>> entry : rowsByTestId.entrySet()) {
-                    Integer testId = entry.getKey();
-                    List<Row> rows = entry.getValue();
-                    hasValidRows = true;
+                // Parse test cases
+                Integer lastTestId = null;
+                HashMap<String, Object> currentTestData = null;
+                HashMap<String, Object> currentHeaders = null;
+                HashMap<String, Object> currentParams = null;
+                HashMap<String, Object> currentModifyPayload = null;
+                HashMap<String, Object> currentResponseCapture = null;
+                HashMap<String, Object> currentAuthDetails = null;
 
-                    HashMap<String, Object> testData = new HashMap<>();
-                    HashMap<String, Object> headers = new HashMap<>();
-                    HashMap<String, Object> params = new HashMap<>();
-                    HashMap<String, Object> modifyPayload = new HashMap<>();
-                    HashMap<String, Object> responseCapture = new HashMap<>();
-                    HashMap<String, Object> authDetails = new HashMap<>();
-                    String testDescription = "";
+                for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                    Row row = sheet.getRow(rowIndex);
+                    if (row == null) continue;
 
-                    // Parse data from rows
-                    for (Row row : rows) {
-                        if (row.getCell(requestIndex) != null && !row.getCell(requestIndex).toString().trim().isEmpty()) {
-                            testData.put("Request", row.getCell(requestIndex).toString().trim());
-                        }
-                        if (row.getCell(endPointIndex) != null && !row.getCell(endPointIndex).toString().trim().isEmpty()) {
-                            testData.put("End-Point", row.getCell(endPointIndex).toString().trim());
-                        }
-                        if (row.getCell(payloadIndex) != null && !row.getCell(payloadIndex).toString().trim().isEmpty()) {
-                            testData.put("Payload", row.getCell(payloadIndex).toString().trim());
-                        }
-                        if (row.getCell(payloadTypeIndex) != null && !row.getCell(payloadTypeIndex).toString().trim().isEmpty()) {
-                            testData.put("Payload Type", row.getCell(payloadTypeIndex).toString().trim());
-                        }
-                        if (row.getCell(expectedStatusIndex) != null && !row.getCell(expectedStatusIndex).toString().trim().isEmpty()) {
-                            testData.put("Expected Status", row.getCell(expectedStatusIndex).toString().trim());
-                        }
-                        if (row.getCell(verifyResponseIndex) != null && !row.getCell(verifyResponseIndex).toString().trim().isEmpty()) {
-                            testData.put("Verify Response", row.getCell(verifyResponseIndex).toString().trim());
-                        }
-                        if (row.getCell(testDescriptionIndex) != null && !row.getCell(testDescriptionIndex).toString().trim().isEmpty()) {
-                            testDescription = row.getCell(testDescriptionIndex).toString().trim();
-                            testData.put("Test Description", testDescription);
-                        }
-                        if (row.getCell(sslValidationIndex) != null && !row.getCell(sslValidationIndex).toString().trim().isEmpty()) {
-                            testData.put("SSL Validation", row.getCell(sslValidationIndex).toString().trim());
+                    String testIdStr = getCellValue(row, headerMap.get("Test ID"));
+                    Integer testId = testIdStr != null && !testIdStr.trim().isEmpty() ? Integer.parseInt(testIdStr.trim()) : null;
+
+                    if (testId != null) {
+                        // New test case
+                        if (lastTestId != null && !lastTestId.equals(testId)) {
+                            // Save previous test case data
+                            testDataMap.put(lastTestId, currentTestData);
+                            headersMap.put(lastTestId, currentHeaders);
+                            paramsMap.put(lastTestId, currentParams);
+                            modifyPayloadMap.put(lastTestId, currentModifyPayload);
+                            responseCaptureMap.put(lastTestId, currentResponseCapture);
+                            authMap.put(lastTestId, currentAuthDetails);
                         }
 
-                        // Parse headers
-                        if (row.getCell(headerKeyIndex) != null && row.getCell(headerValueIndex) != null) {
-                            String headerKey = row.getCell(headerKeyIndex).toString().trim();
-                            String headerValue = row.getCell(headerValueIndex).toString().trim();
-                            if (!headerKey.isEmpty()) {
-                                headers.put(headerKey, headerValue);
-                            }
-                        }
+                        lastTestId = testId;
+                        String testDescription = getCellValue(row, headerMap.get("Test Description"));
+                        testCases.add(new TestCase(true, testId.toString(), testDescription, "No Run"));
 
-                        // Parse parameters
-                        if (row.getCell(paramKeyIndex) != null && row.getCell(paramValueIndex) != null) {
-                            String paramKey = row.getCell(paramKeyIndex).toString().trim();
-                            String paramValue = row.getCell(paramValueIndex).toString().trim();
-                            if (!paramKey.isEmpty()) {
-                                params.put(paramKey, paramValue);
-                            }
-                        }
+                        // Initialize maps for new test case
+                        currentTestData = new HashMap<>();
+                        currentTestData.put("Request", getCellValue(row, headerMap.get("Request")));
+                        currentTestData.put("End-Point", getCellValue(row, headerMap.get("End-Point")));
+                        currentTestData.put("Payload", getCellValue(row, headerMap.get("Payload")));
+                        currentTestData.put("Payload Type", getCellValue(row, headerMap.get("Payload Type")));
+                        currentTestData.put("Expected Status", getCellValue(row, headerMap.get("Expected Status")));
+                        currentTestData.put("Verify Response", getCellValue(row, headerMap.get("Verify Response")));
+                        currentTestData.put("SSL Validation", getCellValue(row, headerMap.get("SSL Validation")));
 
-                        // Parse payload modifications
-                        if (row.getCell(modifyPayloadKeyIndex) != null && row.getCell(modifyPayloadValueIndex) != null) {
-                            String modifyKey = row.getCell(modifyPayloadKeyIndex).toString().trim();
-                            String modifyValue = row.getCell(modifyPayloadValueIndex).toString().trim();
-                            if (!modifyKey.isEmpty()) {
-                                modifyPayload.put(modifyKey, modifyValue);
-                            }
-                        }
+                        currentHeaders = new HashMap<>();
+                        currentParams = new HashMap<>();
+                        currentModifyPayload = new HashMap<>();
+                        currentResponseCapture = new HashMap<>();
+                        currentAuthDetails = new HashMap<>();
+                        currentAuthDetails.put("Type", getCellValue(row, headerMap.get("Authorization")));
 
-                        // Parse response captures
-                        if (row.getCell(responseKeyNameIndex) != null && row.getCell(captureKeyValueIndex) != null) {
-                            String responseKey = row.getCell(responseKeyNameIndex).toString().trim();
-                            String captureValue = row.getCell(captureKeyValueIndex) != null ? row.getCell(captureKeyValueIndex).toString().trim() : "";
-                            if (!responseKey.isEmpty() && !captureValue.isEmpty()) {
-                                String cleanCaptureValue = captureValue.replaceAll("^\\{\\{|\\}\\}$", "").trim();
-                                if (cleanCaptureValue.isEmpty()) {
-                                    System.err.println("Warning: Empty environment variable name after removing {{}} for response key '" + responseKey + "' in Test ID " + testId);
-                                } else {
-                                    responseCapture.put(responseKey, cleanCaptureValue);
-                                    System.out.println("Debug: Stored response capture for Test ID " + testId + ": key='" + responseKey + "', envVar='" + cleanCaptureValue + "'");
-                                }
-                            }
-                        }
+                        // Add header, param, modify payload, response capture, and auth data
+                        addMultiColumnData(row, headerMap, "Header (key)", "Header (value)", currentHeaders);
+                        addMultiColumnData(row, headerMap, "Parameter (key)", "Parameter (value)", currentParams);
+                        addMultiColumnData(row, headerMap, "Modify Payload (key)", "Modify Payload (value)", currentModifyPayload);
+                        addMultiColumnData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture);
 
-                        // Parse authorization
-                        if (row.getCell(authorizationIndex) != null && !row.getCell(authorizationIndex).toString().trim().isEmpty()) {
-                            String authType = row.getCell(authorizationIndex).toString().trim();
-                            String authField1 = row.getCell(authField1Index) != null ? row.getCell(authField1Index).toString().trim() : "";
-                            String authField2 = row.getCell(authField2Index) != null ? row.getCell(authField2Index).toString().trim() : "";
-                            authDetails.put("Type", authType);
-                            if (authType.equalsIgnoreCase("Basic Auth")) {
-                                authDetails.put("Username", authField1);
-                                authDetails.put("Password", authField2);
-                            } else if (authType.equalsIgnoreCase("Bearer Token")) {
-                                authDetails.put("Token", authField1);
-                            } else {
-                                authDetails.put("Type", "None");
-                            }
-                        }
+                        String username = getCellValue(row, headerMap.get("Username"));
+                        String password = getCellValue(row, headerMap.get("Password"));
+                        String token = getCellValue(row, headerMap.get("Token"));
+                        if (username != null) currentAuthDetails.put("Username", username);
+                        if (password != null) currentAuthDetails.put("Password", password);
+                        if (token != null) currentAuthDetails.put("Token", token);
+                    } else if (lastTestId != null) {
+                        // Continue adding data to the current test case
+                        addMultiColumnData(row, headerMap, "Header (key)", "Header (value)", currentHeaders);
+                        addMultiColumnData(row, headerMap, "Parameter (key)", "Parameter (value)", currentParams);
+                        addMultiColumnData(row, headerMap, "Modify Payload (key)", "Modify Payload (value)", currentModifyPayload);
+                        addMultiColumnData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture);
                     }
-
-                    // Store parsed data
-                    testDataMap.put(testId, testData);
-                    headersMap.put(testId, headers);
-                    paramsMap.put(testId, params);
-                    modifyPayloadMap.put(testId, modifyPayload);
-                    responseCaptureMap.put(testId, responseCapture);
-                    authMap.put(testId, authDetails);
-
-                    // Add to UI table
-                    testCases.add(new TestCase(true, testId.toString(), testDescription, "No Run"));
                 }
 
-                if (!hasValidRows) {
-                    showError("No rows with non-empty Test ID found in test suite '" + testSuiteName + "'.");
-                    return;
+                // Save the last test case data
+                if (lastTestId != null) {
+                    testDataMap.put(lastTestId, currentTestData);
+                    headersMap.put(lastTestId, currentHeaders);
+                    paramsMap.put(lastTestId, currentParams);
+                    modifyPayloadMap.put(lastTestId, currentModifyPayload);
+                    responseCaptureMap.put(lastTestId, currentResponseCapture);
+                    authMap.put(lastTestId, currentAuthDetails);
                 }
 
-                // Update UI state
                 lastLoadedFile = file;
-                runButton.setDisable(false);
-                loadButton.setDisable(false);
-                refreshButton.setDisable(false);
-                stopButton.setDisable(true);
-
-                table.refresh();
-                selectAllCheckBox.setSelected(true);
-                Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Success");
-                alert.setHeaderText("Test Suite Loaded");
-                alert.setContentText("Test cases loaded successfully from test suite '" + testSuiteName + "'.");
-                alert.showAndWait();
-            } catch (IOException ex) {
-                showError("Failed to load test suite '" + testSuiteName + "': " + ex.getMessage());
+                System.out.println("Debug: Loaded test cases from '" + file.getAbsolutePath() + "'. Test IDs: " + testDataMap.keySet());
+            } catch (Exception e) {
+                showError("Failed to load test suite '" + testSuiteName + "': " + e.getMessage());
+                System.err.println("Error loading test suite: " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }
 
     /**
-     * Updates the Select All checkbox state based on individual checkboxes.
+     * Adds multi-column data (e.g., headers, parameters) to a map.
+     *
+     * @param row the current row
+     * @param headerMap map of headers to column indices
+     * @param keyHeader the header for the key column
+     * @param valueHeader the header for the value column
+     * @param targetMap the map to store key-value pairs
      */
-    private void updateSelectAllState() {
-        boolean allSelected = testCases.stream().allMatch(testCase -> testCase.runProperty().get());
-        selectAllCheckBox.setSelected(allSelected);
+    private void addMultiColumnData(Row row, Map<String, Integer> headerMap, String keyHeader, String valueHeader, HashMap<String, Object> targetMap) {
+        String key = getCellValue(row, headerMap.get(keyHeader));
+        String value = getCellValue(row, headerMap.get(valueHeader));
+        if (key != null && !key.trim().isEmpty()) {
+            targetMap.put(key, value != null ? value : "");
+        }
     }
 
     /**
-     * Displays an error alert dialog.
+     * Retrieves the string value of a cell, handling different cell types.
      *
-     * @param message the error message
+     * @param row the row to read from
+     * @param columnIndex the column index
+     * @return the cell value as a string, or null if empty
+     */
+    private String getCellValue(Row row, Integer columnIndex) {
+        if (row == null || columnIndex == null || columnIndex < 0) {
+            return null;
+        }
+        var cell = row.getCell(columnIndex);
+        if (cell == null) {
+            return null;
+        }
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue().trim();
+            case NUMERIC:
+                double numericValue = cell.getNumericCellValue();
+                if (numericValue == (int) numericValue) {
+                    return String.valueOf((int) numericValue);
+                }
+                return String.valueOf(numericValue);
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Displays an error alert to the user.
+     *
+     * @param message the error message to display
      */
     private void showError(String message) {
-        Alert alert = new Alert(Alert.AlertType.ERROR);
-        alert.setTitle("Error");
-        alert.setHeaderText("Error Loading Test Suite");
-        alert.setContentText(message);
-        alert.showAndWait();
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Operation Failed");
+            alert.setContentText(message);
+            alert.showAndWait();
+        });
     }
 
     /**
-     * Launches the JavaFX application.
+     * Main method to launch the JavaFX application.
      *
      * @param args command-line arguments
      */

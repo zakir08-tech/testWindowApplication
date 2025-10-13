@@ -44,231 +44,234 @@ public class HtmlReportGeneratorApi {
         """;
 
     private static final String CSS_STYLE = """
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #FFFFFF;
-            color: #000000;
-        }
-        .report-container {
-            max-width: 1400px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: #FFFFFF;
-            color: #000000;
-            min-height: 100vh;
-        }
-        .report-container h1 {
-            font-size: 1.5rem;
-            text-align: center;
-        }
-        .table-container {
-            overflow-x: auto;
-            overflow-y: auto;
-            max-height: calc(70vh - 50px);
-            min-height: 500px;
-            max-width: 1400px;
-            width: 100%;
-            position: relative;
-            border: 2px solid #dee2e6;
-            background-color: #F8F9FA;
-            margin-top: 20px;
-        }
-        table {
-            table-layout: auto;
-            background-color: #FFFFFF;
-            width: 100%;
-            font-size: 10px;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 8px;
-            border: 1px solid #dee2e6;
-            color: #000000;
-            vertical-align: top;
-        }
-        td {
-            white-space: nowrap;
-            text-align: left;
-        }
-        table th {
-            background-color: #0D6EFD !important;
-            color: #FFFFFF !important;
-            position: sticky;
-            top: 0;
-            z-index: 2;
-            white-space: nowrap;
-            text-align: center;
-        }
-        #testReportTable th:nth-child(6),
-        #testReportTable td:nth-child(6) {
-            min-width: 250px;
-        }
-        #testReportTable th:nth-child(11),
-        #testReportTable td:nth-child(11) {
-            min-width: 350px;
-        }
-        #testReportTable th:nth-child(12),
-        #testReportTable td:nth-child(12) {
-            min-width: 350px;
-        }
-        .pass {
-            color: #008000 !important;
-            vertical-align: middle;
-            font-weight: bold;
-        }
-        .fail {
-            color: #FF0000 !important;
-            font-weight: bold;
-        }
-        .pass-bg {
-            background-color: #D4EDDA;
-        }
-        .fail-bg {
-            background-color: #F8D7DA;
-        }
-        .payload {
-            white-space: pre;
-            color: #008000 !important;
-            background-color: #F8F9FA;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 0;
-            font-size: 10px;
-        }
-        .verify-response-green {
-            white-space: pre;
-            background-color: #D4EDDA;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 0;
-            font-size: 10px;
-        }
-        .verify-response-red {
-            white-space: pre;
-            background-color: #F8D7DA;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 0;
-            font-size: 10px;
-        }
-        .verify-response-gray {
-            white-space: pre;
-            background-color: #F5F5F5;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 0;
-            font-size: 10px;
-        }
-        .response-body {
-            white-space: pre;
-            color: #8B008B !important;
-            background-color: #F8F9FA;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 0;
-            font-size: 10px;
-        }
-        .map-content {
-            white-space: pre;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 0;
-            background-color: #F8F9FA;
-            color: #000000;
-            font-size: 10px;
-        }
-        .not-available {
-            color: #6c757d !important;
-            font-style: italic;
-            font-size: 10px;
-        }
-        .description, .failure-reason, .capture-issues {
-            min-width: 200px;
-            max-width: 300px;
-            font-size: 10px;
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
-        }
-        .description span, .capture-issues span {
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
-        }
-        .wrap-long {
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
-        }
-        .wrap-long span {
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
-        }
-        .summary-buttons {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .summary-buttons .count-btn {
-            margin: 0;
-            padding: 0.125rem 0.375rem;
-            border: 1px solid transparent;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-            font-weight: bold;
-            color: white;
-            min-width: 1.5rem;
-            text-align: center;
-            line-height: 1.2;
-        }
-        .date-line {
-            text-align: center;
-            margin-bottom: 10px;
-        }
-        .scroll-to-top button {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            padding: 0.25rem 0.5rem;
-            border: none !important;
-            border-width: 0 !important;
-            border-style: none !important;
-            outline: none !important;
-            border-radius: 0.375rem;
-            height: 2rem;
-            width: 2rem;
-        }
-        .scroll-to-top .bi {
-            font-size: 1rem;
-        }
-        pre:hover {
-            z-index: 10;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-        }
-        /* Button backgrounds */
-        #filterAllBtn {
-            background-color: #0d6efd !important;
-            border-color: #0d6efd !important;
-        }
-        #filterPassBtn {
-            background-color: #198754 !important;
-            border-color: #198754 !important;
-        }
-        #filterFailBtn {
-            background-color: #dc3545 !important;
-            border-color: #dc3545 !important;
-        }
-        #scrollToTopBtn {
-            background-color: #0d6efd !important;
-            border-color: #0d6efd !important;
-            color: white !important;
-        }
-        """;
+         body {
+             margin: 0;
+             font-family: Arial, sans-serif;
+             background-color: #FFFFFF;
+             color: #000000;
+         }
+         .report-container {
+             max-width: 1400px;
+             margin: 20px auto;
+             padding: 20px;
+             background-color: #FFFFFF;
+             color: #000000;
+             min-height: 100vh;
+         }
+         .report-container h1 {
+             font-size: 1.5rem;
+             text-align: center;
+         }
+         .table-container {
+             overflow-x: auto;
+             overflow-y: auto;
+             max-height: calc(70vh - 50px);
+             min-height: 500px;
+             max-width: 1400px;
+             width: 100%;
+             position: relative;
+             border: 2px solid #dee2e6;
+             background-color: #F8F9FA;
+             margin-top: 20px;
+         }
+         table {
+             table-layout: auto;
+             background-color: #FFFFFF;
+             width: 100%;
+             font-size: 10px;
+             border-collapse: collapse;
+         }
+         th, td {
+             padding: 8px;
+             border: 1px solid #dee2e6;
+             color: #000000;
+             text-align: left;
+             vertical-align: top;
+         }
+         td {
+             white-space: nowrap;
+         }
+         table th {
+             background-color: #0D6EFD !important;
+             color: #FFFFFF !important;
+             position: sticky;
+             top: 0;
+             z-index: 2;
+             white-space: nowrap;
+         }
+         #testReportTable td:nth-child(3) {
+             text-align: left !important;
+             vertical-align: top !important;
+         }
+         #testReportTable th:nth-child(6),
+         #testReportTable td:nth-child(6) {
+             min-width: 250px;
+         }
+         #testReportTable th:nth-child(12),
+         #testReportTable td:nth-child(12) {
+             min-width: 350px;
+         }
+         #testReportTable th:nth-child(11),
+         #testReportTable td:nth-child(11) {
+             width: 110px;
+             min-width: 110px;
+             max-width: 110px;
+         }
+         .pass {
+             color: #008000 !important;
+             font-weight: bold;
+         }
+         .fail {
+             color: #FF0000 !important;
+             font-weight: bold;
+         }
+         .pass-bg {
+             background-color: #D4EDDA;
+         }
+         .fail-bg {
+             background-color: #F8D7DA;
+         }
+         .payload {
+             white-space: pre;
+             color: #008000 !important;
+             background-color: #F8F9FA;
+             padding: 10px;
+             border-radius: 4px;
+             margin: 0;
+             font-size: 10px;
+         }
+         .verify-response-green {
+             white-space: pre;
+             background-color: #D4EDDA;
+             padding: 10px;
+             border-radius: 4px;
+             margin: 0;
+             font-size: 10px;
+         }
+         .verify-response-red {
+             white-space: pre;
+             background-color: #F8D7DA;
+             padding: 10px;
+             border-radius: 4px;
+             margin: 0;
+             font-size: 10px;
+         }
+         .verify-response-gray {
+             white-space: pre;
+             background-color: #F5F5F5;
+             padding: 10px;
+             border-radius: 4px;
+             margin: 0;
+             font-size: 10px;
+         }
+         .response-body {
+             white-space: pre;
+             color: #8B008B !important;
+             background-color: #F8F9FA;
+             padding: 10px;
+             border-radius: 4px;
+             margin: 0;
+             font-size: 10px;
+         }
+         .map-content {
+             white-space: pre;
+             padding: 10px;
+             border-radius: 4px;
+             margin: 0;
+             background-color: #F8F9FA;
+             color: #000000;
+             font-size: 10px;
+         }
+         .not-available {
+             color: #6c757d !important;
+             font-style: italic;
+             font-size: 10px;
+         }
+         .description, .failure-reason, .capture-issues {
+             min-width: 200px;
+             max-width: 300px;
+             font-size: 10px;
+             white-space: normal !important;
+             word-wrap: break-word !important;
+             overflow-wrap: break-word !important;
+         }
+         .description span, .capture-issues span {
+             white-space: normal !important;
+             word-wrap: break-word !important;
+             overflow-wrap: break-word !important;
+         }
+         .wrap-long {
+             white-space: normal !important;
+             word-wrap: break-word !important;
+             overflow-wrap: break-word !important;
+         }
+         .wrap-long span {
+             white-space: normal !important;
+             word-wrap: break-word !important;
+             overflow-wrap: break-word !important;
+         }
+         .summary-buttons {
+             display: flex;
+             justify-content: center;
+             align-items: center;
+             gap: 10px;
+             flex-wrap: wrap;
+         }
+         .summary-buttons .count-btn {
+             margin: 0;
+             padding: 0.125rem 0.375rem;
+             border: 1px solid transparent;
+             border-radius: 0.25rem;
+             font-size: 0.875rem;
+             font-weight: bold;
+             color: white;
+             min-width: 1.5rem;
+             text-align: center;
+             line-height: 1.2;
+         }
+         .date-line {
+             text-align: center;
+             margin-bottom: 10px;
+         }
+         .scroll-to-top button {
+             position: fixed;
+             bottom: 20px;
+             right: 20px;
+             z-index: 1000;
+             padding: 0.25rem 0.5rem;
+             border: none !important;
+             border-width: 0 !important;
+             border-style: none !important;
+             outline: none !important;
+             border-radius: 0.375rem;
+             height: 2rem;
+             width: 2rem;
+         }
+         .scroll-to-top .bi {
+             font-size: 1rem;
+         }
+         pre:hover {
+             z-index: 10;
+             box-shadow: 0 0 10px rgba(0,0,0,0.2);
+         }
+         #filterAllBtn {
+             background-color: #0d6efd !important;
+             border-color: #0d6efd !important;
+         }
+         #filterPassBtn {
+             background-color: #198754 !important;
+             border-color: #198754 !important;
+         }
+         #filterFailBtn {
+             background-color: #dc3545 !important;
+             border-color: #dc3545 !important;
+         }
+         #scrollToTopBtn {
+             background-color: #0d6efd !important;
+             border-color: #0d6efd !important;
+             color: white !important;
+         }
+         """;
 
     public void generateReport(List<Map<String, Object>> reportDataList, ObjectMapper objectMapper) {
         int totalTests = reportDataList.size();
@@ -276,14 +279,12 @@ public class HtmlReportGeneratorApi {
         int failCount = 0;
         for (Map<String, Object> reportData : reportDataList) {
             String status = safeToString(reportData.get("status"));
-            // Handle common variants explicitly for robustness
             if (status.equalsIgnoreCase("Pass") || status.equalsIgnoreCase("passed")) {
                 passCount++;
             } else if (status.equalsIgnoreCase("Fail") || status.equalsIgnoreCase("failed")) {
                 failCount++;
             }
         }
-        // DEBUG: Log counts (remove after testing)
         System.out.println("DEBUG - Total: " + totalTests + ", Pass: " + passCount + ", Fail: " + failCount);
 
         ZonedDateTime now = ZonedDateTime.now();
@@ -291,50 +292,49 @@ public class HtmlReportGeneratorApi {
         String dateTime = now.format(formatter);
 
         StringBuilder html = new StringBuilder();
-        html.append("<!DOCTYPE html>\n");
-        html.append("<html lang='en'>\n");
-        html.append("<head>\n");
-        html.append("<meta charset='UTF-8'>\n");
-        html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-        html.append("<title>API Test Execution Report</title>\n");
-        html.append(BOOTSTRAP_CSS);
-        html.append(BOOTSTRAP_ICONS_CSS);
-        html.append("<style>\n").append(CSS_STYLE).append("</style>\n");
-        html.append("</head>\n");
-        html.append("<body>\n");
-        html.append("<div class='report-container'>\n");
-        html.append("<h1 class='display-6 text-center mb-4'>API Test Execution Report</h1>\n");
-        html.append("<div class='text-center mb-3'>\n");
-        // Wrapped date in div with class for explicit centering
-        html.append("<div class='date-line'><p>Generated on: ").append(escapeHtml(dateTime)).append("</p></div>\n");
-        html.append("<div class='summary-buttons'>\n");
-        // Simple labels and small buttons to match image
-        html.append("Total Tests: <button id='filterAllBtn' class='count-btn'>").append(String.valueOf(totalTests)).append("</button> | ");
-        html.append("Passed: <button id='filterPassBtn' class='count-btn'>").append(String.valueOf(passCount)).append("</button> | ");
-        html.append("Failed: <button id='filterFailBtn' class='count-btn'>").append(String.valueOf(failCount)).append("</button>\n");
-        html.append("</div>\n");
-        html.append("</div>\n");
-        html.append("<div class='table-container' id='tableContainer'>\n");
-        html.append("<table class='table table-hover table-bordered' id='testReportTable'>\n");
-        html.append("<thead>\n");
-        html.append("<tr>\n");
-        html.append("<th>Test ID</th>\n");
-        html.append("<th>Description</th>\n");
-        html.append("<th>Status</th>\n");
-        html.append("<th>Request</th>\n");
-        html.append("<th>Endpoint</th>\n");
-        html.append("<th>Payload</th>\n");
-        html.append("<th>Headers</th>\n");
-        html.append("<th>Parameters</th>\n");
-        html.append("<th>Authentication</th>\n");
-        html.append("<th>Response Status</th>\n");
-        html.append("<th>Response Body</th>\n");
-        html.append("<th>Verify Response</th>\n");
-        html.append("<th>Failure Reason</th>\n");
-        html.append("<th>Capture Issues</th>\n");
-        html.append("</tr>\n");
-        html.append("</thead>\n");
-        html.append("<tbody>\n");
+        html.append("<!DOCTYPE html>\n")
+            .append("<html lang='en'>\n")
+            .append("<head>\n")
+            .append("<meta charset='UTF-8'>\n")
+            .append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n")
+            .append("<title>API Test Execution Report</title>\n")
+            .append(BOOTSTRAP_CSS)
+            .append(BOOTSTRAP_ICONS_CSS)
+            .append("<style>\n").append(CSS_STYLE).append("</style>\n")
+            .append("</head>\n")
+            .append("<body>\n")
+            .append("<div class='report-container'>\n")
+            .append("<h1 class='display-6 text-center mb-4'>API Test Execution Report</h1>\n")
+            .append("<div class='text-center mb-3'>\n")
+            .append("<div class='date-line'><p>Generated on: ").append(escapeHtml(dateTime)).append("</p></div>\n")
+            .append("<div class='summary-buttons'>\n")
+            .append("Total Tests: <button id='filterAllBtn' class='count-btn'>").append(totalTests).append("</button> | ")
+            .append("Passed: <button id='filterPassBtn' class='count-btn'>").append(passCount).append("</button> | ")
+            .append("Failed: <button id='filterFailBtn' class='count-btn'>").append(failCount).append("</button>\n")
+            .append("</div>\n")
+            .append("</div>\n")
+            .append("<div class='table-container' id='tableContainer'>\n")
+            .append("<table class='table table-hover table-bordered' id='testReportTable'>\n")
+            .append("<thead>\n")
+            .append("<tr>\n")
+            .append("<th>Test ID</th>\n")
+            .append("<th>Description</th>\n")
+            .append("<th>Status</th>\n")
+            .append("<th>Request</th>\n")
+            .append("<th>Endpoint</th>\n")
+            .append("<th>Payload</th>\n")
+            .append("<th>Headers</th>\n")
+            .append("<th>Parameters</th>\n")
+            .append("<th>Authentication</th>\n")
+            .append("<th>Response Status</th>\n")
+            .append("<th>Response Time (ms)</th>\n")
+            .append("<th>Response Body</th>\n")
+            .append("<th>Verify Response</th>\n")
+            .append("<th>Failure Reason</th>\n")
+            .append("<th>Capture Issues</th>\n")
+            .append("</tr>\n")
+            .append("</thead>\n")
+            .append("<tbody>\n");
 
         int rowIndex = 0;
         for (Map<String, Object> reportData : reportDataList) {
@@ -359,10 +359,23 @@ public class HtmlReportGeneratorApi {
             String parametersContent = formatMap(reportData.get("parameters"), objectMapper, false);
             html.append("<td>").append(parametersContent.startsWith("<span") ? parametersContent : "<pre class='map-content'>" + highlightPlaceholders(parametersContent) + "</pre>").append("</td>\n");
 
-            String authContent = formatMap(reportData.get("authentication"), objectMapper, true);
+            String authContent;
+            Object authObj = reportData.get("authentication");
+            if (authObj == null || !(authObj instanceof Map) || ((Map<?, ?>) authObj).isEmpty() || 
+                ((Map<?, ?>) authObj).get("Type") == null || 
+                "".equals(String.valueOf(((Map<?, ?>) authObj).get("Type")).trim()) || 
+                "None".equalsIgnoreCase(String.valueOf(((Map<?, ?>) authObj).get("Type")))) {
+                authContent = "<span class='not-available'>None</span>";
+            } else {
+                authContent = formatMap(authObj, objectMapper, true);
+            }
             html.append("<td>").append(authContent.startsWith("<span") ? authContent : "<pre class='map-content'>" + highlightPlaceholders(authContent) + "</pre>").append("</td>\n");
 
             html.append("<td>").append(safeToString(reportData.get("responseStatus"))).append("</td>\n");
+
+            String responseTimeMs = safeToString(reportData.get("responseTimeMs"));
+            System.out.println("DEBUG - Rendering Response Time (ms) for Test ID " + safeToString(reportData.get("testId")) + ": " + responseTimeMs);
+            html.append("<td>").append(responseTimeMs).append("</td>\n");
 
             String responseBodyStr = reportData.get("responseBody") != null ? String.valueOf(reportData.get("responseBody")) : "";
             String contentType = detectContentType(responseBodyStr);
@@ -415,7 +428,7 @@ public class HtmlReportGeneratorApi {
         html.append(" const filterFailBtn = document.getElementById('filterFailBtn');\n");
         html.append(" const scrollToTopBtn = document.getElementById('scrollToTopBtn');\n");
         html.append(" function wrapLongContent() {\n");
-        html.append(" if (!testReportTable) return;\n");  // Null check
+        html.append(" if (!testReportTable) return;\n");
         html.append(" document.querySelectorAll('#testReportTable tbody td.description').forEach(cell => {\n");
         html.append(" const span = cell.querySelector('span');\n");
         html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
@@ -432,21 +445,11 @@ public class HtmlReportGeneratorApi {
         html.append(" document.querySelectorAll('#testReportTable tbody td.capture-issues').forEach(cell => {\n");
         html.append(" const span = cell.querySelector('span');\n");
         html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
-        html.append(" if (rawText.includes('{{')) {\n");
-        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\\\"color: #FF0000;\\\">${match}</span>`);\n");
-        html.append(" if (span) span.innerHTML = highlightedText;\n");
-        html.append(" else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
-        html.append(" }\n");
-        html.append(" if (rawText.length > 150) {\n");
+        html.append(" if (rawText && rawText.length > 150) {\n");
         html.append(" cell.classList.add('wrap-long');\n");
         html.append(" if (span) span.classList.add('wrap-long');\n");
         html.append(" }\n");
         html.append(" });\n");
-        html.append(" }\n");
-        html.append(" try {\n");
-        html.append(" wrapLongContent();\n");
-        html.append(" } catch (e) {\n");
-        html.append(" console.error('Error in wrapLongContent: ', e);\n");
         html.append(" }\n");
         html.append(" if (filterAllBtn) {\n");
         html.append(" filterAllBtn.addEventListener('click', function() {\n");
@@ -493,7 +496,6 @@ public class HtmlReportGeneratorApi {
         html.append(" console.error('Error in wrapLongContent after filter: ', e);\n");
         html.append(" }\n");
         html.append(" }\n");
-        // Always attempt scroll to top (removed no-op checks); added window fallback
         html.append(" function scrollToTop() {\n");
         html.append(" const container = document.getElementById('tableContainer');\n");
         html.append(" if (container) {\n");
@@ -503,7 +505,6 @@ public class HtmlReportGeneratorApi {
         html.append(" container.scrollTop = 0;\n");
         html.append(" }\n");
         html.append(" } else {\n");
-        html.append(" // Fallback to window scroll if container missing\n");
         html.append(" try {\n");
         html.append(" window.scrollTo({ top: 0, behavior: 'smooth' });\n");
         html.append(" } catch (e) {\n");
@@ -521,6 +522,7 @@ public class HtmlReportGeneratorApi {
             System.out.println("Report generated successfully at: report.html");
         } catch (IOException e) {
             System.err.println("Error writing HTML report: " + e.getMessage());
+            throw new RuntimeException("Failed to write HTML report", e);
         }
     }
 
@@ -565,7 +567,6 @@ public class HtmlReportGeneratorApi {
         return wrapped.toString();
     }
 
-    // Made public to allow reuse in RunApiTest without duplication (was private)
     public boolean isNoValidationFailure(String verifyResponse, String responseBody, ObjectMapper objectMapper) {
         String verifyValue = verifyResponse != null ? verifyResponse.trim() : "";
         String responseValue = responseBody != null ? responseBody.trim() : "";
@@ -654,13 +655,11 @@ public class HtmlReportGeneratorApi {
                 formattedContent = prettyXml;
                 System.out.println("formatContent: Formatted XML for class: " + cssClass + ", content: " + prettyXml);
             } else {
-                // Assume JSON
                 Object json = objectMapper.readValue(content, Object.class);
                 String prettyJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
                 formattedContent = prettyJson;
                 System.out.println("formatContent: Formatted JSON for class: " + cssClass + ", content: " + prettyJson);
             }
-            // Wrap long lines
             formattedContent = wrapLongLines(formattedContent, 100);
             String escaped = escapeHtml(formattedContent);
             String highlighted = highlightPlaceholders(escaped);
@@ -688,7 +687,7 @@ public class HtmlReportGeneratorApi {
         if (trimmed.startsWith("<?xml") || (trimmed.startsWith("<") && trimmed.contains(">") && trimmed.endsWith(">"))) {
             return "xml";
         }
-        return "json"; // Default to JSON for parsing attempt
+        return "json";
     }
 
     private String prettyPrintXml(String xml) {
@@ -706,7 +705,7 @@ public class HtmlReportGeneratorApi {
             transformer.transform(new DOMSource(document), new StreamResult(writer));
             return writer.getBuffer().toString();
         } catch (ParserConfigurationException | SAXException | IOException | TransformerException e) {
-            return xml; // Fallback to raw if parsing fails
+            return xml;
         }
     }
 
@@ -719,7 +718,6 @@ public class HtmlReportGeneratorApi {
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
             String anyValue = matcher.group();
-            // Quote dynamic part for safe appendReplacement
             String quotedAnyValue = Matcher.quoteReplacement(anyValue);
             matcher.appendReplacement(result, "<span style=\"color: #000000;\">" + quotedAnyValue + "</span>");
         }
@@ -732,28 +730,24 @@ public class HtmlReportGeneratorApi {
             return "<span class='not-available'>None</span>";
         }
         String text = original;
-        // Handle expected <value>,
         Pattern expPattern = Pattern.compile("expected\\s+([^,]+?)\\s*,\\s*");
         Matcher matcher = expPattern.matcher(text);
         StringBuffer sb = new StringBuffer();
         while (matcher.find()) {
             String value = matcher.group(1).trim();
             String escapedValue = escapeHtml(value);
-            // Quote dynamic part for safe appendReplacement
             String quotedValue = Matcher.quoteReplacement(escapedValue);
             String replacement = "expected <span style=\"color: #008000;\">" + quotedValue + "</span>, ";
             matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);
         String temp = sb.toString();
-        // Handle got <value>
         Pattern gotPattern = Pattern.compile("got\\s+(.+)");
         matcher = gotPattern.matcher(temp);
         sb = new StringBuffer();
         while (matcher.find()) {
             String value = matcher.group(1).trim();
             String escapedValue = escapeHtml(value);
-            // Quote dynamic part for safe appendReplacement
             String quotedValue = Matcher.quoteReplacement(escapedValue);
             String replacement = "got <span style=\"color: #FF0000;\">" + quotedValue + "</span>";
             matcher.appendReplacement(sb, replacement);
@@ -772,7 +766,6 @@ public class HtmlReportGeneratorApi {
         while (matcher.find()) {
             String placeholder = matcher.group();
             String escapedPlaceholder = escapeHtml(placeholder);
-            // Quote dynamic part for safe appendReplacement
             String quotedPlaceholder = Matcher.quoteReplacement(escapedPlaceholder);
             matcher.appendReplacement(result, "<span style=\"color: #FF0000;\">" + quotedPlaceholder + "</span>");
         }

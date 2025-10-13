@@ -85,9 +85,11 @@ public class HtmlReportGeneratorApi {
             padding: 8px;
             border: 1px solid #dee2e6;
             color: #000000;
+            vertical-align: top;
         }
         td {
             white-space: nowrap;
+            text-align: left;
         }
         table th {
             background-color: #0D6EFD !important;
@@ -96,6 +98,7 @@ public class HtmlReportGeneratorApi {
             top: 0;
             z-index: 2;
             white-space: nowrap;
+            text-align: center;
         }
         #testReportTable th:nth-child(6),
         #testReportTable td:nth-child(6) {

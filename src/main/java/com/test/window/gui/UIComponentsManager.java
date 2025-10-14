@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +18,8 @@ import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.fxmisc.richtext.model.StyleSpans;
+import org.fxmisc.richtext.model.StyleSpansBuilder;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -45,6 +49,9 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Manages the creation and configuration of UI components for the API test editor application.
  * This class handles the dynamic generation of text fields, combo boxes, buttons, and scrollable areas
@@ -58,9 +65,9 @@ public class UIComponentsManager {
     private enum ColumnIndex {
         TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
         PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
-        MODIFY_PAYLOAD_KEY(9), MODIFY_PAYLOAD_VALUE(10), RESPONSE_KEY_NAME(11),
-        CAPTURE_VALUE(12), AUTHORIZATION(13), AUTH_FIELD1(14), AUTH_FIELD2(15),
-        SSL_VALIDATION(16), EXPECTED_STATUS(17), VERIFY_RESPONSE(18), TEST_DESCRIPTION(19);
+        RESPONSE_KEY_NAME(9), CAPTURE_VALUE(10), AUTHORIZATION(11),
+        AUTH_FIELD1(12), AUTH_FIELD2(13), SSL_VALIDATION(14), EXPECTED_STATUS(15),
+        VERIFY_RESPONSE(16), TEST_DESCRIPTION(17);
 
         private final int index;
         ColumnIndex(int index) { this.index = index; }
@@ -70,52 +77,52 @@ public class UIComponentsManager {
     /**
      * Observable list of authorization options for the auth combo box.
      */
-    private static final ObservableList<String> AUTH_OPTIONS = 
+    private static final ObservableList<String> AUTH_OPTIONS =
         FXCollections.observableArrayList("", "Basic Auth", "Bearer Token");
 
     /**
      * Observable list of HTTP methods for the request combo box.
      */
-    private static final ObservableList<String> HTTP_METHODS = 
+    private static final ObservableList<String> HTTP_METHODS =
         FXCollections.observableArrayList("", "GET", "POST", "PUT", "PATCH", "DELETE");
 
     /**
      * Observable list of payload types for the payload type combo box.
      */
-    private static final ObservableList<String> PAYLOAD_TYPES = 
+    private static final ObservableList<String> PAYLOAD_TYPES =
         FXCollections.observableArrayList("", "json", "form-data", "urlencoded");
 
     /**
      * CSS style for unfocused text fields and combo boxes.
      */
-    private static final String FIELD_STYLE_UNFOCUSED = 
+    private static final String FIELD_STYLE_UNFOCUSED =
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
     /**
      * CSS style for focused text fields and combo boxes.
      */
-    private static final String FIELD_STYLE_FOCUSED = 
+    private static final String FIELD_STYLE_FOCUSED =
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
         "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
     /**
      * CSS style for disabled text fields and combo boxes.
      */
-    private static final String FIELD_STYLE_DISABLED = 
+    private static final String FIELD_STYLE_DISABLED =
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: #888888; " +
         "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
 
     /**
      * CSS style for buttons in their default state.
      */
-    private static final String BUTTON_STYLE = 
+    private static final String BUTTON_STYLE =
         "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
     /**
      * CSS style for buttons on hover.
      */
-    private static final String BUTTON_HOVER_STYLE = 
+    private static final String BUTTON_HOVER_STYLE =
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
 
     /**
@@ -166,7 +173,7 @@ public class UIComponentsManager {
     /**
      * Button for adding a step above the selected row.
      */
-    private Button addAboveButton, addBelowButton, moveUpButton, moveDownButton, 
+    private Button addAboveButton, addBelowButton, moveUpButton, moveDownButton,
                    deleteStepButton, deleteTestCaseButton, saveTestButton, createNewTestButton;
 
     /**
@@ -570,8 +577,8 @@ public class UIComponentsManager {
     }
 
     /**
-     * Creates a VBox containing additional content areas for headers, parameters, payload modifications,
-     * response captures, payload editing, and response verification.
+     * Creates a VBox containing additional content areas for headers, parameters, payload editing,
+     * response captures, and response verification.
      *
      * @return VBox containing the additional UI components
      */
@@ -592,30 +599,18 @@ public class UIComponentsManager {
         headerFieldsScroll.setMaxHeight(200);
         headerFieldsScroll.setMinHeight(200);
         headerFieldsVBox.setMaxHeight(190);
-        
+
         // VBox and ScrollPane for parameter key-value pairs
         VBox paramFieldsVBox = new VBox(5);
         paramFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
-        ScrollPane paramListField = new ScrollPane(paramFieldsVBox);
-        paramListField.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
-        paramListField.setFitToWidth(true);
-        paramListField.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        paramListField.setPrefHeight(200);
-        paramListField.setMaxHeight(200);
-        paramListField.setMinHeight(200);
+        ScrollPane paramScroll = new ScrollPane(paramFieldsVBox);
+        paramScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
+        paramScroll.setFitToWidth(true);
+        paramScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        paramScroll.setPrefHeight(200);
+        paramScroll.setMaxHeight(200);
+        paramScroll.setMinHeight(200);
         paramFieldsVBox.setMaxHeight(190);
-
-        // VBox and ScrollPane for modify payload key-value pairs
-        VBox modifyPayloadVBox = new VBox(5);
-        modifyPayloadVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
-        ScrollPane modifyPayloadScroll = new ScrollPane(modifyPayloadVBox);
-        modifyPayloadScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
-        modifyPayloadScroll.setFitToWidth(true);
-        modifyPayloadScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        modifyPayloadScroll.setPrefHeight(200);
-        modifyPayloadScroll.setMaxHeight(200);
-        modifyPayloadScroll.setMinHeight(200);
-        modifyPayloadVBox.setMaxHeight(190);
 
         // VBox and ScrollPane for response capture key-value pairs
         VBox responseCaptureVBox = new VBox(5);
@@ -633,13 +628,23 @@ public class UIComponentsManager {
         payloadField = new TextArea();
         payloadField.setPromptText("Payload");
         payloadField.setStyle(FIELD_STYLE_UNFOCUSED);
-        payloadField.setPrefHeight(200);
-        payloadField.setMinHeight(200);
-        payloadField.setMaxHeight(200);
+        payloadField.setPrefHeight(300);
+        payloadField.setMinHeight(300);
+        payloadField.setMaxHeight(300);
         payloadField.setWrapText(true);
         payloadField.setDisable(false);
         payloadField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             payloadField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+
+        // Listener for payload field changes to update table
+        payloadField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && payloadField.isEditable()) {
+                table.getItems().get(selectedIndex)[ColumnIndex.PAYLOAD.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
         });
 
         // Handle TAB key in payload field for focus traversal (no tab insertion)
@@ -661,13 +666,23 @@ public class UIComponentsManager {
         verifyResponseField = new TextArea();
         verifyResponseField.setPromptText("Verify Response");
         verifyResponseField.setStyle(FIELD_STYLE_UNFOCUSED);
-        verifyResponseField.setPrefHeight(200);
-        verifyResponseField.setMinHeight(200);
-        verifyResponseField.setMaxHeight(200);
+        verifyResponseField.setPrefHeight(310);
+        verifyResponseField.setMinHeight(310);
+        verifyResponseField.setMaxHeight(310);
         verifyResponseField.setWrapText(true);
         verifyResponseField.setDisable(false);
         verifyResponseField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             verifyResponseField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+
+        // Listener for verify response field changes to update table
+        verifyResponseField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && verifyResponseField.isEditable()) {
+                table.getItems().get(selectedIndex)[ColumnIndex.VERIFY_RESPONSE.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
         });
 
         // Handle TAB key in verify response field for focus traversal
@@ -685,39 +700,41 @@ public class UIComponentsManager {
             }
         });
 
-        // GridPane to layout the scroll panes and text areas in a 3-column grid
+        // Create left VBox for scroll panes
+        VBox leftVBox = new VBox(10, headerFieldsScroll, paramScroll, responseCaptureScroll);
+        leftVBox.setAlignment(Pos.TOP_LEFT);
+        GridPane.setValignment(leftVBox, VPos.TOP);
+        // Bind widths for left scrolls
+        paramScroll.prefWidthProperty().bind(headerFieldsScroll.widthProperty());
+        paramScroll.maxWidthProperty().bind(headerFieldsScroll.widthProperty());
+        responseCaptureScroll.prefWidthProperty().bind(headerFieldsScroll.widthProperty());
+        responseCaptureScroll.maxWidthProperty().bind(headerFieldsScroll.widthProperty());
+
+        // Create right VBox for text areas, with verifyResponseField under payloadField
+        VBox rightVBox = new VBox(10, payloadField, verifyResponseField);
+        rightVBox.setAlignment(Pos.TOP_LEFT);
+        GridPane.setValignment(rightVBox, VPos.TOP);
+
+        // GridPane to layout the left and right VBoxes
         GridPane additionalFields = new GridPane();
         additionalFields.setHgap(10);
         additionalFields.setVgap(10);
         additionalFields.setAlignment(Pos.CENTER_LEFT);
-        additionalFields.add(headerFieldsScroll, 0, 0);
-        GridPane.setValignment(headerFieldsScroll, VPos.TOP);
-        additionalFields.add(modifyPayloadScroll, 0, 1);
-        GridPane.setValignment(modifyPayloadScroll, VPos.TOP);
-        additionalFields.add(paramListField, 1, 0);
-        GridPane.setValignment(paramListField, VPos.TOP);
-        additionalFields.add(responseCaptureScroll, 1, 1);
-        GridPane.setValignment(responseCaptureScroll, VPos.TOP);
-        additionalFields.add(payloadField, 2, 0);
-        GridPane.setValignment(payloadField, VPos.TOP);
-        additionalFields.add(verifyResponseField, 2, 1);
-        GridPane.setValignment(verifyResponseField, VPos.TOP);
+        additionalFields.add(leftVBox, 0, 0);
+        additionalFields.add(rightVBox, 1, 0);
 
         // Set column widths for the grid
         ColumnConstraints col1 = new ColumnConstraints();
-        col1.setPercentWidth(26.73);
+        col1.setPercentWidth(40);
         ColumnConstraints col2 = new ColumnConstraints();
-        col2.setPercentWidth(26.73);
-        ColumnConstraints col3 = new ColumnConstraints();
-        col3.setPercentWidth(46.54);
-        additionalFields.getColumnConstraints().addAll(col1, col2, col3);
+        col2.setPercentWidth(60);
+        additionalFields.getColumnConstraints().addAll(col1, col2);
         additionalContent.getChildren().add(additionalFields);
 
         // Listener for table selection to populate dynamic fields (headers, params, etc.) for test steps
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
             // Clear all dynamic field containers
             headerFieldsVBox.getChildren().clear();
-            modifyPayloadVBox.getChildren().clear();
             paramFieldsVBox.getChildren().clear();
             responseCaptureVBox.getChildren().clear();
             if (newItem != null) {
@@ -730,10 +747,8 @@ public class UIComponentsManager {
                     }
                 }
                 boolean isValid = CreateEditAPITest.isValidTestId(testId, testIds, testId);
-                payloadField.setDisable(false);
-                payloadField.setEditable(isValid);
-                verifyResponseField.setDisable(false);
-                verifyResponseField.setEditable(isValid);
+                payloadField.setDisable(!isValid);
+                verifyResponseField.setDisable(!isValid);
 
                 if (!isValid) {
                     payloadField.clear();
@@ -741,9 +756,15 @@ public class UIComponentsManager {
                     return;
                 }
 
+                // Populate payload and verify response fields with formatted JSON
+                String payload = newItem[ColumnIndex.PAYLOAD.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD.getIndex()] : "";
+                payloadField.setText(CreateEditAPITest.formatJson(payload, statusLabel));
+                String verify = newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] != null ? newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] : "";
+                verifyResponseField.setText(CreateEditAPITest.formatJson(verify, statusLabel));
+
                 // Find start of current test case block
                 int start = selectedIndex;
-                while (start >= 0 && (table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()] == null || 
+                while (start >= 0 && (table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()] == null ||
                         table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
                     start--;
                 }
@@ -753,7 +774,7 @@ public class UIComponentsManager {
                 List<Integer> rowIndices = new ArrayList<>();
                 for (int i = start; i < table.getItems().size(); i++) {
                     String[] r = table.getItems().get(i);
-                    if (i > start && r[ColumnIndex.TEST_ID.getIndex()] != null && 
+                    if (i > start && r[ColumnIndex.TEST_ID.getIndex()] != null &&
                             !r[ColumnIndex.TEST_ID.getIndex()].isEmpty()) break;
                     rowIndices.add(i);
                 }
@@ -763,7 +784,7 @@ public class UIComponentsManager {
                     String[] row = table.getItems().get(rowIndex);
 
                     // Header key-value pair
-                    TextField headerKeyField = new TextField(row[ColumnIndex.HEADER_KEY.getIndex()] != null ? 
+                    TextField headerKeyField = new TextField(row[ColumnIndex.HEADER_KEY.getIndex()] != null ?
                             row[ColumnIndex.HEADER_KEY.getIndex()] : "");
                     headerKeyField.setPromptText("Header Key");
                     headerKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -772,11 +793,11 @@ public class UIComponentsManager {
                         headerKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
 
-                    TextField headerValueField = new TextField(row[ColumnIndex.HEADER_VALUE.getIndex()] != null ? 
+                    TextField headerValueField = new TextField(row[ColumnIndex.HEADER_VALUE.getIndex()] != null ?
                             row[ColumnIndex.HEADER_VALUE.getIndex()] : "");
                     headerValueField.setPromptText("Header Value");
                     headerValueField.setStyle(FIELD_STYLE_UNFOCUSED);
-                    headerKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    headerValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
                     headerValueField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
                         headerValueField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
@@ -804,50 +825,8 @@ public class UIComponentsManager {
 
                     headerFieldsVBox.getChildren().add(headerPair);
 
-                    // Modify payload key-value pair
-                    TextField modifyKeyField = new TextField(row[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] != null ? 
-                            row[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] : "");
-                    modifyKeyField.setPromptText("Modify Payload Key");
-                    modifyKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
-                    modifyKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
-                    modifyKeyField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        modifyKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-                    });
-
-                    TextField modifyValueField = new TextField(row[ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex()] != null ? 
-                            row[ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex()] : "");
-                    modifyValueField.setPromptText("Modify Payload Value");
-                    modifyValueField.setStyle(FIELD_STYLE_UNFOCUSED);
-                    modifyValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
-                    modifyValueField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        modifyValueField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-                    });
-
-                    HBox modifyPair = new HBox(5, modifyKeyField, modifyValueField);
-                    modifyPair.setAlignment(Pos.CENTER_LEFT);
-                    modifyKeyField.prefWidthProperty().bind(modifyPayloadScroll.widthProperty().multiply(0.5).subtract(8.5));
-                    modifyKeyField.maxWidthProperty().bind(modifyKeyField.prefWidthProperty());
-                    modifyKeyField.minWidthProperty().bind(modifyKeyField.prefWidthProperty());
-                    modifyValueField.prefWidthProperty().bind(modifyPayloadScroll.widthProperty().multiply(0.5).subtract(8.5));
-                    modifyValueField.maxWidthProperty().bind(modifyValueField.prefWidthProperty());
-                    modifyValueField.minWidthProperty().bind(modifyValueField.prefWidthProperty());
-
-                    modifyKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
-                    modifyValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
-                    modifyPayloadVBox.getChildren().add(modifyPair);
-
                     // Parameter key-value pair
-                    TextField paramKeyField = new TextField(row[ColumnIndex.PARAM_KEY.getIndex()] != null ? 
+                    TextField paramKeyField = new TextField(row[ColumnIndex.PARAM_KEY.getIndex()] != null ?
                             row[ColumnIndex.PARAM_KEY.getIndex()] : "");
                     paramKeyField.setPromptText("Parameter Key");
                     paramKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -856,7 +835,7 @@ public class UIComponentsManager {
                         paramKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
 
-                    TextField paramValueField = new TextField(row[ColumnIndex.PARAM_VALUE.getIndex()] != null ? 
+                    TextField paramValueField = new TextField(row[ColumnIndex.PARAM_VALUE.getIndex()] != null ?
                             row[ColumnIndex.PARAM_VALUE.getIndex()] : "");
                     paramValueField.setPromptText("Parameter Value");
                     paramValueField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -867,10 +846,10 @@ public class UIComponentsManager {
 
                     HBox paramPair = new HBox(5, paramKeyField, paramValueField);
                     paramPair.setAlignment(Pos.CENTER_LEFT);
-                    paramKeyField.prefWidthProperty().bind(paramListField.widthProperty().multiply(0.5).subtract(8.5));
+                    paramKeyField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
                     paramKeyField.maxWidthProperty().bind(paramKeyField.prefWidthProperty());
                     paramKeyField.minWidthProperty().bind(paramKeyField.prefWidthProperty());
-                    paramValueField.prefWidthProperty().bind(paramListField.widthProperty().multiply(0.5).subtract(8.5));
+                    paramValueField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
                     paramValueField.maxWidthProperty().bind(paramValueField.prefWidthProperty());
                     paramValueField.minWidthProperty().bind(paramValueField.prefWidthProperty());
 
@@ -889,7 +868,7 @@ public class UIComponentsManager {
                     paramFieldsVBox.getChildren().add(paramPair);
 
                     // Response key-capture value pair
-                    TextField responseKeyField = new TextField(row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] != null ? 
+                    TextField responseKeyField = new TextField(row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] != null ?
                             row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] : "");
                     responseKeyField.setPromptText("Response Key Name");
                     responseKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -898,7 +877,7 @@ public class UIComponentsManager {
                         responseKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
 
-                    TextField captureValueField = new TextField(row[ColumnIndex.CAPTURE_VALUE.getIndex()] != null ? 
+                    TextField captureValueField = new TextField(row[ColumnIndex.CAPTURE_VALUE.getIndex()] != null ?
                             row[ColumnIndex.CAPTURE_VALUE.getIndex()] : "");
                     captureValueField.setPromptText("Capture Value (env var)");
                     captureValueField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -909,10 +888,10 @@ public class UIComponentsManager {
 
                     HBox responsePair = new HBox(5, responseKeyField, captureValueField);
                     responsePair.setAlignment(Pos.CENTER_LEFT);
-                    responseKeyField.prefWidthProperty().bind(responseCaptureScroll.widthProperty().multiply(0.5).subtract(8.5));
+                    responseKeyField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
                     responseKeyField.maxWidthProperty().bind(responseKeyField.prefWidthProperty());
                     responseKeyField.minWidthProperty().bind(responseKeyField.prefWidthProperty());
-                    captureValueField.prefWidthProperty().bind(responseCaptureScroll.widthProperty().multiply(0.5).subtract(8.5));
+                    captureValueField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
                     captureValueField.maxWidthProperty().bind(captureValueField.prefWidthProperty());
                     captureValueField.minWidthProperty().bind(captureValueField.prefWidthProperty());
 
@@ -930,20 +909,12 @@ public class UIComponentsManager {
 
                     responseCaptureVBox.getChildren().add(responsePair);
                 }
-
-                // Populate payload and verify response fields with formatted JSON
-                String payload = newItem[ColumnIndex.PAYLOAD.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD.getIndex()] : "";
-                payloadField.setText(CreateEditAPITest.formatJson(payload, statusLabel));
-                String verify = newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] != null ? newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] : "";
-                verifyResponseField.setText(CreateEditAPITest.formatJson(verify, statusLabel));
             } else {
                 // Disable and clear payload and verify fields when no selection
                 payloadField.clear();
-                payloadField.setDisable(false);
-                payloadField.setEditable(false);
+                payloadField.setDisable(true);
                 verifyResponseField.clear();
-                verifyResponseField.setDisable(false);
-                verifyResponseField.setEditable(false);
+                verifyResponseField.setDisable(true);
             }
         });
 
@@ -959,8 +930,8 @@ public class UIComponentsManager {
      * @param saveAsToFile function to save as a new file
      * @return VBox containing the buttons
      */
-    public VBox createButtonsVBox(Stage primaryStage, Function<Stage, Boolean> checkUnsavedChanges, 
-                                  BiFunction<File, Stage, Boolean> saveToFile, 
+    public VBox createButtonsVBox(Stage primaryStage, Function<Stage, Boolean> checkUnsavedChanges,
+                                  BiFunction<File, Stage, Boolean> saveToFile,
                                   Function<Stage, Boolean> saveAsToFile) {
         // Main container for buttons
         VBox buttonsVBox = new VBox(10);
@@ -1110,13 +1081,13 @@ public class UIComponentsManager {
                 if (result.isPresent() && result.get() == ButtonType.OK) {
                     // Find start and end of test case block
                     int startIndex = selectedIndex;
-                    while (startIndex > 0 && (table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()] == null || 
+                    while (startIndex > 0 && (table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()] == null ||
                             table.getItems().get(startIndex - 1)[ColumnIndex.TEST_ID.getIndex()].isEmpty())) {
                         startIndex--;
                     }
                     int endIndex = startIndex;
-                    while (endIndex < table.getItems().size() && (table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()] == null || 
-                            table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].isEmpty() || 
+                    while (endIndex < table.getItems().size() && (table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()] == null ||
+                            table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].isEmpty() ||
                             table.getItems().get(endIndex)[ColumnIndex.TEST_ID.getIndex()].equals(testId))) {
                         endIndex++;
                     }
@@ -1225,7 +1196,7 @@ public class UIComponentsManager {
                                     } else {
                                         testId = cell.toString().trim();
                                     }
-                                    if (!testId.isEmpty() && !CreateEditAPITest.isValidTestId(testId, testIds, null)) {
+                                    if (!testId.isEmpty() && !CreateEditAPITest.isValidTestId(testId, testIds, testId)) {
                                         String fileName = file.getName().replaceFirst("[.][^.]+$", "");
                                         CreateEditAPITest.showError("Invalid Test ID '" + testId + "' in row " + (i + 1) + " of " + fileName + ". Must be digits, length <= 5, and unique.");
                                         return;
@@ -1315,7 +1286,7 @@ public class UIComponentsManager {
         importCollectionButton.setTooltip(new Tooltip("Import a collection of test cases"));
         importCollectionButton.setOnMouseEntered(e -> importCollectionButton.setStyle(BUTTON_HOVER_STYLE));
         importCollectionButton.setOnMouseExited(e -> importCollectionButton.setStyle(BUTTON_STYLE));
-        
+
         importCollectionButton.setOnAction(e -> {
             if (!checkUnsavedChanges.apply(primaryStage)) {
                 return;
@@ -1377,7 +1348,7 @@ public class UIComponentsManager {
         saveTestButton.setDisable(!hasItems);
         createNewTestButton.setDisable(false);
     }
-    
+
     /**
      * Moves focus to the next or previous traversable node in the scene.
      *
@@ -1387,7 +1358,7 @@ public class UIComponentsManager {
     private void moveFocus(Node fromNode, boolean next) {
         List<Node> traversables = new ArrayList<>();
         addTraversableNodes(fromNode.getScene().getRoot(), traversables);
-        int currentIndex = traversables.indexOf(fromNode.getScene().getFocusOwner());
+        int currentIndex = traversables.indexOf(fromNode);
         if (currentIndex >= 0) {
             int targetIndex = currentIndex + (next ? 1 : -1);
             if (targetIndex < 0) {
@@ -1413,7 +1384,7 @@ public class UIComponentsManager {
             ((Parent) node).getChildrenUnmodifiable().forEach(child -> addTraversableNodes(child, list));
         }
     }
-    
+
     /**
      * Closes the environment variables stage if it is open.
      */
@@ -1422,5 +1393,26 @@ public class UIComponentsManager {
             envVarStage.close();
         }
         envVarStage = null;
+    }
+    
+    /**
+     * Simple highlighter for {{any-text}} in pink (used by StyledTextArea).
+     */
+    private StyleSpans<Collection<String>> computeHighlighting(String text) {
+        StyleSpansBuilder<Collection<String>> spansBuilder = new StyleSpansBuilder<>();
+        Pattern pattern = Pattern.compile("\\{\\{[^}]+\\}\\}");  // Matches {{any-text}}
+        Matcher matcher = pattern.matcher(text);
+        int lastEnd = 0;
+
+        while (matcher.find()) {
+            // Plain text before match
+            spansBuilder.add(Collections.emptyList(), matcher.start() - lastEnd);
+            // Highlighted match (pink + bold)
+            spansBuilder.add(Collections.singleton("-fx-fill: pink; -fx-font-weight: bold;"), matcher.end() - matcher.start());
+            lastEnd = matcher.end();
+        }
+        // Remaining plain text
+        spansBuilder.add(Collections.emptyList(), text.length() - lastEnd);
+        return spansBuilder.create();
     }
 }

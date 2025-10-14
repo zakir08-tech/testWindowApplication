@@ -322,8 +322,7 @@ public class PostmanCollectionImporter {
         String[] columns = {
             "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
             "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-            "Modify Payload (key)", "Modify Payload (value)", "Response (key) Name",
-            "Capture (key) Value (env var)", "Authorization", "", "",
+             "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
             "SSL Validation", "Expected Status", "Verify Response", "Test Description"
         };
 
@@ -406,22 +405,22 @@ public class PostmanCollectionImporter {
                 row[8] = request.bodyType != null ? request.bodyType : ""; // Payload Type
 
                 // Unpopulated fields
-                row[9] = ""; // Modify Payload (key)
-                row[10] = ""; // Modify Payload (value)
-                row[11] = ""; // Response (key) Name
-                row[12] = ""; // Capture (key) Value (env var)
+                //row[9] = ""; // Modify Payload (key)
+                //row[10] = ""; // Modify Payload (value)
+                row[9] = ""; // Response (key) Name
+                row[10] = ""; // Capture (key) Value (env var)
 
                 // Authorization: empty if header present, else use extracted value
                 boolean hasAuthorizationHeader = request.headers != null &&
                         request.headers.keySet().stream().anyMatch(key -> key.equalsIgnoreCase("Authorization"));
-                row[13] = hasAuthorizationHeader ? "" : (request.authorization != null ? request.authorization : "");
+                row[11] = hasAuthorizationHeader ? "" : (request.authorization != null ? request.authorization : "");
 
-                row[14] = ""; // Empty
-                row[15] = ""; // Empty
-                row[16] = ""; // SSL Validation
-                row[17] = "200"; // Expected Status (default)
-                row[18] = ""; // Verify Response
-                row[19] = request.name != null ? request.name : ""; // Test Description
+                row[12] = ""; // Empty
+                row[13] = ""; // Empty
+                row[14] = ""; // SSL Validation
+                row[15] = "200"; // Expected Status (default)
+                row[16] = ""; // Verify Response
+                row[17] = request.name != null ? request.name : ""; // Test Description
 
                 // Set header if available for this row index
                 if (headerIndex < headerCount && request.headers != null) {

@@ -40,9 +40,9 @@ public class TableManager {
     private enum ColumnIndex {
         TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
         PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
-        MODIFY_PAYLOAD_KEY(9), MODIFY_PAYLOAD_VALUE(10), RESPONSE_KEY_NAME(11),
-        CAPTURE_VALUE(12), AUTHORIZATION(13), AUTH_FIELD1(14), AUTH_FIELD2(15),
-        SSL_VALIDATION(16), EXPECTED_STATUS(17), VERIFY_RESPONSE(18), TEST_DESCRIPTION(19);
+        RESPONSE_KEY_NAME(9), CAPTURE_VALUE(10), AUTHORIZATION(11),
+        AUTH_FIELD1(12), AUTH_FIELD2(13), SSL_VALIDATION(14), EXPECTED_STATUS(15),
+        VERIFY_RESPONSE(16), TEST_DESCRIPTION(17);
 
         private final int index;
         ColumnIndex(int index) { this.index = index; }
@@ -53,7 +53,7 @@ public class TableManager {
      * Observable list of supported HTTP methods for the request column.
      * Includes an empty option for no method selection.
      */
-    private static final ObservableList<String> HTTP_METHODS = 
+    private static final ObservableList<String> HTTP_METHODS =
         FXCollections.observableArrayList("", "GET", "POST", "PUT", "PATCH", "DELETE");
 
     /** The main TableView instance managed by this class. */
@@ -124,8 +124,6 @@ public class TableManager {
                                  index == ColumnIndex.PARAM_KEY.getIndex() ||
                                  index == ColumnIndex.PARAM_VALUE.getIndex() ||
                                  index == ColumnIndex.PAYLOAD.getIndex() ||
-                                 index == ColumnIndex.MODIFY_PAYLOAD_KEY.getIndex() ||
-                                 index == ColumnIndex.MODIFY_PAYLOAD_VALUE.getIndex() ||
                                  index == ColumnIndex.RESPONSE_KEY_NAME.getIndex() ||
                                  index == ColumnIndex.CAPTURE_VALUE.getIndex() ||
                                  index == ColumnIndex.AUTHORIZATION.getIndex() ||

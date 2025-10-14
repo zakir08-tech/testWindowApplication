@@ -53,7 +53,7 @@ public class CreateEditAPITest extends Application {
     private static final String[] COLUMN_NAMES = {
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-        "Modify Payload (key)", "Modify Payload (value)", "Response (key) Name",
+        "Response (key) Name",
         "Capture (key) Value (env var)", "Authorization", "", "",
         "SSL Validation", "Expected Status", "Verify Response", "Test Description"
     };

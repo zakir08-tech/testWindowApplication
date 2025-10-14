@@ -206,9 +206,8 @@ public class RunApiTest extends Application {
     private static final Set<String> REQUIRED_HEADERS = new HashSet<>(Arrays.asList(
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-        "Modify Payload (key)", "Modify Payload (value)", "Response (key) Name",
-        "Capture (key) Value (env var)", "Authorization", "", ""
-        , "SSL Validation", "Expected Status", "Verify Response",
+        "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
+        "SSL Validation", "Expected Status", "Verify Response",
         "Test Description"
     ));
 

@@ -15,8 +15,10 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.CheckBoxTableCell;
+import javafx.scene.image.Image;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -24,6 +26,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.test.window.app.UIConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.io.File;
@@ -211,7 +214,15 @@ public class RunApiTest extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        testCases = FXCollections.observableArrayList();
+    	 // Set the window icon
+        try {
+        	Image backgroundImage = new Image("file:" + UIConstants.UI_ICON);
+            primaryStage.getIcons().add(backgroundImage);
+        } catch (Exception e) {
+            System.err.println("Error setting window icon: " + e.getMessage());
+        }
+        
+    	testCases = FXCollections.observableArrayList();
         table = new TableView<>(testCases);
         table.setStyle("-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
                 "-fx-table-cell-border-color: #3C3F41; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
@@ -293,12 +304,31 @@ public class RunApiTest extends Application {
         selectAllCheckBox = new CheckBox("Select All");
         selectAllCheckBox.setStyle(FIELD_STYLE_UNFOCUSED);
         selectAllCheckBox.setSelected(false);
-        selectAllCheckBox.setOnAction(e -> {
-            boolean selected = selectAllCheckBox.isSelected();
-            for (TestCase testCase : testCases) {
-                testCase.runProperty().set(selected);
-            }
-        });
+
+        loadButton = new Button("Load");
+        loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
+        loadButton.setTooltip(new Tooltip("Load test cases from an Excel test suite"));
+        loadButton.setOnMouseEntered(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
+        loadButton.setOnMouseExited(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
+
+        runButton = new Button("Run");
+        runButton.setStyle(RUN_BUTTON_STYLE);
+        runButton.setTooltip(new Tooltip("Run selected test cases"));
+        runButton.setOnMouseEntered(e -> runButton.setStyle(RUN_BUTTON_HOVER_STYLE));
+        runButton.setOnMouseExited(e -> runButton.setStyle(RUN_BUTTON_STYLE));
+
+        stopButton = new Button("Stop");
+        stopButton.setStyle(STOP_BUTTON_STYLE);
+        stopButton.setTooltip(new Tooltip("Stop running test cases"));
+        stopButton.setDisable(true);
+        stopButton.setOnMouseEntered(e -> stopButton.setStyle(STOP_BUTTON_HOVER_STYLE));
+        stopButton.setOnMouseExited(e -> stopButton.setStyle(STOP_BUTTON_STYLE));
+
+        refreshButton = new Button("Refresh");
+        refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
+        refreshButton.setTooltip(new Tooltip("Refresh test cases from the last loaded file"));
+        refreshButton.setOnMouseEntered(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
+        refreshButton.setOnMouseExited(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
 
         testCases.addListener((ListChangeListener<TestCase>) change -> {
             while (change.next()) {
@@ -309,7 +339,18 @@ public class RunApiTest extends Application {
                 }
             }
             updateSelectAllState();
+            updateRunButtonState();
         });
+
+        selectAllCheckBox.setOnAction(e -> {
+            boolean selected = selectAllCheckBox.isSelected();
+            for (TestCase testCase : testCases) {
+                testCase.runProperty().set(selected);
+            }
+        });
+
+        updateSelectAllState();
+        updateRunButtonState();
 
         table.setOnScroll(event -> {
             ScrollBar verticalScrollBar = getVerticalScrollBar();
@@ -318,16 +359,8 @@ public class RunApiTest extends Application {
             }
         });
 
-        loadButton = new Button("Load");
-        loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
-        loadButton.setTooltip(new Tooltip("Load test cases from an Excel test suite"));
         loadButton.setOnAction(e -> loadTestCases(primaryStage, true));
-        loadButton.setOnMouseEntered(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
-        loadButton.setOnMouseExited(e -> loadButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
 
-        runButton = new Button("Run");
-        runButton.setStyle(RUN_BUTTON_STYLE);
-        runButton.setTooltip(new Tooltip("Run selected test cases"));
         runButton.setOnAction(e -> {
             reportDataList.clear();
             runTask = new Task<Void>() {
@@ -690,6 +723,7 @@ public class RunApiTest extends Application {
                         loadButton.setDisable(false);
                         refreshButton.setDisable(false);
                         stopButton.setDisable(true);
+                        updateRunButtonState();
 
                         try {
                             HtmlReportGeneratorApi reportGenerator = new HtmlReportGeneratorApi();
@@ -713,13 +747,7 @@ public class RunApiTest extends Application {
             };
             new Thread(runTask).start();
         });
-        runButton.setOnMouseEntered(e -> runButton.setStyle(RUN_BUTTON_HOVER_STYLE));
-        runButton.setOnMouseExited(e -> runButton.setStyle(RUN_BUTTON_STYLE));
 
-        stopButton = new Button("Stop");
-        stopButton.setStyle(STOP_BUTTON_STYLE);
-        stopButton.setTooltip(new Tooltip("Stop running test cases"));
-        stopButton.setDisable(true);
         stopButton.setOnAction(e -> {
             if (runTask != null) {
                 runTask.cancel();
@@ -728,18 +756,21 @@ public class RunApiTest extends Application {
             loadButton.setDisable(false);
             refreshButton.setDisable(false);
             stopButton.setDisable(true);
+            updateRunButtonState();
         });
-        stopButton.setOnMouseEntered(e -> stopButton.setStyle(STOP_BUTTON_HOVER_STYLE));
-        stopButton.setOnMouseExited(e -> stopButton.setStyle(STOP_BUTTON_STYLE));
 
-        refreshButton = new Button("Refresh");
-        refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE);
-        refreshButton.setTooltip(new Tooltip("Refresh test cases from the last loaded file"));
         refreshButton.setOnAction(e -> loadTestCases(primaryStage, false));
-        refreshButton.setOnMouseEntered(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_HOVER_STYLE));
-        refreshButton.setOnMouseExited(e -> refreshButton.setStyle(LOAD_REFRESH_BUTTON_STYLE));
 
-        HBox buttonBox = new HBox(10, loadButton, refreshButton, runButton, stopButton);
+        HBox leftButtons = new HBox(10, loadButton, refreshButton);
+        leftButtons.setAlignment(Pos.CENTER_LEFT);
+
+        HBox rightButtons = new HBox(10, runButton, stopButton);
+        rightButtons.setAlignment(Pos.CENTER_RIGHT);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox buttonBox = new HBox(10, leftButtons, spacer, rightButtons);
         buttonBox.setAlignment(Pos.CENTER);
         buttonBox.setPadding(new Insets(10));
 
@@ -757,6 +788,10 @@ public class RunApiTest extends Application {
         primaryStage.setTitle("API Test Runner");
         primaryStage.setScene(scene);
         primaryStage.show();
+    }
+
+    private void updateRunButtonState() {
+        runButton.setDisable(testCases.isEmpty());
     }
 
     private void updateSelectAllState() {

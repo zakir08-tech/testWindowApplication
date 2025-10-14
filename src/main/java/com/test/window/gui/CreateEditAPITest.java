@@ -11,6 +11,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.image.Image;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -20,6 +21,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.test.window.app.UIConstants;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -278,6 +281,14 @@ public class CreateEditAPITest extends Application {
     @Override
     public void start(Stage primaryStage) {
         try {
+        	 // Set the window icon
+            try {
+            	Image backgroundImage = new Image("file:" + UIConstants.UI_ICON);
+                primaryStage.getIcons().add(backgroundImage);
+            } catch (Exception e) {
+                System.err.println("Error setting window icon: " + e.getMessage());
+            }
+
             // Initialize status label for displaying messages
             statusLabel = new Label();
             statusLabel.setStyle("-fx-text-fill: #FF5555;");
@@ -324,9 +335,10 @@ public class CreateEditAPITest extends Application {
             primaryStage.setScene(scene);
             primaryStage.setMinWidth(800);
             primaryStage.setMinHeight(600);
-            primaryStage.setMaximized(true);
             primaryStage.setTitle("Table with JSON Viewer");
             primaryStage.show();
+            primaryStage.setMaximized(true);
+            primaryStage.setResizable(false);
 
             // Listener for CSS loading issues
             scene.getStylesheets().addListener((javafx.collections.ListChangeListener<String>) change -> {

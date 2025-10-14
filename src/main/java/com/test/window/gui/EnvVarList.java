@@ -17,6 +17,7 @@ import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.TextFieldTableCell;
+import javafx.scene.image.Image;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
@@ -29,6 +30,7 @@ import javafx.util.StringConverter;
 import javafx.scene.control.TextFormatter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.test.window.app.UIConstants;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.io.File;
@@ -259,7 +261,15 @@ public class EnvVarList extends Application {
      */
     @Override
     public void start(Stage primaryStage) {
-        table = createTable();
+    	 // Set the window icon
+        try {
+        	Image backgroundImage = new Image("file:" + UIConstants.UI_ICON);
+            primaryStage.getIcons().add(backgroundImage);
+        } catch (Exception e) {
+            System.err.println("Error setting window icon: " + e.getMessage());
+        }
+        
+    	table = createTable();
 
         statusLabel = new Label();
         statusLabel.setStyle("-fx-text-fill: #FF5555;");

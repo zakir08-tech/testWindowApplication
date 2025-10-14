@@ -37,6 +37,7 @@ public class LaunchScreenApi extends Application {
     // Track specific stages to prevent duplicate windows
     private Stage testCreateEditApiTest = null;
     private Stage testRunApiTest = null;
+    private Stage envVarListStage = null;
 
     /**
      * Entry point for the JavaFX application. Initializes the primary stage with the launch screen UI.
@@ -102,7 +103,7 @@ public class LaunchScreenApi extends Application {
             // Create and style the title text
             Text title = new Text("Phantom");
             title.setFont(Font.font("Impact", FontWeight.BOLD, 50));
-            title.setFill(Color.WHITE);
+            title.setFill(Color.web("#4A90E2"));
 
             // Add glow and inner shadow effects to the title text
             Glow glow = new Glow(0.6); // Moderate glow intensity
@@ -128,23 +129,28 @@ public class LaunchScreenApi extends Application {
             // Create and style the "Create/Edit Test" button
             Button createEditButton = new Button("Create/Edit Test");
             createEditButton.setFont(Font.font("Arial", FontWeight.BOLD, 16));
-            createEditButton.setStyle("-fx-background-color: #333333; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
+            createEditButton.setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
 
             // Create and style the "Run Test" button
             Button runTestButton = new Button("Run Test");
             runTestButton.setFont(Font.font("Arial", FontWeight.BOLD, 16));
-            runTestButton.setStyle("-fx-background-color: #333333; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
+            runTestButton.setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
+
+            // Create and style the "Environment Variables" button
+            Button envButton = new Button("Environment Variables");
+            envButton.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+            envButton.setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
 
             // Add hover effects for createEditButton
             ScaleTransition createButtonHover = new ScaleTransition(Duration.millis(200), createEditButton);
             createButtonHover.setToX(1.05); // Scale up by 5%
             createButtonHover.setToY(1.05);
             createEditButton.setOnMouseEntered(e -> {
-                createEditButton.setStyle("-fx-background-color: #4a4a4a; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
+                createEditButton.setStyle("-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
                 createButtonHover.playFromStart();
             });
             createEditButton.setOnMouseExited(e -> {
-                createEditButton.setStyle("-fx-background-color: #333333; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
+                createEditButton.setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
                 createButtonHover.setToX(1.0);
                 createButtonHover.setToY(1.0);
                 createButtonHover.playFromStart();
@@ -155,14 +161,29 @@ public class LaunchScreenApi extends Application {
             runButtonHover.setToX(1.05); // Scale up by 5%
             runButtonHover.setToY(1.05);
             runTestButton.setOnMouseEntered(e -> {
-                runTestButton.setStyle("-fx-background-color: #4a4a4a; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
+                runTestButton.setStyle("-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
                 runButtonHover.playFromStart();
             });
             runTestButton.setOnMouseExited(e -> {
-                runTestButton.setStyle("-fx-background-color: #333333; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
+                runTestButton.setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
                 runButtonHover.setToX(1.0);
                 runButtonHover.setToY(1.0);
                 runButtonHover.playFromStart();
+            });
+
+            // Add hover effects for envButton
+            ScaleTransition envButtonHover = new ScaleTransition(Duration.millis(200), envButton);
+            envButtonHover.setToX(1.05); // Scale up by 5%
+            envButtonHover.setToY(1.05);
+            envButton.setOnMouseEntered(e -> {
+                envButton.setStyle("-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
+                envButtonHover.playFromStart();
+            });
+            envButton.setOnMouseExited(e -> {
+                envButton.setStyle("-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5; -fx-min-width: 100px;");
+                envButtonHover.setToX(1.0);
+                envButtonHover.setToY(1.0);
+                envButtonHover.playFromStart();
             });
 
             // Handle "Create/Edit Test" button action
@@ -199,8 +220,25 @@ public class LaunchScreenApi extends Application {
                 }
             });
 
+            // Handle "Environment Variables" button action
+            envButton.setOnAction(e -> {
+                try {
+                    if (envVarListStage == null || !envVarListStage.isShowing()) {
+                        // Create a new stage if none exists or it's not showing
+                        envVarListStage = new Stage();
+                        EnvVarList envApp = new EnvVarList();
+                        envApp.start(envVarListStage);
+                        openStages.add(envVarListStage);
+                    } else {
+                        envVarListStage.requestFocus(); // Bring existing window to focus
+                    }
+                } catch (Exception ex) {
+                    System.err.println("Error opening Environment Variables: " + ex.getMessage());
+                }
+            });
+
             // Stack buttons vertically with spacing
-            VBox buttonBox = new VBox(10, createEditButton, runTestButton);
+            VBox buttonBox = new VBox(10, createEditButton, runTestButton, envButton);
             buttonBox.setLayoutX(imageWidth + 20); // Padding from image
             buttonBox.setLayoutY(windowHeight - 100); // Position 100 pixels from bottom
 
@@ -219,10 +257,13 @@ public class LaunchScreenApi extends Application {
             }
 
             // Handle window close request to clean up all open stages
-            primaryStage.setOnCloseRequest(e -> {
+            primaryStage.setOnCloseRequest(event -> {
                 try {
+                    // Close any open EnvVarList from UIComponentsManager
+                    UIComponentsManager.closeEnvVarStage();
+                    
                     for (Stage stage : new ArrayList<>(openStages)) {
-                        if (stage.isShowing()) {
+                        if (stage != null && stage.isShowing()) {
                             stage.close();
                         }
                     }

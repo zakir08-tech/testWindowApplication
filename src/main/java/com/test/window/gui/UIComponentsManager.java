@@ -1413,4 +1413,14 @@ public class UIComponentsManager {
             ((Parent) node).getChildrenUnmodifiable().forEach(child -> addTraversableNodes(child, list));
         }
     }
+    
+    /**
+     * Closes the environment variables stage if it is open.
+     */
+    public static void closeEnvVarStage() {
+        if (envVarStage != null && envVarStage.isShowing()) {
+            envVarStage.close();
+        }
+        envVarStage = null;
+    }
 }

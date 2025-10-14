@@ -156,6 +156,11 @@ public class EnvVarList extends Application {
     private TableView<String[]> table;
 
     /**
+     * Flag to track if there are unsaved changes in the table.
+     */
+    private boolean hasUnsavedChanges = false;
+
+    /**
      * Validates an environment variable name.
      * - Allows empty names (for clearing).
      * - Ensures uniqueness (case-insensitive, excluding current row).
@@ -226,9 +231,36 @@ public class EnvVarList extends Application {
     }
 
     /**
+     * Updates the unsaved changes flag based on comparison with the loaded file.
+     */
+    private void updateUnsavedChangesFlag() {
+        try {
+            File file = new File("env.json");
+            if (!file.exists()) {
+                hasUnsavedChanges = !table.getItems().isEmpty();
+                return;
+            }
+            Map<String, String> fileMap = objectMapper.readValue(file, new TypeReference<LinkedHashMap<String, String>>() {});
+            Map<String, String> tableMap = new LinkedHashMap<>();
+            for (String[] row : table.getItems()) {
+                String name = row[0] != null ? row[0].trim() : "";
+                String value = row[1] != null ? row[1].trim() : "";
+                if (!name.isEmpty()) {
+                    tableMap.put(name, value);
+                }
+            }
+            hasUnsavedChanges = !fileMap.equals(tableMap);
+        } catch (Exception ex) {
+            // If file read fails, assume changes exist to be safe
+            hasUnsavedChanges = true;
+        }
+    }
+
+    /**
      * Reloads environment variables from env.json into the table.
      * Clears existing items and populates from the JSON map.
      * Selects and focuses the first row if not empty.
+     * Resets the unsaved changes flag.
      */
     private void reloadEnvJson() {
         try {
@@ -247,9 +279,13 @@ public class EnvVarList extends Application {
                         table.scrollTo(0);
                     });
                 }
+                hasUnsavedChanges = false; // Reset flag after successful load
+            } else {
+                hasUnsavedChanges = false;
             }
         } catch (Exception ex) {
             System.err.println("Failed to load env.json: " + ex.getMessage());
+            hasUnsavedChanges = true; // Assume changes if load fails
         }
     }
 
@@ -338,6 +374,7 @@ public class EnvVarList extends Application {
                 alert.setHeaderText(null);
                 alert.setContentText("Environment variables saved successfully to " + outputFile.getPath());
                 alert.showAndWait();
+                hasUnsavedChanges = false; // Reset flag on success
             } catch (IOException ex) {
                 showError("Failed to save: " + ex.getMessage());
             }
@@ -350,9 +387,19 @@ public class EnvVarList extends Application {
         // Load from env.json on startup
         reloadEnvJson();
 
-        // Reload env.json when window gains focus
+        // Listen for table changes to mark as unsaved
+        table.getItems().addListener((javafx.collections.ListChangeListener<String[]>) change -> {
+            while (change.next()) {
+                if (change.wasAdded() || change.wasRemoved() || change.wasUpdated()) {
+                    hasUnsavedChanges = true;
+                }
+            }
+            updateUnsavedChangesFlag(); // Re-check for accuracy
+        });
+
+        // Reload env.json when window gains focus, but only if no unsaved changes
         primaryStage.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
-            if (isNowFocused) {
+            if (isNowFocused && !hasUnsavedChanges) {
                 reloadEnvJson();
             }
         });
@@ -419,6 +466,8 @@ public class EnvVarList extends Application {
                 int colIndex = event.getTablePosition().getColumn();
                 int rowIndex = event.getTablePosition().getRow();
                 event.getTableView().getItems().get(rowIndex)[colIndex] = newValue;
+                hasUnsavedChanges = true;
+                updateUnsavedChangesFlag(); // Re-check after commit
             });
             table.getColumns().add(column);
         }

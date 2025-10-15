@@ -437,7 +437,6 @@ public class RunApiTest extends Application {
                             reportData.put("testId", testId.toString());
                             reportData.put("description", testCase.testDescriptionProperty().get());
                             reportData.put("request", method);
-                            reportData.put("verifyResponse", verifyResponse);
 
                             long responseTimeMs = 0L;
 
@@ -552,7 +551,9 @@ public class RunApiTest extends Application {
 
                                 System.out.println("Debug: Processing expected status for Test ID " + testId);
                                 String processedExpectedStatusStr = replacePlaceholders(expectedStatusStr, envVars, testId);
+                                testData.put("Expected Status", processedExpectedStatusStr);
                                 processedVerifyResponse = replacePlaceholders(verifyResponse, envVars, testId);
+                                testData.put("Verify Response", processedVerifyResponse);
 
                                 boolean sslValidation = sslValidationStr != null && sslValidationStr.equalsIgnoreCase("true");
 
@@ -665,17 +666,23 @@ public class RunApiTest extends Application {
                                 reportData.put("captureIssues", captureIssues.toString());
 
                                 boolean verificationPassed = true;
+                                String finalVerifyResponse = processedVerifyResponse != null ? processedVerifyResponse : "";
 
                                 if (processedVerifyResponse != null && !processedVerifyResponse.trim().isEmpty()) {
                                     System.out.println("Debug: Verifying response for Test ID " + testId);
                                     try {
-                                        verifyResponse(response.getBody(), processedVerifyResponse, testId);
+                                        finalVerifyResponse = processVerifyExpression(processedVerifyResponse, response.getBody(), testId);
+                                        Object actualJson = objectMapper.readValue(response.getBody(), Object.class);
+                                        Object expectedJson = objectMapper.readValue(finalVerifyResponse, Object.class);
+                                        compareJson(actualJson, expectedJson, "", testId);
                                     } catch (Exception e) {
                                         verificationPassed = false;
+                                        // finalVerifyResponse remains processedVerifyResponse if process failed, or the full if compare failed
                                         throw new Exception("Response verification failed for Test ID " + testId + ": " + e.getMessage(), e);
                                     }
                                 }
 
+                                reportData.put("verifyResponse", finalVerifyResponse);
                                 reportData.put("verificationPassed", verificationPassed);
 
                                 System.out.println("Test ID: " + testId);
@@ -707,6 +714,7 @@ public class RunApiTest extends Application {
                                 boolean verificationPassed = !failureReason.startsWith("Response verification failed");
                                 reportData.put("verificationPassed", verificationPassed);
                                 reportData.put("responseTimeMs", responseTimeMs);
+                                reportData.put("verifyResponse", processedVerifyResponse != null ? processedVerifyResponse : "");
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Fail");
                                     reportData.put("status", "Fail");
@@ -818,16 +826,9 @@ public class RunApiTest extends Application {
         }
     }
 
-    private void verifyResponse(String actualResponseBody, String verifyExpression, Integer testId) throws Exception {
+    private String processVerifyExpression(String verifyExpression, String actualResponseBody, Integer testId) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
-        Object actualJson;
-        Object expectedJson;
-        try {
-            actualJson = mapper.readValue(actualResponseBody, Object.class);
-        } catch (JsonProcessingException e) {
-            throw new Exception("Failed to parse actual response body as JSON for Test ID " + testId + ": " + e.getMessage(), e);
-        }
-
+        Object actualJson = mapper.readValue(actualResponseBody, Object.class);
         String tempVerifyExpression = verifyExpression;
         Map<String, String> pathToValueMap = new HashMap<>();
 
@@ -836,21 +837,16 @@ public class RunApiTest extends Application {
                 tempVerifyExpression = verifyExpression
                     .replaceAll("\\$any-value\\b(?=\\s*(,|\\}|\\]))", "\"_any_value_\"")
                     .replaceAll("\"\\$any-value\"", "\"_any_value_\"");
-                expectedJson = mapper.readValue(tempVerifyExpression, Object.class);
-                extractAnyValuePathsFromObject(expectedJson, actualJson, pathToValueMap, "", testId);
+                Object expectedJsonForExtract = mapper.readValue(tempVerifyExpression, Object.class);
+                extractAnyValuePathsFromObject(expectedJsonForExtract, actualJson, pathToValueMap, "", testId);
                 tempVerifyExpression = replaceAnyValueWithActual(tempVerifyExpression, pathToValueMap, testId);
             } catch (JsonProcessingException e) {
                 throw new Exception("Failed to parse verifyExpression with $any-value for Test ID " + testId + ": " + e.getMessage(), e);
+            } catch (Exception e) {
+                throw new Exception("Failed to process $any-value in verifyExpression for Test ID " + testId + ": " + e.getMessage(), e);
             }
         }
-
-        try {
-            expectedJson = mapper.readValue(tempVerifyExpression, Object.class);
-        } catch (JsonProcessingException e) {
-            throw new Exception("Failed to parse modified verifyExpression as JSON for Test ID " + testId + ": " + e.getMessage(), e);
-        }
-
-        compareJson(actualJson, expectedJson, "", testId);
+        return tempVerifyExpression;
     }
 
     private void extractAnyValuePathsFromObject(Object expected, Object actual, Map<String, String> pathToValueMap, String path, Integer testId) throws Exception {

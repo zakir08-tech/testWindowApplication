@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 
 /**
  * Redesigned class to parse Postman collection JSON files and convert them into
- * table data as List&lt;String[]&gt; for UI table population. This class handles
+ * table data as List<String[]> for UI table population. This class handles
  * nested folders, extracts requests, headers, query params, body, and maps them
  * to the expected column structure.
  */
@@ -96,7 +96,34 @@ public class PostmanCollectionImporter {
         List<RequestInfo> requests = extractFromCollection(collection);
 
         // Convert to table rows
-        return convertToTableRows(requests);
+        List<String[]> rows = convertToTableRows(requests);
+
+        // Validate Test IDs format (digits, 3-5 length starting from 100; duplicates allowed for multi-row requests)
+        if (!validateTestIds(rows)) {
+            throw new IllegalArgumentException("Generated Test IDs are invalid. Please check the collection structure.");
+        }
+
+        return rows;
+    }
+
+    /**
+     * Validates Test IDs in the rows: non-empty ones must be digits only, length 3-5 (to ensure >=100 and <=99999).
+     * Blanks are allowed in multi-row groups.
+     *
+     * @param rows the table rows
+     * @return true if all non-empty Test IDs are valid in format
+     */
+    private static boolean validateTestIds(List<String[]> rows) {
+        if (rows.isEmpty()) {
+            return true;
+        }
+        for (String[] row : rows) {
+            String testId = row[0];  // Column 0: Test ID
+            if (!testId.isEmpty() && !testId.matches("\\d{3,5}")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -306,7 +333,7 @@ public class PostmanCollectionImporter {
     }
 
     /**
-     * Converts a list of RequestInfo to table rows (List&lt;String[]&gt;), pairing
+     * Converts a list of RequestInfo to table rows (List<String[]>), pairing
      * headers and parameters in the same rows where possible. Uses Math.max for total rows
      * to align headers and params side-by-side.
      *
@@ -340,12 +367,61 @@ public class PostmanCollectionImporter {
             int paramCount = request.queryParams != null ? request.queryParams.size() : 0;
             int totalRows = Math.max(1, Math.max(headerCount, paramCount)); // At least one row, pair by max count
 
-            // Use sequential Test ID for this request
+            // Use sequential Test ID for this request (ensures no duplicates across requests)
             int testId = currentTestId++;
 
             // Track indices for headers and params
             int headerIndex = 0;
             int paramIndex = 0;
+
+            // Pre-compute shared values
+            String method = request.method != null ? request.method : "";
+            String url = request.url != null ? request.url : "";
+            String bodyStr = "";
+            if ("urlencoded".equals(request.bodyType) && request.body instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, String> bodyMap = (Map<String, String>) request.body;
+                if (bodyMap != null && !bodyMap.isEmpty()) {
+                    StringBuilder sb = new StringBuilder();
+                    int k = 0;
+                    for (Map.Entry<String, String> entry : bodyMap.entrySet()) {
+                        sb.append(entry.getKey()).append(":").append(entry.getValue());
+                        if (k < bodyMap.size() - 1) {
+                            sb.append("\n");
+                        }
+                        k++;
+                    }
+                    bodyStr = sb.toString();
+                }
+            } else if ("json".equals(request.bodyType) && request.body instanceof String) {
+                try {
+                    String rawBody = (String) request.body;
+                    if (rawBody != null && !rawBody.isEmpty()) {
+                        // Try parsing as JSONObject or JSONArray for pretty-print
+                        try {
+                            JSONObject jsonObject = new JSONObject(rawBody);
+                            bodyStr = jsonObject.toString(2); // Pretty-print with indent of 2
+                        } catch (JSONException e1) {
+                            try {
+                                JSONArray jsonArray = new JSONArray(rawBody);
+                                bodyStr = jsonArray.toString(2);
+                            } catch (JSONException e2) {
+                                bodyStr = rawBody; // Fallback to raw string if not valid JSON
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error formatting JSON body: " + e.getMessage());
+                    bodyStr = String.valueOf(request.body); // Fallback
+                }
+            } else {
+                bodyStr = request.body instanceof Map ? request.body.toString() : String.valueOf(request.body);
+            }
+            String bodyType = request.bodyType != null ? request.bodyType : "";
+            String name = request.name != null ? request.name : "";
+            boolean hasAuthorizationHeader = request.headers != null &&
+                    request.headers.keySet().stream().anyMatch(key -> key.equalsIgnoreCase("Authorization"));
+            String authValue = hasAuthorizationHeader ? "" : (request.authorization != null ? request.authorization : "");
 
             for (int j = 0; j < totalRows; j++) {
                 String[] row = new String[columns.length];
@@ -354,73 +430,39 @@ public class PostmanCollectionImporter {
                     row[col] = "";
                 }
 
-                // Populate shared fields (same for all rows of this request)
-                row[0] = String.valueOf(testId); // Test ID
-                row[1] = request.method != null ? request.method : ""; // Request
-                row[2] = request.url != null ? request.url : ""; // End-Point
-
-                // Handle payload formatting
-                String bodyStr = "";
-                if ("urlencoded".equals(request.bodyType) && request.body instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, String> bodyMap = (Map<String, String>) request.body;
-                    if (bodyMap != null && !bodyMap.isEmpty()) {
-                        StringBuilder sb = new StringBuilder();
-                        int k = 0;
-                        for (Map.Entry<String, String> entry : bodyMap.entrySet()) {
-                            sb.append(entry.getKey()).append(":").append(entry.getValue());
-                            if (k < bodyMap.size() - 1) {
-                                sb.append("\n");
-                            }
-                            k++;
-                        }
-                        bodyStr = sb.toString();
-                    }
-                } else if ("json".equals(request.bodyType) && request.body instanceof String) {
-                    try {
-                        String rawBody = (String) request.body;
-                        if (rawBody != null && !rawBody.isEmpty()) {
-                            // Try parsing as JSONObject or JSONArray for pretty-print
-                            try {
-                                JSONObject jsonObject = new JSONObject(rawBody);
-                                bodyStr = jsonObject.toString(2); // Pretty-print with indent of 2
-                            } catch (JSONException e1) {
-                                try {
-                                    JSONArray jsonArray = new JSONArray(rawBody);
-                                    bodyStr = jsonArray.toString(2);
-                                } catch (JSONException e2) {
-                                    bodyStr = rawBody; // Fallback to raw string if not valid JSON
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Error formatting JSON body: " + e.getMessage());
-                        bodyStr = String.valueOf(request.body); // Fallback
-                    }
+                // Populate shared fields only on first row (j == 0) to avoid repetition
+                if (j == 0) {
+                    row[0] = String.valueOf(testId); // Test ID
+                    row[1] = method; // Request
+                    row[2] = url; // End-Point
+                    row[7] = bodyStr; // Payload
+                    row[8] = bodyType; // Payload Type
+                    row[9] = ""; // Response (key) Name
+                    row[10] = ""; // Capture (key) Value (env var)
+                    row[11] = authValue; // Authorization
+                    row[12] = ""; // Empty
+                    row[13] = ""; // Empty
+                    row[14] = ""; // SSL Validation
+                    row[15] = "200"; // Expected Status (default)
+                    row[16] = ""; // Verify Response
+                    row[17] = name; // Test Description
                 } else {
-                    bodyStr = request.body instanceof Map ? request.body.toString() : String.valueOf(request.body);
+                    // For subsequent rows, leave shared fields blank
+                    row[0] = ""; // Test ID blank
+                    row[1] = ""; // Request blank
+                    row[2] = ""; // End-Point blank
+                    row[7] = ""; // Payload blank
+                    row[8] = ""; // Payload Type blank
+                    row[9] = ""; // Response (key) Name
+                    row[10] = ""; // Capture (key) Value (env var)
+                    row[11] = ""; // Authorization blank
+                    row[12] = ""; // Empty
+                    row[13] = ""; // Empty
+                    row[14] = ""; // SSL Validation
+                    row[15] = ""; // Expected Status blank
+                    row[16] = ""; // Verify Response
+                    row[17] = ""; // Test Description blank
                 }
-                row[7] = bodyStr; // Payload
-
-                row[8] = request.bodyType != null ? request.bodyType : ""; // Payload Type
-
-                // Unpopulated fields
-                //row[9] = ""; // Modify Payload (key)
-                //row[10] = ""; // Modify Payload (value)
-                row[9] = ""; // Response (key) Name
-                row[10] = ""; // Capture (key) Value (env var)
-
-                // Authorization: empty if header present, else use extracted value
-                boolean hasAuthorizationHeader = request.headers != null &&
-                        request.headers.keySet().stream().anyMatch(key -> key.equalsIgnoreCase("Authorization"));
-                row[11] = hasAuthorizationHeader ? "" : (request.authorization != null ? request.authorization : "");
-
-                row[12] = ""; // Empty
-                row[13] = ""; // Empty
-                row[14] = ""; // SSL Validation
-                row[15] = "200"; // Expected Status (default)
-                row[16] = ""; // Verify Response
-                row[17] = request.name != null ? request.name : ""; // Test Description
 
                 // Set header if available for this row index
                 if (headerIndex < headerCount && request.headers != null) {

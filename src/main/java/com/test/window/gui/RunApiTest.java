@@ -995,6 +995,13 @@ public class RunApiTest extends Application {
                 }
                 compareJson(actualMap.get(key), expectedValue, newPath, testId);
             }
+            // Additional strict check: Ensure no extra keys in actual (bidirectional enforcement)
+            for (String actualKey : actualMap.keySet()) {
+                if (!expectedMap.containsKey(actualKey)) {
+                    String newPath = path.isEmpty() ? actualKey : path + "." + actualKey;
+                    throw new Exception("Unexpected extra key '" + actualKey + "' in response at path '" + newPath + "' for Test ID " + testId);
+                }
+            }
         } else if (expected instanceof List) {
             if (!(actual instanceof List)) {
                 throw new Exception("Type mismatch at path '" + path + "' for Test ID " + testId +

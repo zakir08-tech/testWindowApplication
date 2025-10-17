@@ -1,23 +1,23 @@
 package com.test.window.gui;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.fxmisc.richtext.InlineCssTextArea;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
 
@@ -36,9 +36,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import javafx.scene.control.cell.TextFieldListCell;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.ColumnConstraints;
@@ -48,17 +48,13 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import javafx.util.StringConverter;
 /**
  * Manages the creation and configuration of UI components for the API test editor application.
  * This class handles the dynamic generation of text fields, combo boxes, buttons, and scrollable areas
  * for editing test steps, including headers, parameters, payloads, and response verifications.
  */
 public class UIComponentsManager {
-
     /**
      * Enum defining the column indices in the test table for easy reference.
      */
@@ -68,119 +64,139 @@ public class UIComponentsManager {
         RESPONSE_KEY_NAME(9), CAPTURE_VALUE(10), AUTHORIZATION(11),
         AUTH_FIELD1(12), AUTH_FIELD2(13), SSL_VALIDATION(14), EXPECTED_STATUS(15),
         VERIFY_RESPONSE(16), TEST_DESCRIPTION(17);
-
         private final int index;
         ColumnIndex(int index) { this.index = index; }
         public int getIndex() { return index; }
     }
-
     /**
      * Observable list of authorization options for the auth combo box.
      */
     private static final ObservableList<String> AUTH_OPTIONS =
         FXCollections.observableArrayList("", "Basic Auth", "Bearer Token");
-
     /**
      * Observable list of HTTP methods for the request combo box.
      */
     private static final ObservableList<String> HTTP_METHODS =
         FXCollections.observableArrayList("", "GET", "POST", "PUT", "PATCH", "DELETE");
-
     /**
      * Observable list of payload types for the payload type combo box.
      */
     private static final ObservableList<String> PAYLOAD_TYPES =
-        FXCollections.observableArrayList("", "json", "form-data", "urlencoded");
-
+        FXCollections.observableArrayList("", "JSON", "form-data", "urlencoded");
     /**
      * CSS style for unfocused text fields and combo boxes.
      */
     private static final String FIELD_STYLE_UNFOCUSED =
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
-        "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
-
+        "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px; " +
+        "-fx-padding: 7px 0px 7px 15px;";
     /**
      * CSS style for focused text fields and combo boxes.
      */
     private static final String FIELD_STYLE_FOCUSED =
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
-        "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
-
+        "-fx-border-color: #4A90E2; -fx-border-width: 2px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px; " +
+        "-fx-padding: 7px 0px 7px 15px;";
     /**
      * CSS style for disabled text fields and combo boxes.
      */
     private static final String FIELD_STYLE_DISABLED =
         "-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: #888888; " +
-        "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px;";
-
+        "-fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-prompt-text-fill: #BBBBBB; -fx-border-radius: 5px; " +
+        "-fx-padding: 7px 0px 7px 15px;";
+    /**
+     * CSS style for unfocused centered text fields.
+     */
+    private static final String FIELD_STYLE_UNFOCUSED_CENTERED =
+        FIELD_STYLE_UNFOCUSED + " -fx-alignment: center;";
+    /**
+     * CSS style for focused centered text fields.
+     */
+    private static final String FIELD_STYLE_FOCUSED_CENTERED =
+        FIELD_STYLE_FOCUSED + " -fx-alignment: center;";
+    /**
+     * CSS style for disabled centered text fields.
+     */
+    private static final String FIELD_STYLE_DISABLED_CENTERED =
+        FIELD_STYLE_DISABLED + " -fx-alignment: center;";
+    /**
+     * CSS style for unfocused left-centered (vertical center, horizontal left) text fields.
+     */
+    private static final String FIELD_STYLE_UNFOCUSED_LEFT_CENTERED =
+        FIELD_STYLE_UNFOCUSED + " -fx-alignment: center-left;";
+    /**
+     * CSS style for focused left-centered text fields.
+     */
+    private static final String FIELD_STYLE_FOCUSED_LEFT_CENTERED =
+        FIELD_STYLE_FOCUSED + " -fx-alignment: center-left;";
+    /**
+     * CSS style for disabled left-centered text fields.
+     */
+    private static final String FIELD_STYLE_DISABLED_LEFT_CENTERED =
+        FIELD_STYLE_DISABLED + " -fx-alignment: center-left;";
     /**
      * CSS style for buttons in their default state.
      */
     private static final String BUTTON_STYLE =
         "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
-
     /**
      * CSS style for buttons on hover.
      */
     private static final String BUTTON_HOVER_STYLE =
         "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
-
     /**
      * Standard height for text fields.
      */
-    private static final double TEXT_FIELD_HEIGHT = 30.0;
-
+    private static final double TEXT_FIELD_HEIGHT = 35.0;
     /**
      * Reference to the main table view displaying test steps.
      */
     private final TableView<String[]> table;
-
     /**
      * Label for displaying status messages.
      */
     private final Label statusLabel;
-
     /**
      * Array of column names for the table.
      */
     private final String[] columnNames;
-
     /**
      * Manager for table operations.
      */
     private final TableManager tableManager;
-
     /**
      * Reference to the main application instance.
      */
     private final CreateEditAPITest app;
-
     /**
      * Text area for editing payload content.
      */
-    private TextArea payloadField;
-
+    private InlineCssTextArea payloadField;
     /**
      * Text area for verifying response content.
      */
-    private TextArea verifyResponseField;
-
+    private InlineCssTextArea verifyResponseField;
+    /**
+     * Text area for endpoint URL with highlighting support.
+     */
+    private InlineCssTextArea endpointField;
     /**
      * Scroll pane containing header fields.
      */
     private ScrollPane headerFieldsScroll;
-
     /**
      * Button for adding a step above the selected row.
      */
     private Button addAboveButton, addBelowButton, moveUpButton, moveDownButton,
                    deleteStepButton, deleteTestCaseButton, saveTestButton, createNewTestButton;
-
     /**
      * Static reference to the environment variables stage to ensure only one instance.
      */
     private static Stage envVarStage; // Track single EnvVarList window
-
+    private final String endpointPrompt = "End-Point";
+    private final String statusPrompt = "Status";
+    private String usernamePrompt = "Username/Token";
+    private final String passwordPrompt = "Password";
     /**
      * Constructs a UIComponentsManager instance.
      *
@@ -197,10 +213,9 @@ public class UIComponentsManager {
         this.tableManager = tableManager;
         this.app = app;
     }
-
     /**
      * Creates an HBox containing text fields and combo boxes for basic test step editing
-     * (request method, endpoint, status, payload type, authorization).
+     * (request method, endpoint, status, authorization).
      *
      * @return HBox containing the input fields
      */
@@ -208,147 +223,356 @@ public class UIComponentsManager {
         // Create combo box for HTTP request methods
         ComboBox<String> requestComboBox = new ComboBox<>(HTTP_METHODS);
         requestComboBox.setPromptText("Request");
-        requestComboBox.setButtonCell(new ListCell<String>() {
+
+        // Add CSS for dark theme text visibility
+        requestComboBox.getStylesheets().add("data:text/css," +
+            ".combo-box .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #2E2E2E;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:selected {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #4A90E2;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:focused {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #4A90E2;" +
+            "}"
+        );
+
+        requestComboBox.setCellFactory(lv -> new ListCell<String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
-                    setText("Request");
+                    setText(null);
                 } else {
-                    setText(item);
+                    setText(item.isEmpty() ? "No Method" : item);
                 }
+                setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
             }
         });
-        requestComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
-        requestComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+
+        requestComboBox.setConverter(new StringConverter<String>() {
+            @Override
+            public String toString(String object) {
+                if (object == null || object.isEmpty()) {
+                    return "No Method";
+                }
+                return object;
+            }
+
+            @Override
+            public String fromString(String string) {
+                return string;
+            }
+        });
+        requestComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
+        requestComboBox.setPrefHeight(38.0);
+        requestComboBox.setMinHeight(38.0);
+        requestComboBox.setMaxHeight(38.0);
         requestComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (!requestComboBox.isDisable()) {
-                requestComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                requestComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
             }
         });
         requestComboBox.setDisable(true);
-        requestComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.07));
+        requestComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.08));
         requestComboBox.maxWidthProperty().bind(requestComboBox.prefWidthProperty());
         requestComboBox.minWidthProperty().bind(requestComboBox.prefWidthProperty());
-
-        // Create text field for endpoint URL
-        TextField endpointField = new TextField();
-        endpointField.setPromptText("End-Point");
+        // Create text area for endpoint URL with highlighting support
+        endpointField = new InlineCssTextArea();
         endpointField.setStyle(FIELD_STYLE_UNFOCUSED);
-        endpointField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        endpointField.setPrefHeight(35.0);
+        endpointField.setMinHeight(35.0);
+        endpointField.setMaxHeight(35.0);
+        endpointField.setWrapText(true);
+        endpointField.setEditable(true);
+        endpointField.replaceText(0, endpointField.getLength(), "");
+        String caretCss = ".styled-text-area .caret { -fx-fill: white; -fx-stroke: white; } " +
+                          ".styled-text-area:focused .caret { -fx-fill: white; -fx-stroke: white; } " +
+                          ".styled-text-area:disabled .caret { -fx-fill: #888888; -fx-stroke: #888888; }";
+        endpointField.getStylesheets().add("data:text/css," + caretCss);
+        updateFieldStyle(endpointField, endpointPrompt, "center-left");
+        // Listener for endpoint field changes to update table
+        endpointField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && endpointField.isEditable()) {
+                table.getItems().get(selectedIndex)[ColumnIndex.END_POINT.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+            updateFieldStyle(endpointField, endpointPrompt, "center-left");
+        });
+        // Handle TAB key in endpoint field for focus traversal (no tab insertion)
+        endpointField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.TAB) {
+                event.consume(); // Prevent tab character insertion
+                int selectedIndex = table.getSelectionModel().getSelectedIndex();
+                if (selectedIndex >= 0 && endpointField.isEditable()) {
+                    String rawText = endpointField.getText();
+                    table.getItems().get(selectedIndex)[ColumnIndex.END_POINT.getIndex()] = rawText;
+                    table.refresh();
+                    app.setModified(true);
+                }
+                moveFocus(endpointField, !event.isShiftDown()); // Move focus forward or backward
+            }
+        });
+        // Focused listener for endpoint
         endpointField.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            endpointField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-        });
-        endpointField.setDisable(true);
-        endpointField.prefWidthProperty().bind(table.widthProperty().multiply(0.375));
-        endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
-        endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
-
-        // Create text field for expected status code
-        TextField statusField = new TextField();
-        statusField.setPromptText("Status");
-        statusField.setStyle(FIELD_STYLE_UNFOCUSED);
-        statusField.setPrefHeight(TEXT_FIELD_HEIGHT);
-        statusField.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            statusField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-        });
-        statusField.setDisable(true);
-        statusField.prefWidthProperty().bind(table.widthProperty().multiply(0.07));
-        statusField.maxWidthProperty().bind(statusField.prefWidthProperty());
-        statusField.minWidthProperty().bind(statusField.prefWidthProperty());
-
-        // Create combo box for payload types
-        ComboBox<String> payloadTypeComboBox = new ComboBox<>(PAYLOAD_TYPES);
-        payloadTypeComboBox.setPromptText("Payload Type");
-        payloadTypeComboBox.setButtonCell(new ListCell<String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText("Payload Type");
-                } else {
-                    setText(item);
+            if (newVal) {
+                if (endpointField.getText().equals(endpointPrompt)) {
+                    endpointField.replaceText(0, endpointField.getLength(), "");
+                }
+            } else {
+                if (endpointField.isEditable() && endpointField.getText().isEmpty()) {
+                    endpointField.replaceText(0, endpointField.getLength(), endpointPrompt);
                 }
             }
+            updateFieldStyle(endpointField, endpointPrompt, "center-left");
+            endpointField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
-        payloadTypeComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
-        payloadTypeComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
-        payloadTypeComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            if (!payloadTypeComboBox.isDisable()) {
-                payloadTypeComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        endpointField.prefWidthProperty().bind(table.widthProperty().multiply(0.500));
+        endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
+        endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
+        // Create text area for expected status code with highlighting support
+        InlineCssTextArea statusField = new InlineCssTextArea();
+        statusField.setStyle(FIELD_STYLE_UNFOCUSED);
+        statusField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        statusField.setMinHeight(TEXT_FIELD_HEIGHT);
+        statusField.setMaxHeight(TEXT_FIELD_HEIGHT);
+        statusField.setWrapText(false);
+        statusField.setEditable(true);
+        statusField.replaceText(0, statusField.getLength(), "");
+        statusField.getStylesheets().add("data:text/css," + caretCss);
+        updateFieldStyle(statusField, statusPrompt, "center");
+        // Listener for status field changes to update table
+        statusField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && statusField.isEditable()) {
+                table.getItems().get(selectedIndex)[ColumnIndex.EXPECTED_STATUS.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+            updateFieldStyle(statusField, statusPrompt, "center");
+        });
+        // Handle TAB key in status field for focus traversal (no tab insertion)
+        statusField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.TAB) {
+                event.consume(); // Prevent tab character insertion
+                int selectedIndex = table.getSelectionModel().getSelectedIndex();
+                if (selectedIndex >= 0 && statusField.isEditable()) {
+                    String rawText = statusField.getText();
+                    table.getItems().get(selectedIndex)[ColumnIndex.EXPECTED_STATUS.getIndex()] = rawText;
+                    table.refresh();
+                    app.setModified(true);
+                }
+                moveFocus(statusField, !event.isShiftDown()); // Move focus forward or backward
             }
         });
-        payloadTypeComboBox.setDisable(true);
-        payloadTypeComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.0924));
-        payloadTypeComboBox.maxWidthProperty().bind(payloadTypeComboBox.prefWidthProperty());
-        payloadTypeComboBox.minWidthProperty().bind(payloadTypeComboBox.prefWidthProperty());
-
+        // Focused listener for status
+        statusField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                if (statusField.getText().equals(statusPrompt)) {
+                    statusField.replaceText(0, statusField.getLength(), "");
+                }
+            } else {
+                if (statusField.isEditable() && statusField.getText().isEmpty()) {
+                    statusField.replaceText(0, statusField.getLength(), statusPrompt);
+                }
+            }
+            updateFieldStyle(statusField, statusPrompt, "center");
+            statusField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        statusField.setEditable(false);
+        statusField.prefWidthProperty().bind(table.widthProperty().multiply(0.05));
+        statusField.maxWidthProperty().bind(statusField.prefWidthProperty());
+        statusField.minWidthProperty().bind(statusField.prefWidthProperty());
         // Create combo box for authorization types
         ComboBox<String> authComboBox = new ComboBox<>(AUTH_OPTIONS);
         authComboBox.setPromptText("Authorization");
-        authComboBox.setButtonCell(new ListCell<String>() {
+
+        // Add CSS for dark theme text visibility
+        authComboBox.getStylesheets().add("data:text/css," +
+            ".combo-box .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #2E2E2E;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:selected {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #4A90E2;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:focused {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #4A90E2;" +
+            "}"
+        );
+
+        authComboBox.setCellFactory(lv -> new ListCell<String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
-                    setText("Authorization");
+                    setText(null);
                 } else {
-                    setText(item);
+                    setText(item.isEmpty() ? "No Auth" : item);
                 }
+                setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
             }
         });
-        authComboBox.setStyle(FIELD_STYLE_UNFOCUSED);
-        authComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+
+        authComboBox.setConverter(new StringConverter<String>() {
+            @Override
+            public String toString(String object) {
+                if (object == null || object.isEmpty()) {
+                    return "No Auth";
+                }
+                return object;
+            }
+
+            @Override
+            public String fromString(String string) {
+                return string;
+            }
+        });
+        authComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
+        authComboBox.setPrefHeight(38.0);
+        authComboBox.setMinHeight(38.0);
+        authComboBox.setMaxHeight(38.0);
         authComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (!authComboBox.isDisable()) {
-                authComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                authComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
             }
         });
         authComboBox.setDisable(true);
-        authComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.0924));
+        authComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.0950));
         authComboBox.maxWidthProperty().bind(authComboBox.prefWidthProperty());
         authComboBox.minWidthProperty().bind(authComboBox.prefWidthProperty());
-
-        // Create text field for username or token (depending on auth type)
-        TextField usernameTokenField = new TextField();
-        usernameTokenField.setPromptText("Username/Token");
+        
+        // Create text area for username or token (depending on auth type)
+        InlineCssTextArea usernameTokenField = new InlineCssTextArea();
+        usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
         usernameTokenField.setStyle(FIELD_STYLE_UNFOCUSED);
         usernameTokenField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        usernameTokenField.setMinHeight(TEXT_FIELD_HEIGHT);
+        usernameTokenField.setMaxHeight(TEXT_FIELD_HEIGHT);
+        usernameTokenField.setWrapText(false);
+        usernameTokenField.setEditable(true);
+        usernameTokenField.getStylesheets().add("data:text/css," + caretCss);
+        updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
+        // Listener for username/token field changes to update table
+        usernameTokenField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && usernameTokenField.isEditable()) {
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD1.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+            updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
+        });
+        // Handle TAB key in username/token field for focus traversal (no tab insertion)
+        usernameTokenField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.TAB) {
+                event.consume(); // Prevent tab character insertion
+                int selectedIndex = table.getSelectionModel().getSelectedIndex();
+                if (selectedIndex >= 0 && usernameTokenField.isEditable()) {
+                    String rawText = usernameTokenField.getText();
+                    table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD1.getIndex()] = rawText;
+                    table.refresh();
+                    app.setModified(true);
+                }
+                moveFocus(usernameTokenField, !event.isShiftDown()); // Move focus forward or backward
+            }
+        });
+        // Focused listener for username/token
         usernameTokenField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                if (usernameTokenField.getText().equals(usernamePrompt)) {
+                    usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
+                }
+            } else {
+                if (usernameTokenField.isEditable() && usernameTokenField.getText().isEmpty()) {
+                    usernameTokenField.replaceText(0, usernameTokenField.getLength(), usernamePrompt);
+                }
+            }
+            updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
             usernameTokenField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
-        usernameTokenField.setDisable(true);
+        usernameTokenField.setEditable(false);
         usernameTokenField.setVisible(false);
         usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
-
-        // Create text field for password (for Basic Auth)
-        TextField passwordField = new TextField();
-        passwordField.setPromptText("Password");
+        // Create text area for password (for Basic Auth)
+        InlineCssTextArea passwordField = new InlineCssTextArea();
+        passwordField.replaceText(0, passwordField.getLength(), "");
         passwordField.setStyle(FIELD_STYLE_UNFOCUSED);
         passwordField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        passwordField.setMinHeight(TEXT_FIELD_HEIGHT);
+        passwordField.setMaxHeight(TEXT_FIELD_HEIGHT);
+        passwordField.setWrapText(false);
+        passwordField.setEditable(true);
+        passwordField.getStylesheets().add("data:text/css," + caretCss);
+        updateFieldStyle(passwordField, passwordPrompt, "center-left");
+        // Listener for password field changes to update table
+        passwordField.textProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0 && passwordField.isEditable()) {
+                table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD2.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+            updateFieldStyle(passwordField, passwordPrompt, "center-left");
+        });
+        // Handle TAB key in password field for focus traversal (no tab insertion)
+        passwordField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.TAB) {
+                event.consume(); // Prevent tab character insertion
+                int selectedIndex = table.getSelectionModel().getSelectedIndex();
+                if (selectedIndex >= 0 && passwordField.isEditable()) {
+                    String rawText = passwordField.getText();
+                    table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD2.getIndex()] = rawText;
+                    table.refresh();
+                    app.setModified(true);
+                }
+                moveFocus(passwordField, !event.isShiftDown()); // Move focus forward or backward
+            }
+        });
+        // Focused listener for password
         passwordField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                if (passwordField.getText().equals(passwordPrompt)) {
+                    passwordField.replaceText(0, passwordField.getLength(), "");
+                }
+            } else {
+                if (passwordField.isEditable() && passwordField.getText().isEmpty()) {
+                    passwordField.replaceText(0, passwordField.getLength(), passwordPrompt);
+                }
+            }
+            updateFieldStyle(passwordField, passwordPrompt, "center-left");
             passwordField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
-        passwordField.setDisable(true);
+        passwordField.setEditable(false);
         passwordField.setVisible(false);
         passwordField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
         passwordField.maxWidthProperty().bind(passwordField.prefWidthProperty());
         passwordField.minWidthProperty().bind(passwordField.prefWidthProperty());
-
         // Create HBox to hold all fields with spacing
         HBox textFieldsBox = new HBox(10);
         textFieldsBox.setStyle("-fx-background-color: #2E2E2E;");
-        textFieldsBox.getChildren().addAll(requestComboBox, endpointField, statusField, payloadTypeComboBox, authComboBox, usernameTokenField, passwordField);
+        textFieldsBox.getChildren().addAll(requestComboBox, endpointField, statusField, authComboBox, usernameTokenField, passwordField);
         HBox.setHgrow(requestComboBox, Priority.NEVER);
         HBox.setHgrow(endpointField, Priority.ALWAYS);
         HBox.setHgrow(statusField, Priority.NEVER);
-        HBox.setHgrow(payloadTypeComboBox, Priority.NEVER);
         HBox.setHgrow(authComboBox, Priority.NEVER);
         HBox.setHgrow(usernameTokenField, Priority.NEVER);
         HBox.setHgrow(passwordField, Priority.NEVER);
-
         // Listener for table selection changes to populate and enable/disable fields based on valid Test ID
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
             if (newItem != null) {
@@ -362,107 +586,117 @@ public class UIComponentsManager {
                     }
                 }
                 boolean isValidTestId = CreateEditAPITest.isValidTestId(testId, testIds, testId);
-                requestComboBox.setValue(row[ColumnIndex.REQUEST.getIndex()]);
-                endpointField.setText(row[ColumnIndex.END_POINT.getIndex()]);
-                statusField.setText(row[ColumnIndex.EXPECTED_STATUS.getIndex()]);
-                payloadTypeComboBox.setValue(row[ColumnIndex.PAYLOAD_TYPE.getIndex()] != null ? row[ColumnIndex.PAYLOAD_TYPE.getIndex()] : "");
-                authComboBox.setValue(row[ColumnIndex.AUTHORIZATION.getIndex()]);
-                usernameTokenField.setText(row[ColumnIndex.AUTH_FIELD1.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD1.getIndex()] : "");
-                passwordField.setText(row[ColumnIndex.AUTH_FIELD2.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD2.getIndex()] : "");
+                // Set editable and disabled states first
                 requestComboBox.setDisable(!isValidTestId);
-                endpointField.setDisable(!isValidTestId);
-                statusField.setDisable(!isValidTestId);
-                payloadTypeComboBox.setDisable(!isValidTestId);
+                endpointField.setEditable(isValidTestId);
+                statusField.setEditable(isValidTestId);
                 authComboBox.setDisable(!isValidTestId);
+                usernameTokenField.setEditable(isValidTestId);
+                passwordField.setEditable(isValidTestId);
+                // Now set values
+                requestComboBox.setValue(row[ColumnIndex.REQUEST.getIndex()]);
+                String endpointText = row[ColumnIndex.END_POINT.getIndex()] != null ? row[ColumnIndex.END_POINT.getIndex()] : "";
+                endpointField.replaceText(0, endpointField.getLength(), endpointText);
+                String statusText = row[ColumnIndex.EXPECTED_STATUS.getIndex()] != null ? row[ColumnIndex.EXPECTED_STATUS.getIndex()] : "";
+                statusField.replaceText(0, statusField.getLength(), statusText);
+                authComboBox.setValue(row[ColumnIndex.AUTHORIZATION.getIndex()]);
+                String authField1Text = row[ColumnIndex.AUTH_FIELD1.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD1.getIndex()] : "";
+                usernameTokenField.replaceText(0, usernameTokenField.getLength(), authField1Text);
+                String authField2Text = row[ColumnIndex.AUTH_FIELD2.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD2.getIndex()] : "";
+                passwordField.replaceText(0, passwordField.getLength(), authField2Text);
                 if (!isValidTestId) {
-                    requestComboBox.setStyle(FIELD_STYLE_DISABLED);
-                    authComboBox.setStyle(FIELD_STYLE_DISABLED);
-                    payloadTypeComboBox.setStyle(FIELD_STYLE_DISABLED);
+                    requestComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
+                    endpointField.setStyle(FIELD_STYLE_DISABLED);
+                    statusField.setStyle(FIELD_STYLE_DISABLED);
+                    authComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
                     requestComboBox.setPromptText("Request");
                     authComboBox.setPromptText("Authorization");
-                    payloadTypeComboBox.setPromptText("Payload Type");
                     requestComboBox.setValue(null);
                     requestComboBox.getSelectionModel().clearSelection();
-                    payloadTypeComboBox.setValue(null);
-                    payloadTypeComboBox.getSelectionModel().clearSelection();
                     authComboBox.setValue(null);
                     authComboBox.getSelectionModel().clearSelection();
                 } else {
-                    requestComboBox.setStyle(requestComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-                    authComboBox.setStyle(authComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-                    payloadTypeComboBox.setStyle(payloadTypeComboBox.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                    requestComboBox.setStyle(requestComboBox.isFocused() ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
+                    endpointField.setStyle(endpointField.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                    statusField.setStyle(statusField.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                    authComboBox.setStyle(authComboBox.isFocused() ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
                 }
+                updateFieldStyle(endpointField, endpointPrompt, "center-left");
+                updateFieldStyle(statusField, statusPrompt, "center");
+                updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
+                updateFieldStyle(passwordField, passwordPrompt, "center-left");
                 if (isValidTestId && authComboBox.getValue() != null) {
                     if ("Basic Auth".equals(authComboBox.getValue())) {
-                        usernameTokenField.setPromptText("Username");
+                        usernamePrompt = "Username";
                         usernameTokenField.setVisible(true);
-                        usernameTokenField.setDisable(false);
+                        usernameTokenField.setEditable(true);
                         usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
                         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         passwordField.setVisible(true);
-                        passwordField.setDisable(false);
+                        passwordField.setEditable(true);
                     } else if ("Bearer Token".equals(authComboBox.getValue())) {
-                        usernameTokenField.setPromptText("Token");
+                        usernamePrompt = "Token";
                         usernameTokenField.setVisible(true);
-                        usernameTokenField.setDisable(false);
+                        usernameTokenField.setEditable(true);
                         usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.21));
                         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         passwordField.setVisible(false);
-                        passwordField.setDisable(true);
+                        passwordField.setEditable(false);
                     } else {
-                        usernameTokenField.setPromptText("Username/Token");
+                        usernamePrompt = "Username/Token";
                         usernameTokenField.setVisible(false);
-                        usernameTokenField.setDisable(true);
+                        usernameTokenField.setEditable(false);
                         usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
                         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         passwordField.setVisible(false);
-                        passwordField.setDisable(true);
+                        passwordField.setEditable(false);
                     }
                 } else {
-                    usernameTokenField.setPromptText("Username/Token");
+                    usernamePrompt = "Username/Token";
                     usernameTokenField.setVisible(false);
-                    usernameTokenField.setDisable(true);
+                    usernameTokenField.setEditable(false);
                     usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
                     usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
                     usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                     passwordField.setVisible(false);
-                    passwordField.setDisable(true);
+                    passwordField.setEditable(false);
                 }
+                updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
+                updateFieldStyle(passwordField, passwordPrompt, "center-left");
             } else {
                 // Clear fields when no selection
                 requestComboBox.setValue(null);
                 requestComboBox.getSelectionModel().clearSelection();
-                requestComboBox.setStyle(FIELD_STYLE_DISABLED);
+                requestComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
                 requestComboBox.setPromptText("Request");
-                endpointField.clear();
-                statusField.clear();
-                payloadTypeComboBox.setValue(null);
-                payloadTypeComboBox.getSelectionModel().clearSelection();
-                payloadTypeComboBox.setStyle(FIELD_STYLE_DISABLED);
-                payloadTypeComboBox.setPromptText("Payload Type");
+                endpointField.replaceText(0, endpointField.getLength(), "");
+                statusField.replaceText(0, statusField.getLength(), "");
                 authComboBox.setValue(null);
                 authComboBox.getSelectionModel().clearSelection();
-                authComboBox.setStyle(FIELD_STYLE_DISABLED);
+                authComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
                 authComboBox.setPromptText("Authorization");
-                usernameTokenField.setPromptText("Username/Token");
-                usernameTokenField.clear();
+                usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
                 usernameTokenField.setVisible(false);
-                usernameTokenField.setDisable(true);
-                passwordField.clear();
+                usernameTokenField.setEditable(false);
+                passwordField.replaceText(0, passwordField.getLength(), "");
                 passwordField.setVisible(false);
-                passwordField.setDisable(true);
+                passwordField.setEditable(false);
                 requestComboBox.setDisable(true);
-                endpointField.setDisable(true);
-                statusField.setDisable(true);
-                payloadTypeComboBox.setDisable(true);
+                endpointField.setEditable(false);
+                endpointField.setStyle(FIELD_STYLE_DISABLED);
+                statusField.setEditable(false);
+                statusField.setStyle(FIELD_STYLE_DISABLED);
                 authComboBox.setDisable(true);
+                updateFieldStyle(endpointField, endpointPrompt, "center-left");
+                updateFieldStyle(statusField, statusPrompt, "center");
+                updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
+                updateFieldStyle(passwordField, passwordPrompt, "center-left");
             }
             updateButtonStates();
         });
-
         // Listener for auth combo box changes to update auth fields visibility and update table
         authComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
@@ -482,37 +716,38 @@ public class UIComponentsManager {
                 app.setModified(true);
                 if (isValidTestId) {
                     if ("Basic Auth".equals(newVal)) {
-                        usernameTokenField.setPromptText("Username");
+                        usernamePrompt = "Username";
                         usernameTokenField.setVisible(true);
-                        usernameTokenField.setDisable(false);
+                        usernameTokenField.setEditable(true);
                         usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
                         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         passwordField.setVisible(true);
-                        passwordField.setDisable(false);
+                        passwordField.setEditable(true);
                     } else if ("Bearer Token".equals(newVal)) {
-                        usernameTokenField.setPromptText("Token");
+                        usernamePrompt = "Token";
                         usernameTokenField.setVisible(true);
-                        usernameTokenField.setDisable(false);
+                        usernameTokenField.setEditable(true);
                         usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.21));
                         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         passwordField.setVisible(false);
-                        passwordField.setDisable(true);
+                        passwordField.setEditable(false);
                     } else {
-                        usernameTokenField.setPromptText("Username/Token");
+                        usernamePrompt = "Username/Token";
                         usernameTokenField.setVisible(false);
-                        usernameTokenField.setDisable(true);
+                        usernameTokenField.setEditable(false);
                         usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
                         usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                         passwordField.setVisible(false);
-                        passwordField.setDisable(true);
+                        passwordField.setEditable(false);
                     }
                 }
+                updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
+                updateFieldStyle(passwordField, passwordPrompt, "center-left");
             }
         });
-
         // Listener for request combo box changes to update table
         requestComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
@@ -522,60 +757,8 @@ public class UIComponentsManager {
                 app.setModified(true);
             }
         });
-
-        // Listener for endpoint field changes to update table
-        endpointField.textProperty().addListener((obs, oldVal, newVal) -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.END_POINT.getIndex()] = newVal;
-                table.refresh();
-                app.setModified(true);
-            }
-        });
-
-        // Listener for status field changes to update table
-        statusField.textProperty().addListener((obs, oldVal, newVal) -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.EXPECTED_STATUS.getIndex()] = newVal;
-                table.refresh();
-                app.setModified(true);
-            }
-        });
-
-        // Listener for payload type combo box changes to update table
-        payloadTypeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.PAYLOAD_TYPE.getIndex()] = newVal;
-                table.refresh();
-                app.setModified(true);
-            }
-        });
-
-        // Listener for username/token field changes to update table
-        usernameTokenField.textProperty().addListener((obs, oldVal, newVal) -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD1.getIndex()] = newVal;
-                table.refresh();
-                app.setModified(true);
-            }
-        });
-
-        // Listener for password field changes to update table
-        passwordField.textProperty().addListener((obs, oldVal, newVal) -> {
-            int selectedIndex = table.getSelectionModel().getSelectedIndex();
-            if (selectedIndex >= 0) {
-                table.getItems().get(selectedIndex)[ColumnIndex.AUTH_FIELD2.getIndex()] = newVal;
-                table.refresh();
-                app.setModified(true);
-            }
-        });
-
         return textFieldsBox;
     }
-
     /**
      * Creates a VBox containing additional content areas for headers, parameters, payload editing,
      * response captures, and response verification.
@@ -587,7 +770,9 @@ public class UIComponentsManager {
         VBox additionalContent = new VBox(10);
         additionalContent.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         additionalContent.setAlignment(Pos.CENTER_LEFT);
-
+        // Add "Headers" heading above headerFieldsScroll
+        Label headersLabel = new Label("Headers");
+        headersLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
         // VBox and ScrollPane for header key-value pairs
         VBox headerFieldsVBox = new VBox(5);
         headerFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
@@ -595,11 +780,13 @@ public class UIComponentsManager {
         headerFieldsScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
         headerFieldsScroll.setFitToWidth(true);
         headerFieldsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        headerFieldsScroll.setPrefHeight(200);
-        headerFieldsScroll.setMaxHeight(200);
-        headerFieldsScroll.setMinHeight(200);
+        headerFieldsScroll.setPrefHeight(150);
+        headerFieldsScroll.setMaxHeight(150);
+        headerFieldsScroll.setMinHeight(150);
         headerFieldsVBox.setMaxHeight(190);
-
+        // Add "Params" heading above paramScroll
+        Label paramsLabel = new Label("Params");
+        paramsLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
         // VBox and ScrollPane for parameter key-value pairs
         VBox paramFieldsVBox = new VBox(5);
         paramFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
@@ -607,11 +794,13 @@ public class UIComponentsManager {
         paramScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
         paramScroll.setFitToWidth(true);
         paramScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        paramScroll.setPrefHeight(200);
-        paramScroll.setMaxHeight(200);
-        paramScroll.setMinHeight(200);
+        paramScroll.setPrefHeight(150);
+        paramScroll.setMaxHeight(150);
+        paramScroll.setMinHeight(150);
         paramFieldsVBox.setMaxHeight(190);
-
+        // Add "Capture Response Data" heading above responseCaptureScroll
+        Label responseCaptureLabel = new Label("Capture Response Data");
+        responseCaptureLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
         // VBox and ScrollPane for response capture key-value pairs
         VBox responseCaptureVBox = new VBox(5);
         responseCaptureVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
@@ -619,24 +808,97 @@ public class UIComponentsManager {
         responseCaptureScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
         responseCaptureScroll.setFitToWidth(true);
         responseCaptureScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        responseCaptureScroll.setPrefHeight(200);
-        responseCaptureScroll.setMaxHeight(200);
-        responseCaptureScroll.setMinHeight(200);
+        responseCaptureScroll.setPrefHeight(150);
+        responseCaptureScroll.setMaxHeight(150);
+        responseCaptureScroll.setMinHeight(150);
         responseCaptureVBox.setMaxHeight(190);
+        // Create combo box for payload types
+        ComboBox<String> payloadTypeComboBox = new ComboBox<>(PAYLOAD_TYPES);
+        payloadTypeComboBox.setPromptText("Payload Type");
 
+        // Add CSS for dark theme text visibility
+        payloadTypeComboBox.getStylesheets().add("data:text/css," +
+            ".combo-box .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #2E2E2E;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:selected {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #4A90E2;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:focused {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #4A90E2;" +
+            "}"
+        );
+
+        payloadTypeComboBox.setCellFactory(lv -> new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.isEmpty() ? "No Type" : item);
+                }
+                setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
+            }
+        });
+
+        payloadTypeComboBox.setConverter(new StringConverter<String>() {
+            @Override
+            public String toString(String object) {
+                if (object == null || object.isEmpty()) {
+                    return "No Type";
+                }
+                return object;
+            }
+
+            @Override
+            public String fromString(String string) {
+                return string;
+            }
+        });
+        payloadTypeComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
+        payloadTypeComboBox.setPrefHeight(38.0);
+        payloadTypeComboBox.setMinHeight(38.0);
+        payloadTypeComboBox.setMaxHeight(38.0);
+        payloadTypeComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            if (!payloadTypeComboBox.isDisable()) {
+                payloadTypeComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
+            }
+        });
+        payloadTypeComboBox.setDisable(true);
+        // Set width to match the original proportion relative to table width
+        payloadTypeComboBox.setPrefWidth(125); // Fixed width to approximate original proportion
+        payloadTypeComboBox.setMaxWidth(125);
+        payloadTypeComboBox.setMinWidth(125);
+        // Listener for payload type combo box changes to update table
+        payloadTypeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+            int selectedIndex = table.getSelectionModel().getSelectedIndex();
+            if (selectedIndex >= 0) {
+                table.getItems().get(selectedIndex)[ColumnIndex.PAYLOAD_TYPE.getIndex()] = newVal;
+                table.refresh();
+                app.setModified(true);
+            }
+        });
         // Text area for payload editing with JSON formatting support
-        payloadField = new TextArea();
-        payloadField.setPromptText("Payload");
+        payloadField = new InlineCssTextArea();
         payloadField.setStyle(FIELD_STYLE_UNFOCUSED);
         payloadField.setPrefHeight(300);
         payloadField.setMinHeight(300);
         payloadField.setMaxHeight(300);
         payloadField.setWrapText(true);
-        payloadField.setDisable(false);
-        payloadField.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            payloadField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-        });
-
+        payloadField.setEditable(true);
+        payloadField.replaceText(0, payloadField.getLength(), "");
+        String caretCss = ".styled-text-area .caret { -fx-fill: white; -fx-stroke: white; } " +
+                          ".styled-text-area:focused .caret { -fx-fill: white; -fx-stroke: white; } " +
+                          ".styled-text-area:disabled .caret { -fx-fill: #888888; -fx-stroke: #888888; }";
+        payloadField.getStylesheets().add("data:text/css," + caretCss);
+        updatePayloadStyle();
         // Listener for payload field changes to update table
         payloadField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
@@ -645,8 +907,8 @@ public class UIComponentsManager {
                 table.refresh();
                 app.setModified(true);
             }
+            updatePayloadStyle();
         });
-
         // Handle TAB key in payload field for focus traversal (no tab insertion)
         payloadField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
@@ -661,20 +923,27 @@ public class UIComponentsManager {
                 moveFocus(payloadField, !event.isShiftDown()); // Move focus forward or backward
             }
         });
-
+        // Focused listener for payload
+        payloadField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            updatePayloadStyle();
+            payloadField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        // Create HBox to hold payloadField and payloadTypeComboBox
+        HBox payloadBox = new HBox(10, payloadField, payloadTypeComboBox);
+        payloadBox.setAlignment(Pos.TOP_LEFT);
+        HBox.setHgrow(payloadField, Priority.ALWAYS);
+        HBox.setHgrow(payloadTypeComboBox, Priority.NEVER);
         // Text area for response verification with JSON formatting support
-        verifyResponseField = new TextArea();
-        verifyResponseField.setPromptText("Verify Response");
+        verifyResponseField = new InlineCssTextArea();
         verifyResponseField.setStyle(FIELD_STYLE_UNFOCUSED);
         verifyResponseField.setPrefHeight(310);
         verifyResponseField.setMinHeight(310);
         verifyResponseField.setMaxHeight(310);
         verifyResponseField.setWrapText(true);
-        verifyResponseField.setDisable(false);
-        verifyResponseField.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            verifyResponseField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
-        });
-
+        verifyResponseField.setEditable(true);
+        verifyResponseField.replaceText(0, verifyResponseField.getLength(), "");
+        verifyResponseField.getStylesheets().add("data:text/css," + caretCss);
+        updateVerifyStyle();
         // Listener for verify response field changes to update table
         verifyResponseField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
@@ -683,8 +952,8 @@ public class UIComponentsManager {
                 table.refresh();
                 app.setModified(true);
             }
+            updateVerifyStyle();
         });
-
         // Handle TAB key in verify response field for focus traversal
         verifyResponseField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
@@ -699,9 +968,19 @@ public class UIComponentsManager {
                 moveFocus(verifyResponseField, !event.isShiftDown()); // Move focus forward or backward
             }
         });
-
-        // Create left VBox for scroll panes
-        VBox leftVBox = new VBox(10, headerFieldsScroll, paramScroll, responseCaptureScroll);
+        // Focused listener for verify response
+        verifyResponseField.focusedProperty().addListener((obs, oldVal, newVal) -> {
+            updateVerifyStyle();
+            verifyResponseField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+        });
+        // Add "Payload" heading above payloadBox
+        Label payloadLabel = new Label("Payload");
+        payloadLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
+        // Add "Verify Response" heading above verifyResponseField
+        Label verifyResponseLabel = new Label("Verify Response");
+        verifyResponseLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
+        // Create left VBox for scroll panes with headers, params, and response capture labels
+        VBox leftVBox = new VBox(10, headersLabel, headerFieldsScroll, paramsLabel, paramScroll, responseCaptureLabel, responseCaptureScroll);
         leftVBox.setAlignment(Pos.TOP_LEFT);
         GridPane.setValignment(leftVBox, VPos.TOP);
         // Bind widths for left scrolls
@@ -709,12 +988,14 @@ public class UIComponentsManager {
         paramScroll.maxWidthProperty().bind(headerFieldsScroll.widthProperty());
         responseCaptureScroll.prefWidthProperty().bind(headerFieldsScroll.widthProperty());
         responseCaptureScroll.maxWidthProperty().bind(headerFieldsScroll.widthProperty());
-
-        // Create right VBox for text areas, with verifyResponseField under payloadField
-        VBox rightVBox = new VBox(10, payloadField, verifyResponseField);
+        // Create right VBox for payload box and verifyResponseField with labels
+        VBox payloadSection = new VBox(5, payloadLabel, payloadBox);
+        payloadSection.setAlignment(Pos.TOP_LEFT);
+        VBox verifySection = new VBox(5, verifyResponseLabel, verifyResponseField);
+        verifySection.setAlignment(Pos.TOP_LEFT);
+        VBox rightVBox = new VBox(10, payloadSection, verifySection);
         rightVBox.setAlignment(Pos.TOP_LEFT);
         GridPane.setValignment(rightVBox, VPos.TOP);
-
         // GridPane to layout the left and right VBoxes
         GridPane additionalFields = new GridPane();
         additionalFields.setHgap(10);
@@ -722,7 +1003,6 @@ public class UIComponentsManager {
         additionalFields.setAlignment(Pos.CENTER_LEFT);
         additionalFields.add(leftVBox, 0, 0);
         additionalFields.add(rightVBox, 1, 0);
-
         // Set column widths for the grid
         ColumnConstraints col1 = new ColumnConstraints();
         col1.setPercentWidth(40);
@@ -730,7 +1010,6 @@ public class UIComponentsManager {
         col2.setPercentWidth(60);
         additionalFields.getColumnConstraints().addAll(col1, col2);
         additionalContent.getChildren().add(additionalFields);
-
         // Listener for table selection to populate dynamic fields (headers, params, etc.) for test steps
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
             // Clear all dynamic field containers
@@ -747,21 +1026,36 @@ public class UIComponentsManager {
                     }
                 }
                 boolean isValid = CreateEditAPITest.isValidTestId(testId, testIds, testId);
-                payloadField.setDisable(!isValid);
-                verifyResponseField.setDisable(!isValid);
-
                 if (!isValid) {
-                    payloadField.clear();
-                    verifyResponseField.clear();
+                    payloadField.replaceText(0, payloadField.getLength(), "");
+                    payloadField.setEditable(false);
+                    payloadField.setStyle(FIELD_STYLE_DISABLED);
+                    verifyResponseField.replaceText(0, verifyResponseField.getLength(), "");
+                    verifyResponseField.setEditable(false);
+                    verifyResponseField.setStyle(FIELD_STYLE_DISABLED);
+                    payloadTypeComboBox.setValue(null);
+                    payloadTypeComboBox.getSelectionModel().clearSelection();
+                    payloadTypeComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
+                    payloadTypeComboBox.setPromptText("Payload Type");
+                    payloadTypeComboBox.setDisable(true);
                     return;
                 }
-
-                // Populate payload and verify response fields with formatted JSON
+                // Populate payload, payload type, and verify response fields
                 String payload = newItem[ColumnIndex.PAYLOAD.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD.getIndex()] : "";
-                payloadField.setText(CreateEditAPITest.formatJson(payload, statusLabel));
+                String formattedPayload = CreateEditAPITest.formatJson(payload, statusLabel);
+                payloadField.replaceText(0, payloadField.getLength(), formattedPayload);
+                updatePayloadStyle();
                 String verify = newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] != null ? newItem[ColumnIndex.VERIFY_RESPONSE.getIndex()] : "";
-                verifyResponseField.setText(CreateEditAPITest.formatJson(verify, statusLabel));
-
+                String formattedVerify = CreateEditAPITest.formatJson(verify, statusLabel);
+                verifyResponseField.replaceText(0, verifyResponseField.getLength(), formattedVerify);
+                updateVerifyStyle();
+                payloadField.setEditable(true);
+                verifyResponseField.setEditable(true);
+                payloadField.setStyle(payloadField.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                verifyResponseField.setStyle(verifyResponseField.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
+                payloadTypeComboBox.setValue(newItem[ColumnIndex.PAYLOAD_TYPE.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD_TYPE.getIndex()] : "");
+                payloadTypeComboBox.setDisable(false);
+                payloadTypeComboBox.setStyle(payloadTypeComboBox.isFocused() ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
                 // Find start of current test case block
                 int start = selectedIndex;
                 while (start >= 0 && (table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()] == null ||
@@ -769,7 +1063,6 @@ public class UIComponentsManager {
                     start--;
                 }
                 if (start < 0) start = 0;
-
                 // Collect all row indices for the current test case
                 List<Integer> rowIndices = new ArrayList<>();
                 for (int i = start; i < table.getItems().size(); i++) {
@@ -778,30 +1071,86 @@ public class UIComponentsManager {
                             !r[ColumnIndex.TEST_ID.getIndex()].isEmpty()) break;
                     rowIndices.add(i);
                 }
-
                 // Dynamically create and add fields for each row in the test case
                 for (Integer rowIndex : rowIndices) {
                     String[] row = table.getItems().get(rowIndex);
-
                     // Header key-value pair
-                    TextField headerKeyField = new TextField(row[ColumnIndex.HEADER_KEY.getIndex()] != null ?
-                            row[ColumnIndex.HEADER_KEY.getIndex()] : "");
-                    headerKeyField.setPromptText("Header Key");
+                    InlineCssTextArea headerKeyField = new InlineCssTextArea();
+                    String headerKeyInitial = row[ColumnIndex.HEADER_KEY.getIndex()] != null ? row[ColumnIndex.HEADER_KEY.getIndex()] : "";
+                    headerKeyField.replaceText(0, headerKeyField.getLength(), headerKeyInitial);
                     headerKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
                     headerKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    headerKeyField.setWrapText(false);
+                    headerKeyField.setEditable(true);
+                    headerKeyField.getStylesheets().add("data:text/css," + caretCss);
+                    String headerKeyPrompt = "Header Key";
+                    updateFieldStyle(headerKeyField, headerKeyPrompt, "center");
+                    headerKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        table.getItems().get(rowIndex)[ColumnIndex.HEADER_KEY.getIndex()] = newVal2.trim();
+                        table.refresh();
+                        app.setModified(true);
+                        updateFieldStyle(headerKeyField, headerKeyPrompt, "center");
+                    });
+                    headerKeyField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                        if (event.getCode() == KeyCode.TAB) {
+                            event.consume();
+                            table.getItems().get(rowIndex)[ColumnIndex.HEADER_KEY.getIndex()] = headerKeyField.getText().trim();
+                            table.refresh();
+                            app.setModified(true);
+                            moveFocus(headerKeyField, !event.isShiftDown());
+                        }
+                    });
                     headerKeyField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        if (newVal2) {
+                            if (headerKeyField.getText().equals(headerKeyPrompt)) {
+                                headerKeyField.replaceText(0, headerKeyField.getLength(), "");
+                            }
+                        } else {
+                            if (headerKeyField.getText().isEmpty()) {
+                                headerKeyField.replaceText(0, headerKeyField.getLength(), headerKeyPrompt);
+                            }
+                        }
+                        updateFieldStyle(headerKeyField, headerKeyPrompt, "center");
                         headerKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
-
-                    TextField headerValueField = new TextField(row[ColumnIndex.HEADER_VALUE.getIndex()] != null ?
-                            row[ColumnIndex.HEADER_VALUE.getIndex()] : "");
-                    headerValueField.setPromptText("Header Value");
+                    InlineCssTextArea headerValueField = new InlineCssTextArea();
+                    String headerValueInitial = row[ColumnIndex.HEADER_VALUE.getIndex()] != null ? row[ColumnIndex.HEADER_VALUE.getIndex()] : "";
+                    headerValueField.replaceText(0, headerValueField.getLength(), headerValueInitial);
                     headerValueField.setStyle(FIELD_STYLE_UNFOCUSED);
                     headerValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    headerValueField.setWrapText(false);
+                    headerValueField.setEditable(true);
+                    headerValueField.getStylesheets().add("data:text/css," + caretCss);
+                    String headerValuePrompt = "Header Value";
+                    updateFieldStyle(headerValueField, headerValuePrompt, "center");
+                    headerValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        table.getItems().get(rowIndex)[ColumnIndex.HEADER_VALUE.getIndex()] = newVal2.trim();
+                        table.refresh();
+                        app.setModified(true);
+                        updateFieldStyle(headerValueField, headerValuePrompt, "center");
+                    });
+                    headerValueField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                        if (event.getCode() == KeyCode.TAB) {
+                            event.consume();
+                            table.getItems().get(rowIndex)[ColumnIndex.HEADER_VALUE.getIndex()] = headerValueField.getText().trim();
+                            table.refresh();
+                            app.setModified(true);
+                            moveFocus(headerValueField, !event.isShiftDown());
+                        }
+                    });
                     headerValueField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        if (newVal2) {
+                            if (headerValueField.getText().equals(headerValuePrompt)) {
+                                headerValueField.replaceText(0, headerValueField.getLength(), "");
+                            }
+                        } else {
+                            if (headerValueField.getText().isEmpty()) {
+                                headerValueField.replaceText(0, headerValueField.getLength(), headerValuePrompt);
+                            }
+                        }
+                        updateFieldStyle(headerValueField, headerValuePrompt, "center");
                         headerValueField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
-
                     HBox headerPair = new HBox(5, headerKeyField, headerValueField);
                     headerPair.setAlignment(Pos.CENTER_LEFT);
                     headerKeyField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
@@ -810,40 +1159,84 @@ public class UIComponentsManager {
                     headerValueField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
                     headerValueField.maxWidthProperty().bind(headerValueField.prefWidthProperty());
                     headerValueField.minWidthProperty().bind(headerValueField.prefWidthProperty());
-
-                    headerKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.HEADER_KEY.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
-                    headerValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.HEADER_VALUE.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
                     headerFieldsVBox.getChildren().add(headerPair);
-
                     // Parameter key-value pair
-                    TextField paramKeyField = new TextField(row[ColumnIndex.PARAM_KEY.getIndex()] != null ?
-                            row[ColumnIndex.PARAM_KEY.getIndex()] : "");
-                    paramKeyField.setPromptText("Parameter Key");
+                    InlineCssTextArea paramKeyField = new InlineCssTextArea();
+                    String paramKeyInitial = row[ColumnIndex.PARAM_KEY.getIndex()] != null ? row[ColumnIndex.PARAM_KEY.getIndex()] : "";
+                    paramKeyField.replaceText(0, paramKeyField.getLength(), paramKeyInitial);
                     paramKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
                     paramKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    paramKeyField.setWrapText(false);
+                    paramKeyField.setEditable(true);
+                    paramKeyField.getStylesheets().add("data:text/css," + caretCss);
+                    String paramKeyPrompt = "Parameter Key";
+                    updateFieldStyle(paramKeyField, paramKeyPrompt, "center");
+                    paramKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        table.getItems().get(rowIndex)[ColumnIndex.PARAM_KEY.getIndex()] = newVal2.trim();
+                        table.refresh();
+                        app.setModified(true);
+                        updateFieldStyle(paramKeyField, paramKeyPrompt, "center");
+                    });
+                    paramKeyField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                        if (event.getCode() == KeyCode.TAB) {
+                            event.consume();
+                            table.getItems().get(rowIndex)[ColumnIndex.PARAM_KEY.getIndex()] = paramKeyField.getText().trim();
+                            table.refresh();
+                            app.setModified(true);
+                            moveFocus(paramKeyField, !event.isShiftDown());
+                        }
+                    });
                     paramKeyField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        if (newVal2) {
+                            if (paramKeyField.getText().equals(paramKeyPrompt)) {
+                                paramKeyField.replaceText(0, paramKeyField.getLength(), "");
+                            }
+                        } else {
+                            if (paramKeyField.getText().isEmpty()) {
+                                paramKeyField.replaceText(0, paramKeyField.getLength(), paramKeyPrompt);
+                            }
+                        }
+                        updateFieldStyle(paramKeyField, paramKeyPrompt, "center");
                         paramKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
-
-                    TextField paramValueField = new TextField(row[ColumnIndex.PARAM_VALUE.getIndex()] != null ?
-                            row[ColumnIndex.PARAM_VALUE.getIndex()] : "");
-                    paramValueField.setPromptText("Parameter Value");
+                    InlineCssTextArea paramValueField = new InlineCssTextArea();
+                    String paramValueInitial = row[ColumnIndex.PARAM_VALUE.getIndex()] != null ? row[ColumnIndex.PARAM_VALUE.getIndex()] : "";
+                    paramValueField.replaceText(0, paramValueField.getLength(), paramValueInitial);
                     paramValueField.setStyle(FIELD_STYLE_UNFOCUSED);
                     paramValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    paramValueField.setWrapText(false);
+                    paramValueField.setEditable(true);
+                    paramValueField.getStylesheets().add("data:text/css," + caretCss);
+                    String paramValuePrompt = "Parameter Value";
+                    updateFieldStyle(paramValueField, paramValuePrompt, "center");
+                    paramValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        table.getItems().get(rowIndex)[ColumnIndex.PARAM_VALUE.getIndex()] = newVal2.trim();
+                        table.refresh();
+                        app.setModified(true);
+                        updateFieldStyle(paramValueField, paramValuePrompt, "center");
+                    });
+                    paramValueField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                        if (event.getCode() == KeyCode.TAB) {
+                            event.consume();
+                            table.getItems().get(rowIndex)[ColumnIndex.PARAM_VALUE.getIndex()] = paramValueField.getText().trim();
+                            table.refresh();
+                            app.setModified(true);
+                            moveFocus(paramValueField, !event.isShiftDown());
+                        }
+                    });
                     paramValueField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        if (newVal2) {
+                            if (paramValueField.getText().equals(paramValuePrompt)) {
+                                paramValueField.replaceText(0, paramValueField.getLength(), "");
+                            }
+                        } else {
+                            if (paramValueField.getText().isEmpty()) {
+                                paramValueField.replaceText(0, paramValueField.getLength(), paramValuePrompt);
+                            }
+                        }
+                        updateFieldStyle(paramValueField, paramValuePrompt, "center");
                         paramValueField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
-
                     HBox paramPair = new HBox(5, paramKeyField, paramValueField);
                     paramPair.setAlignment(Pos.CENTER_LEFT);
                     paramKeyField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
@@ -852,40 +1245,84 @@ public class UIComponentsManager {
                     paramValueField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
                     paramValueField.maxWidthProperty().bind(paramValueField.prefWidthProperty());
                     paramValueField.minWidthProperty().bind(paramValueField.prefWidthProperty());
-
-                    paramKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.PARAM_KEY.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
-                    paramValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.PARAM_VALUE.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
                     paramFieldsVBox.getChildren().add(paramPair);
-
                     // Response key-capture value pair
-                    TextField responseKeyField = new TextField(row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] != null ?
-                            row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] : "");
-                    responseKeyField.setPromptText("Response Key Name");
+                    InlineCssTextArea responseKeyField = new InlineCssTextArea();
+                    String responseKeyInitial = row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] != null ? row[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] : "";
+                    responseKeyField.replaceText(0, responseKeyField.getLength(), responseKeyInitial);
                     responseKeyField.setStyle(FIELD_STYLE_UNFOCUSED);
                     responseKeyField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    responseKeyField.setWrapText(false);
+                    responseKeyField.setEditable(true);
+                    responseKeyField.getStylesheets().add("data:text/css," + caretCss);
+                    String responseKeyPrompt = "Response Key Name";
+                    updateFieldStyle(responseKeyField, responseKeyPrompt, "center");
+                    responseKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        table.getItems().get(rowIndex)[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] = newVal2.trim();
+                        table.refresh();
+                        app.setModified(true);
+                        updateFieldStyle(responseKeyField, responseKeyPrompt, "center");
+                    });
+                    responseKeyField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                        if (event.getCode() == KeyCode.TAB) {
+                            event.consume();
+                            table.getItems().get(rowIndex)[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] = responseKeyField.getText().trim();
+                            table.refresh();
+                            app.setModified(true);
+                            moveFocus(responseKeyField, !event.isShiftDown());
+                        }
+                    });
                     responseKeyField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        if (newVal2) {
+                            if (responseKeyField.getText().equals(responseKeyPrompt)) {
+                                responseKeyField.replaceText(0, responseKeyField.getLength(), "");
+                            }
+                        } else {
+                            if (responseKeyField.getText().isEmpty()) {
+                                responseKeyField.replaceText(0, responseKeyField.getLength(), responseKeyPrompt);
+                            }
+                        }
+                        updateFieldStyle(responseKeyField, responseKeyPrompt, "center");
                         responseKeyField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
-
-                    TextField captureValueField = new TextField(row[ColumnIndex.CAPTURE_VALUE.getIndex()] != null ?
-                            row[ColumnIndex.CAPTURE_VALUE.getIndex()] : "");
-                    captureValueField.setPromptText("Capture Value (env var)");
+                    InlineCssTextArea captureValueField = new InlineCssTextArea();
+                    String captureValueInitial = row[ColumnIndex.CAPTURE_VALUE.getIndex()] != null ? row[ColumnIndex.CAPTURE_VALUE.getIndex()] : "";
+                    captureValueField.replaceText(0, captureValueField.getLength(), captureValueInitial);
                     captureValueField.setStyle(FIELD_STYLE_UNFOCUSED);
                     captureValueField.setPrefHeight(TEXT_FIELD_HEIGHT);
+                    captureValueField.setWrapText(false);
+                    captureValueField.setEditable(true);
+                    captureValueField.getStylesheets().add("data:text/css," + caretCss);
+                    String captureValuePrompt = "Capture Value (env var)";
+                    updateFieldStyle(captureValueField, captureValuePrompt, "center");
+                    captureValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        table.getItems().get(rowIndex)[ColumnIndex.CAPTURE_VALUE.getIndex()] = newVal2.trim();
+                        table.refresh();
+                        app.setModified(true);
+                        updateFieldStyle(captureValueField, captureValuePrompt, "center");
+                    });
+                    captureValueField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                        if (event.getCode() == KeyCode.TAB) {
+                            event.consume();
+                            table.getItems().get(rowIndex)[ColumnIndex.CAPTURE_VALUE.getIndex()] = captureValueField.getText().trim();
+                            table.refresh();
+                            app.setModified(true);
+                            moveFocus(captureValueField, !event.isShiftDown());
+                        }
+                    });
                     captureValueField.focusedProperty().addListener((obs2, oldVal2, newVal2) -> {
+                        if (newVal2) {
+                            if (captureValueField.getText().equals(captureValuePrompt)) {
+                                captureValueField.replaceText(0, captureValueField.getLength(), "");
+                            }
+                        } else {
+                            if (captureValueField.getText().isEmpty()) {
+                                captureValueField.replaceText(0, captureValueField.getLength(), captureValuePrompt);
+                            }
+                        }
+                        updateFieldStyle(captureValueField, captureValuePrompt, "center");
                         captureValueField.setStyle(newVal2 ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     });
-
                     HBox responsePair = new HBox(5, responseKeyField, captureValueField);
                     responsePair.setAlignment(Pos.CENTER_LEFT);
                     responseKeyField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
@@ -894,33 +1331,84 @@ public class UIComponentsManager {
                     captureValueField.prefWidthProperty().bind(headerFieldsScroll.widthProperty().multiply(0.5).subtract(8.5));
                     captureValueField.maxWidthProperty().bind(captureValueField.prefWidthProperty());
                     captureValueField.minWidthProperty().bind(captureValueField.prefWidthProperty());
-
-                    responseKeyField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.RESPONSE_KEY_NAME.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
-                    captureValueField.textProperty().addListener((obs2, oldVal2, newVal2) -> {
-                        table.getItems().get(rowIndex)[ColumnIndex.CAPTURE_VALUE.getIndex()] = newVal2.trim();
-                        table.refresh();
-                        app.setModified(true);
-                    });
-
                     responseCaptureVBox.getChildren().add(responsePair);
                 }
             } else {
-                // Disable and clear payload and verify fields when no selection
-                payloadField.clear();
-                payloadField.setDisable(true);
-                verifyResponseField.clear();
-                verifyResponseField.setDisable(true);
+                // Disable and clear payload, payload type, and verify fields when no selection
+                payloadField.replaceText(0, payloadField.getLength(), "");
+                payloadField.setEditable(false);
+                payloadField.setStyle(FIELD_STYLE_DISABLED);
+                verifyResponseField.replaceText(0, verifyResponseField.getLength(), "");
+                verifyResponseField.setEditable(false);
+                verifyResponseField.setStyle(FIELD_STYLE_DISABLED);
+                payloadTypeComboBox.setValue(null);
+                payloadTypeComboBox.getSelectionModel().clearSelection();
+                payloadTypeComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
+                payloadTypeComboBox.setPromptText("Payload Type");
+                payloadTypeComboBox.setDisable(true);
             }
         });
-
         return additionalContent;
     }
-
+    
+    private void updateFieldStyle(InlineCssTextArea field, String prompt, String alignment) {
+        if (!field.isEditable()) {
+            field.setStyleSpans(0, new StyleSpansBuilder<String>().add("-fx-fill: #888888;", field.getLength()).create());
+            field.setParagraphStyle(0, "-fx-alignment: " + alignment + ";");
+            return;
+        }
+        String text = field.getText();
+        boolean isEmpty = text.isEmpty();
+        boolean showPlaceholder = isEmpty && !field.isFocused();
+        if (showPlaceholder) {
+            field.replaceText(0, field.getLength(), prompt);
+            field.setStyleSpans(0, computePlaceholderStyle(prompt));
+        } else if (text.equals(prompt) && !field.isFocused()) {
+            field.setStyleSpans(0, computePlaceholderStyle(prompt));
+        } else {
+            if (text.equals(prompt)) {
+                field.replaceText(0, field.getLength(), "");
+            }
+            field.setStyleSpans(0, computeHighlighting(field.getText()));
+        }
+        field.setParagraphStyle(0, "-fx-alignment: " + alignment + ";");
+    }
+    private void updatePayloadStyle() {
+        String text = payloadField.getText();
+        payloadField.setStyleSpans(0, computeHighlighting(text));
+        payloadField.setParagraphStyle(0, "-fx-alignment: top-left;");
+    }
+    private void updateVerifyStyle() {
+        String text = verifyResponseField.getText();
+        verifyResponseField.setStyleSpans(0, computeHighlighting(text));
+        verifyResponseField.setParagraphStyle(0, "-fx-alignment: top-left;");
+    }
+    /**
+     * Simple highlighter for {{any-text}} in pink (used by InlineCssTextArea).
+     * Uses inline CSS styles; default is empty string to inherit white from control.
+     */
+    private StyleSpans<String> computeHighlighting(String text) {
+        StyleSpansBuilder<String> spansBuilder = new StyleSpansBuilder<>();
+        Pattern pattern = Pattern.compile("\\{\\{[^}]+\\}\\}"); // Matches {{any-text}}
+        Matcher matcher = pattern.matcher(text);
+        int lastEnd = 0;
+        while (matcher.find()) {
+            // Plain text before match (white)
+            spansBuilder.add("-fx-fill: white;", matcher.start() - lastEnd);
+            // Highlighted match
+            spansBuilder.add("-fx-fill: pink;", matcher.end() - matcher.start());
+            lastEnd = matcher.end();
+        }
+        // Remaining plain text (white)
+        spansBuilder.add("-fx-fill: white;", text.length() - lastEnd);
+        return spansBuilder.create();
+    }
+    private StyleSpans<String> computePlaceholderStyle(String prompt) {
+        StyleSpansBuilder<String> spansBuilder = new StyleSpansBuilder<>();
+        spansBuilder.add("-fx-fill: #BBBBBB;", prompt.length());
+        return spansBuilder.create();
+    }
+    
     /**
      * Creates a VBox containing action buttons for managing test steps and files.
      *
@@ -937,7 +1425,6 @@ public class UIComponentsManager {
         VBox buttonsVBox = new VBox(10);
         buttonsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 10px;");
         buttonsVBox.setAlignment(Pos.TOP_CENTER);
-
         // Button to add a new test step at the end
         Button addStepButton = new Button("Add Step");
         addStepButton.setStyle(BUTTON_STYLE);
@@ -951,7 +1438,6 @@ public class UIComponentsManager {
         });
         addStepButton.setOnMouseEntered(e -> addStepButton.setStyle(BUTTON_HOVER_STYLE));
         addStepButton.setOnMouseExited(e -> addStepButton.setStyle(BUTTON_STYLE));
-
         // Button to add a step above the selected row
         addAboveButton = new Button("Add Above");
         addAboveButton.setStyle(BUTTON_STYLE);
@@ -968,11 +1454,10 @@ public class UIComponentsManager {
         });
         addAboveButton.setOnMouseEntered(e -> addAboveButton.setStyle(BUTTON_HOVER_STYLE));
         addAboveButton.setOnMouseExited(e -> addAboveButton.setStyle(BUTTON_STYLE));
-
         // Button to add a step below the selected row
         addBelowButton = new Button("Add Below");
         addBelowButton.setStyle(BUTTON_STYLE);
-        addBelowButton.setTooltip(new Tooltip("Add a new step below the selected row"));
+        addBelowButton.setTooltip(new Tooltip("Add a step below the selected row"));
         addBelowButton.setOnAction(e -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -985,7 +1470,6 @@ public class UIComponentsManager {
         });
         addBelowButton.setOnMouseEntered(e -> addBelowButton.setStyle(BUTTON_HOVER_STYLE));
         addBelowButton.setOnMouseExited(e -> addBelowButton.setStyle(BUTTON_STYLE));
-
         // Button to move selected step up
         moveUpButton = new Button("Move Up");
         moveUpButton.setStyle(BUTTON_STYLE);
@@ -1005,7 +1489,6 @@ public class UIComponentsManager {
         });
         moveUpButton.setOnMouseEntered(e -> moveUpButton.setStyle(BUTTON_HOVER_STYLE));
         moveUpButton.setOnMouseExited(e -> moveUpButton.setStyle(BUTTON_STYLE));
-
         // Button to move selected step down
         moveDownButton = new Button("Move Down");
         moveDownButton.setStyle(BUTTON_STYLE);
@@ -1025,7 +1508,6 @@ public class UIComponentsManager {
         });
         moveDownButton.setOnMouseEntered(e -> moveDownButton.setStyle(BUTTON_HOVER_STYLE));
         moveDownButton.setOnMouseExited(e -> moveDownButton.setStyle(BUTTON_STYLE));
-
         // Button to delete the selected step
         deleteStepButton = new Button("Delete Step");
         deleteStepButton.setStyle(BUTTON_STYLE);
@@ -1058,7 +1540,6 @@ public class UIComponentsManager {
         });
         deleteStepButton.setOnMouseEntered(e -> deleteStepButton.setStyle(BUTTON_HOVER_STYLE));
         deleteStepButton.setOnMouseExited(e -> deleteStepButton.setStyle(BUTTON_STYLE));
-
         // Button to delete the entire test case
         deleteTestCaseButton = new Button("Delete Test Case");
         deleteTestCaseButton.setStyle(BUTTON_STYLE);
@@ -1110,7 +1591,6 @@ public class UIComponentsManager {
         });
         deleteTestCaseButton.setOnMouseEntered(e -> deleteTestCaseButton.setStyle(BUTTON_HOVER_STYLE));
         deleteTestCaseButton.setOnMouseExited(e -> deleteTestCaseButton.setStyle(BUTTON_STYLE));
-
         // Button to save the test case (Save or Save As)
         saveTestButton = new Button("Save Test");
         saveTestButton.setStyle(BUTTON_STYLE);
@@ -1141,7 +1621,6 @@ public class UIComponentsManager {
         });
         saveTestButton.setOnMouseEntered(e -> saveTestButton.setStyle(BUTTON_HOVER_STYLE));
         saveTestButton.setOnMouseExited(e -> saveTestButton.setStyle(BUTTON_STYLE));
-
         // Button to load a test case from Excel file
         Button loadTestButton = new Button("Load Test");
         loadTestButton.setStyle(BUTTON_STYLE);
@@ -1177,7 +1656,6 @@ public class UIComponentsManager {
                         CreateEditAPITest.showError("Invalid test suite " + fileName + ". Upload the valid test suite.");
                         return;
                     }
-
                     // Load data rows and validate Test IDs
                     table.getItems().clear();
                     Set<String> testIds = new HashSet<>();
@@ -1239,7 +1717,6 @@ public class UIComponentsManager {
         });
         loadTestButton.setOnMouseEntered(e -> loadTestButton.setStyle(BUTTON_HOVER_STYLE));
         loadTestButton.setOnMouseExited(e -> loadTestButton.setStyle(BUTTON_STYLE));
-
         // Button to create a new empty test case
         createNewTestButton = new Button("Create New Test");
         createNewTestButton.setStyle(BUTTON_STYLE);
@@ -1256,7 +1733,6 @@ public class UIComponentsManager {
         });
         createNewTestButton.setOnMouseEntered(e -> createNewTestButton.setStyle(BUTTON_HOVER_STYLE));
         createNewTestButton.setOnMouseExited(e -> createNewTestButton.setStyle(BUTTON_STYLE));
-
         // Button to open environment variables editor
         Button addEditEnvVarButton = new Button("Add/Edit Env Var");
         addEditEnvVarButton.setStyle(BUTTON_STYLE);
@@ -1279,14 +1755,12 @@ public class UIComponentsManager {
         });
         addEditEnvVarButton.setOnMouseEntered(e -> addEditEnvVarButton.setStyle(BUTTON_HOVER_STYLE));
         addEditEnvVarButton.setOnMouseExited(e -> addEditEnvVarButton.setStyle(BUTTON_STYLE));
-
         // Button to import Postman collection
         Button importCollectionButton = new Button("Import Collection");
         importCollectionButton.setStyle(BUTTON_STYLE);
         importCollectionButton.setTooltip(new Tooltip("Import a collection of test cases"));
         importCollectionButton.setOnMouseEntered(e -> importCollectionButton.setStyle(BUTTON_HOVER_STYLE));
         importCollectionButton.setOnMouseExited(e -> importCollectionButton.setStyle(BUTTON_STYLE));
-
         importCollectionButton.setOnAction(e -> {
             if (!checkUnsavedChanges.apply(primaryStage)) {
                 return;
@@ -1320,17 +1794,14 @@ public class UIComponentsManager {
             }
             updateButtonStates();
         });
-
         // Add all buttons to the VBox
         buttonsVBox.getChildren().addAll(
             addStepButton, addAboveButton, addBelowButton, moveUpButton, moveDownButton,
             deleteStepButton, deleteTestCaseButton, saveTestButton, loadTestButton,
             createNewTestButton, addEditEnvVarButton, importCollectionButton
         );
-
         return buttonsVBox;
     }
-
     /**
      * Updates the enabled/disabled state of action buttons based on current table selection and content.
      */
@@ -1338,7 +1809,6 @@ public class UIComponentsManager {
         int selectedIndex = table.getSelectionModel().getSelectedIndex();
         boolean hasSelection = selectedIndex >= 0;
         boolean hasItems = !table.getItems().isEmpty();
-
         addAboveButton.setDisable(!hasSelection);
         addBelowButton.setDisable(!hasSelection);
         moveUpButton.setDisable(!hasSelection || selectedIndex == 0);
@@ -1348,7 +1818,6 @@ public class UIComponentsManager {
         saveTestButton.setDisable(!hasItems);
         createNewTestButton.setDisable(false);
     }
-
     /**
      * Moves focus to the next or previous traversable node in the scene.
      *
@@ -1369,7 +1838,6 @@ public class UIComponentsManager {
             traversables.get(targetIndex).requestFocus();
         }
     }
-
     /**
      * Recursively collects all focus-traversable, visible, and enabled nodes in the scene hierarchy.
      *
@@ -1384,7 +1852,6 @@ public class UIComponentsManager {
             ((Parent) node).getChildrenUnmodifiable().forEach(child -> addTraversableNodes(child, list));
         }
     }
-
     /**
      * Closes the environment variables stage if it is open.
      */
@@ -1393,26 +1860,5 @@ public class UIComponentsManager {
             envVarStage.close();
         }
         envVarStage = null;
-    }
-    
-    /**
-     * Simple highlighter for {{any-text}} in pink (used by StyledTextArea).
-     */
-    private StyleSpans<Collection<String>> computeHighlighting(String text) {
-        StyleSpansBuilder<Collection<String>> spansBuilder = new StyleSpansBuilder<>();
-        Pattern pattern = Pattern.compile("\\{\\{[^}]+\\}\\}");  // Matches {{any-text}}
-        Matcher matcher = pattern.matcher(text);
-        int lastEnd = 0;
-
-        while (matcher.find()) {
-            // Plain text before match
-            spansBuilder.add(Collections.emptyList(), matcher.start() - lastEnd);
-            // Highlighted match (pink + bold)
-            spansBuilder.add(Collections.singleton("-fx-fill: pink; -fx-font-weight: bold;"), matcher.end() - matcher.start());
-            lastEnd = matcher.end();
-        }
-        // Remaining plain text
-        spansBuilder.add(Collections.emptyList(), text.length() - lastEnd);
-        return spansBuilder.create();
     }
 }

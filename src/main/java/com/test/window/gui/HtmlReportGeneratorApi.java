@@ -291,6 +291,18 @@ public class HtmlReportGeneratorApi {
         }
         System.out.println("DEBUG - Total: " + totalTests + ", Pass: " + passCount + ", Fail: " + failCount);
 
+        // NEW: Post-processing validation for unresolved placeholders
+        for (Map<String, Object> data : reportDataList) {
+            String testId = safeToString(data.get("testId"));
+            List<String> fieldsToCheck = Arrays.asList("endpoint", "payload", "verifyResponse");
+            for (String field : fieldsToCheck) {
+                String value = safeToString(data.get(field));
+                if (value != null && value.contains("{{")) {
+                    System.err.println("Warning: Unresolved placeholders in " + field + " for Test ID " + testId + ": " + value);
+                }
+            }
+        }
+
         ZonedDateTime now = ZonedDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss z");
         String dateTime = now.format(formatter);
@@ -694,6 +706,13 @@ public class HtmlReportGeneratorApi {
             } else {
                 Object json = objectMapper.readValue(content, Object.class);
                 String prettyJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
+                // NEW: For verify-response, replace JSON null with {{null}}
+                if (cssClass.startsWith("verify-response-")) {
+                    Pattern nullPattern = Pattern.compile(":\\s*null(?=\\s*[,}\\]])");
+                    Matcher nullMatcher = nullPattern.matcher(prettyJson);
+                    prettyJson = nullMatcher.replaceAll(": {{null}}");
+                    System.out.println("formatContent: Replaced null with {{null}} for verify-response class: " + cssClass);
+                }
                 formattedContent = prettyJson;
                 System.out.println("formatContent: Formatted JSON for class: " + cssClass + ", content: " + prettyJson);
             }

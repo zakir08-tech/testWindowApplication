@@ -33,6 +33,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -202,6 +203,7 @@ public class RunApiTest extends Application {
     private HashMap<Integer, HashMap<String, Object>> responseCaptureMap = new HashMap<>();
     private HashMap<Integer, HashMap<String, Object>> authMap = new HashMap<>();
     private List<Map<String, Object>> reportDataList = new ArrayList<>();
+    private String currentTimestamp = null; // Global variable to hold the timestamp for the current test
 
     private static final Set<String> REQUIRED_HEADERS = new HashSet<>(Arrays.asList(
         "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
@@ -213,15 +215,15 @@ public class RunApiTest extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-    	 // Set the window icon
+        // Set the window icon
         try {
-        	Image backgroundImage = new Image("file:" + UIConstants.UI_ICON);
+            Image backgroundImage = new Image("file:" + UIConstants.UI_ICON);
             primaryStage.getIcons().add(backgroundImage);
         } catch (Exception e) {
             System.err.println("Error setting window icon: " + e.getMessage());
         }
-        
-    	testCases = FXCollections.observableArrayList();
+
+        testCases = FXCollections.observableArrayList();
         table = new TableView<>(testCases);
         table.setStyle("-fx-background-color: #2E2E2E; -fx-control-inner-background: #2E2E2E; -fx-text-fill: white; " +
                 "-fx-table-cell-border-color: #3C3F41; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
@@ -375,11 +377,13 @@ public class RunApiTest extends Application {
                     ApiExecutor apiExecutor = new ApiExecutor();
                     ObjectMapper objectMapper = new ObjectMapper();
                     Map<String, String> envVars = new HashMap<>();
+                    Map<String, String> originalEnvVars = new HashMap<>();
 
                     File envFile = new File("env.json");
                     if (envFile.exists()) {
                         try {
                             envVars = objectMapper.readValue(envFile, HashMap.class);
+                            originalEnvVars.putAll(envVars);
                             System.out.println("Debug: Loaded env.json: " + envVars);
                         } catch (IOException ex) {
                             System.err.println("Error loading env.json: " + ex.getMessage());
@@ -393,6 +397,7 @@ public class RunApiTest extends Application {
                             break;
                         }
                         if (testCase.runProperty().get()) {
+                            currentTimestamp = null; // Reset timestamp for each test
                             Integer testId = Integer.parseInt(testCase.testIdProperty().get());
                             int index = testCases.indexOf(testCase);
                             Platform.runLater(() -> {
@@ -439,6 +444,8 @@ public class RunApiTest extends Application {
                             reportData.put("request", method);
 
                             long responseTimeMs = 0L;
+                            String originalPayload = null;
+                            String originalVerifyResponse = null;
 
                             try {
                                 System.out.println("Debug: Starting processing for Test ID " + testId);
@@ -487,12 +494,14 @@ public class RunApiTest extends Application {
                                 System.out.println("Debug: Processed modify payload for Test ID " + testId + ": " + processedModifyPayload);
 
                                 modifiedPayload = payload;
+                                String lowerPayloadType = payloadType != null ? payloadType.toLowerCase() : "";
+                                boolean isJsonPayload = "json".equals(lowerPayloadType);
                                 if (payload != null && !payload.trim().isEmpty()) {
                                     System.out.println("Debug: Replacing placeholders in payload for Test ID " + testId);
                                     modifiedPayload = replacePlaceholders(payload, envVars, testId);
-                                    String lowerPayloadType = payloadType != null ? payloadType.toLowerCase() : "";
-                                    boolean isJsonPayload = "json".equals(lowerPayloadType);
+                                    originalPayload = modifiedPayload;
                                     if (isJsonPayload) {
+                                        modifiedPayload = postProcessForJson(modifiedPayload);
                                         try {
                                             objectMapper.readTree(modifiedPayload);
                                         } catch (JsonProcessingException ex) {
@@ -523,9 +532,10 @@ public class RunApiTest extends Application {
                                     }
                                 } else {
                                     System.out.println("Debug: No payload to process for Test ID " + testId);
+                                    originalPayload = modifiedPayload;
                                 }
                                 testData.put("Payload", modifiedPayload);
-                                reportData.put("payload", modifiedPayload);
+                                reportData.put("payload", originalPayload != null ? originalPayload : modifiedPayload);
                                 reportData.put("payloadType", payloadType);
 
                                 System.out.println("Debug: Processing authorization for Test ID " + testId);
@@ -553,6 +563,10 @@ public class RunApiTest extends Application {
                                 String processedExpectedStatusStr = replacePlaceholders(expectedStatusStr, envVars, testId);
                                 testData.put("Expected Status", processedExpectedStatusStr);
                                 processedVerifyResponse = replacePlaceholders(verifyResponse, envVars, testId);
+                                originalVerifyResponse = processedVerifyResponse;
+                                if (processedVerifyResponse != null && !processedVerifyResponse.trim().isEmpty()) {
+                                    processedVerifyResponse = postProcessForJson(processedVerifyResponse);
+                                }
                                 testData.put("Verify Response", processedVerifyResponse);
 
                                 boolean sslValidation = sslValidationStr != null && sslValidationStr.equalsIgnoreCase("true");
@@ -635,8 +649,11 @@ public class RunApiTest extends Application {
                                                 System.err.println("Warning: Environment variable name '" + envVarName + "' for Test ID " + testId + " contains invalid braces");
                                                 continue;
                                             }
-                                            envVars.put(envVarName, cleanedValue);
-                                            capturedValues.put(envVarName, cleanedValue);
+                                            // Avoid saving {{null}} to envVars
+                                            if (!cleanedValue.equals("{{null}}")) {
+                                                envVars.put(envVarName, cleanedValue);
+                                                capturedValues.put(envVarName, cleanedValue);
+                                            }
                                             captureCount++;
                                             captureIssues.append("Captured key '").append(responsePath)
                                                 .append("' as env var '").append(envVarName).append("': ").append(cleanedValue).append(". ");
@@ -649,8 +666,22 @@ public class RunApiTest extends Application {
                                     }
                                     System.out.println("Debug: Total values captured for Test ID " + testId + ": " + captureCount + " out of " + responseCapture.size() + " entries");
 
+                                    Map<String, String> envVarsToSave = new HashMap<>();
+                                    for (Map.Entry<String, String> entry : envVars.entrySet()) {
+                                        String value = entry.getValue();
+                                        // Skip saving {{null}} to env.json
+                                        if (!"{{null}}".equals(value)) {
+                                            envVarsToSave.put(entry.getKey(), value);
+                                        }
+                                    }
+                                    for (Map.Entry<String, String> entry : originalEnvVars.entrySet()) {
+                                        if ("$timestamp".equals(entry.getValue()) || "$last-timestamp".equals(entry.getValue())) {
+                                            envVarsToSave.put(entry.getKey(), entry.getValue());
+                                        }
+                                    }
+
                                     try {
-                                        objectMapper.writerWithDefaultPrettyPrinter().writeValue(new FileOutputStream(envFile), envVars);
+                                        objectMapper.writerWithDefaultPrettyPrinter().writeValue(new FileOutputStream(envFile), envVarsToSave);
                                         captureIssues.append("Successfully updated env.json with ").append(captureCount).append(" captured values. ");
                                         System.out.println("Debug: Successfully updated env.json with " + captureCount + " captured values: " + capturedValues + " for Test ID " + testId);
                                     } catch (IOException ex) {
@@ -677,12 +708,11 @@ public class RunApiTest extends Application {
                                         compareJson(actualJson, expectedJson, "", testId);
                                     } catch (Exception e) {
                                         verificationPassed = false;
-                                        // finalVerifyResponse remains processedVerifyResponse if process failed, or the full if compare failed
                                         throw new Exception("Response verification failed for Test ID " + testId + ": " + e.getMessage(), e);
                                     }
                                 }
 
-                                reportData.put("verifyResponse", finalVerifyResponse);
+                                reportData.put("verifyResponse", originalVerifyResponse != null ? originalVerifyResponse : "");
                                 reportData.put("verificationPassed", verificationPassed);
 
                                 System.out.println("Test ID: " + testId);
@@ -714,7 +744,8 @@ public class RunApiTest extends Application {
                                 boolean verificationPassed = !failureReason.startsWith("Response verification failed");
                                 reportData.put("verificationPassed", verificationPassed);
                                 reportData.put("responseTimeMs", responseTimeMs);
-                                reportData.put("verifyResponse", processedVerifyResponse != null ? processedVerifyResponse : "");
+                                reportData.put("payload", originalPayload != null ? originalPayload : modifiedPayload);
+                                reportData.put("verifyResponse", originalVerifyResponse != null ? originalVerifyResponse : "");
                                 Platform.runLater(() -> {
                                     testCase.statusProperty().set("Fail");
                                     reportData.put("status", "Fail");
@@ -795,6 +826,39 @@ public class RunApiTest extends Application {
         primaryStage.setTitle("API Test Runner");
         primaryStage.setScene(scene);
         primaryStage.show();
+    }
+
+    private String postProcessForJson(String jsonStr) {
+        if (jsonStr == null || !jsonStr.contains("{{null}}")) {
+            return jsonStr;
+        }
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        boolean inString = false;
+        while (i < jsonStr.length()) {
+            char c = jsonStr.charAt(i);
+            if (!inString) {
+                if (c == '"') {
+                    inString = true;
+                    sb.append(c);
+                    i++;
+                    continue;
+                } else if (jsonStr.startsWith("{{null}}", i)) {
+                    // Not in string, replace with null
+                    sb.append("null");
+                    i += 8; // length of {{null}}
+                    continue;
+                }
+            } else {
+                // Simple escape handling: check for \"
+                if (c == '"' && (i == 0 || jsonStr.charAt(i - 1) != '\\')) {
+                    inString = false;
+                }
+            }
+            sb.append(c);
+            i++;
+        }
+        return sb.toString();
     }
 
     private void updateRunButtonState() {
@@ -995,7 +1059,6 @@ public class RunApiTest extends Application {
                 }
                 compareJson(actualMap.get(key), expectedValue, newPath, testId);
             }
-            // Additional strict check: Ensure no extra keys in actual (bidirectional enforcement)
             for (String actualKey : actualMap.keySet()) {
                 if (!expectedMap.containsKey(actualKey)) {
                     String newPath = path.isEmpty() ? actualKey : path + "." + actualKey;
@@ -1047,13 +1110,34 @@ public class RunApiTest extends Application {
             while (matcher.find()) {
                 String placeholder = matcher.group(1);
                 String replacement;
-                if (!envVars.containsKey(placeholder) || envVars.get(placeholder) == null || envVars.get(placeholder).trim().isEmpty()) {
+                String val = envVars.get(placeholder);
+                if (!envVars.containsKey(placeholder) || val == null || val.trim().isEmpty() || "null".equals(val)) {
                     replacement = "{{null}}";
-                    System.out.println("Debug: Placeholder '" + placeholder + "' not found or null/empty in env.json for Test ID " + testId + ", replacing with {{null}}");
+                    envVars.put(placeholder, replacement);
+                    System.out.println("Debug: Placeholder '" + placeholder + "' not found or null/empty/'null' in env.json for Test ID " + testId + ", replacing with '{{null}}' and updating hashmap");
                 } else {
                     String value = envVars.get(placeholder);
-                    replacement = value;
-                    System.out.println("Debug: Replaced placeholder '" + placeholder + "' with value '" + value + "' for Test ID " + testId);
+                    if ("$timestamp".equals(value)) {
+                        if (currentTimestamp == null) {
+                            SimpleDateFormat sdf = new SimpleDateFormat("MMddyyssSSS");
+                            currentTimestamp = sdf.format(new Date());
+                            System.out.println("Debug: Generated new timestamp '" + currentTimestamp + "' for Test ID " + testId);
+                        }
+                        replacement = currentTimestamp;
+                        envVars.put(placeholder, replacement); // Update envVars for consistency within this test
+                        System.out.println("Debug: Replaced placeholder '" + placeholder + "' with timestamp value '" + replacement + "' for Test ID " + testId);
+                    } else if ("$last-timestamp".equals(value)) {
+                        if (currentTimestamp == null) {
+                            replacement = "{{null}}";
+                            System.out.println("Debug: Placeholder '" + placeholder + "' with $last-timestamp has no current timestamp available for Test ID " + testId + ", replacing with '{{null}}'");
+                        } else {
+                            replacement = currentTimestamp;
+                            System.out.println("Debug: Replaced placeholder '" + placeholder + "' with $last-timestamp value '" + replacement + "' for Test ID " + testId);
+                        }
+                    } else {
+                        replacement = value;
+                        System.out.println("Debug: Replaced placeholder '" + placeholder + "' with value '" + value + "' for Test ID " + testId);
+                    }
                 }
                 matcher.appendReplacement(modifiedText, Matcher.quoteReplacement(replacement));
             }
@@ -1246,10 +1330,10 @@ public class RunApiTest extends Application {
                     if (row == null) continue;
 
                     String testIdStr = getCellValue(row, headerMap.get("Test ID"));
-                    Integer testId = testIdStr != null && !testIdStr.trim().isEmpty() ? Integer.parseInt(testIdStr.trim()) : null;
+                    Integer tempId = testIdStr != null && !testIdStr.trim().isEmpty() ? Integer.parseInt(testIdStr.trim()) : null;
 
-                    if (testId != null) {
-                        if (lastTestId != null && !lastTestId.equals(testId)) {
+                    if (tempId != null) {
+                        if (lastTestId != null && !lastTestId.equals(tempId)) {
                             testDataMap.put(lastTestId, currentTestData);
                             headersMap.put(lastTestId, currentHeaders);
                             paramsMap.put(lastTestId, currentParams);
@@ -1258,9 +1342,9 @@ public class RunApiTest extends Application {
                             authMap.put(lastTestId, currentAuthDetails);
                         }
 
-                        lastTestId = testId;
+                        lastTestId = tempId;
                         String testDescription = getCellValue(row, headerMap.get("Test Description"));
-                        testCases.add(new TestCase(true, testId.toString(), testDescription, "No Run"));
+                        testCases.add(new TestCase(true, lastTestId.toString(), testDescription, "No Run"));
 
                         currentTestData = new HashMap<>();
                         currentTestData.put("Request", getCellValue(row, headerMap.get("Request")));
@@ -1281,7 +1365,7 @@ public class RunApiTest extends Application {
                         addMultiColumnData(row, headerMap, "Header (key)", "Header (value)", currentHeaders);
                         addMultiColumnData(row, headerMap, "Parameter (key)", "Parameter (value)", currentParams);
                         addMultiColumnData(row, headerMap, "Modify Payload (key)", "Modify Payload (value)", currentModifyPayload);
-                        addResponseCaptureData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture, testId);
+                        addResponseCaptureData(row, headerMap, "Response (key) Name", "Capture (key) Value (env var)", currentResponseCapture, lastTestId);
 
                         String username = getCellValue(row, headerMap.get("Username"));
                         String password = getCellValue(row, headerMap.get("Password"));

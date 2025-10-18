@@ -349,7 +349,7 @@ public class PostmanCollectionImporter {
         String[] columns = {
             "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
             "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-             "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
+            "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
             "SSL Validation", "Expected Status", "Verify Response", "Test Description"
         };
 
@@ -417,7 +417,7 @@ public class PostmanCollectionImporter {
             } else {
                 bodyStr = request.body instanceof Map ? request.body.toString() : String.valueOf(request.body);
             }
-            String bodyType = request.bodyType != null ? request.bodyType : "";
+            String bodyType = request.bodyType != null ? mapBodyType(request.bodyType) : "";
             String name = request.name != null ? request.name : "";
             boolean hasAuthorizationHeader = request.headers != null &&
                     request.headers.keySet().stream().anyMatch(key -> key.equalsIgnoreCase("Authorization"));
@@ -498,5 +498,20 @@ public class PostmanCollectionImporter {
             }
         }
         return rows;
+    }
+
+    /**
+     * Maps the raw body type from Postman to the desired display format.
+     *
+     * @param rawBodyType the raw body type from the Postman collection
+     * @return the display-friendly body type
+     */
+    private static String mapBodyType(String rawBodyType) {
+        if ("json".equalsIgnoreCase(rawBodyType)) {
+            return "JSON";
+        } else if ("formdata".equalsIgnoreCase(rawBodyType)) {
+            return "form-data";
+        }
+        return rawBodyType; // Return as-is for other types (e.g., "urlencoded", "")
     }
 }

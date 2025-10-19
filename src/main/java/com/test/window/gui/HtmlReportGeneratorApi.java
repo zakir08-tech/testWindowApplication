@@ -347,7 +347,7 @@ public class HtmlReportGeneratorApi {
             .append("<th>Response Body</th>\n")
             .append("<th>Verify Response</th>\n")
             .append("<th>Failure Reason</th>\n")
-            .append("<th>Capture Issues</th>\n")
+            .append("<th>Capture Summary</th>\n")
             .append("</tr>\n")
             .append("</thead>\n")
             .append("<tbody>\n");

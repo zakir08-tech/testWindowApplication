@@ -63,11 +63,11 @@ public class UIComponentsManager {
      * Enum defining the column indices in the test table for easy reference.
      */
     private enum ColumnIndex {
-        TEST_ID(0), REQUEST(1), END_POINT(2), HEADER_KEY(3), HEADER_VALUE(4),
-        PARAM_KEY(5), PARAM_VALUE(6), PAYLOAD(7), PAYLOAD_TYPE(8),
-        RESPONSE_KEY_NAME(9), CAPTURE_VALUE(10), AUTHORIZATION(11),
-        AUTH_FIELD1(12), AUTH_FIELD2(13), SSL_VALIDATION(14), EXPECTED_STATUS(15),
-        VERIFY_RESPONSE(16), TEST_DESCRIPTION(17);
+        TEST_ID(0), TEST_DESCRIPTION(1), REQUEST(2), END_POINT(3), HEADER_KEY(4), HEADER_VALUE(5),
+        PARAM_KEY(6), PARAM_VALUE(7), PAYLOAD(8), PAYLOAD_TYPE(9),
+        RESPONSE_KEY_NAME(10), CAPTURE_VALUE(11), AUTHORIZATION(12),
+        AUTH_FIELD1(13), AUTH_FIELD2(14), SSL_VALIDATION(15), EXPECTED_STATUS(16),
+        VERIFY_RESPONSE(17);
         private final int index;
         ColumnIndex(int index) { this.index = index; }
         public int getIndex() { return index; }

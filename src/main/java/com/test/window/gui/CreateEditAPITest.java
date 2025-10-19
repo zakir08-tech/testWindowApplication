@@ -51,11 +51,11 @@ public class CreateEditAPITest extends Application {
      * payloads, and verification criteria.
      */
     private static final String[] COLUMN_NAMES = {
-        "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
+        "Test ID", "Test Description", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
         "Response (key) Name",
         "Capture (key) Value (env var)", "Authorization", "", "",
-        "SSL Validation", "Expected Status", "Verify Response", "Test Description"
+        "SSL Validation", "Expected Status", "Verify Response"
     };
 
     /**

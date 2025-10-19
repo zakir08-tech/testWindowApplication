@@ -433,35 +433,35 @@ public class PostmanCollectionImporter {
                 // Populate shared fields only on first row (j == 0) to avoid repetition
                 if (j == 0) {
                     row[0] = String.valueOf(testId); // Test ID
-                    row[1] = method; // Request
-                    row[2] = url; // End-Point
-                    row[7] = bodyStr; // Payload
-                    row[8] = bodyType; // Payload Type
-                    row[9] = ""; // Response (key) Name
-                    row[10] = ""; // Capture (key) Value (env var)
-                    row[11] = authValue; // Authorization
-                    row[12] = ""; // Empty
+                    row[1] = name; // Test Description
+                    row[2] = method; // Request
+                    row[3] = url; // End-Point
+                    row[8] = bodyStr; // Payload
+                    row[9] = bodyType; // Payload Type
+                    row[10] = ""; // Response (key) Name
+                    row[11] = ""; // Capture (key) Value (env var)
+                    row[12] = authValue; // Authorization
                     row[13] = ""; // Empty
-                    row[14] = ""; // SSL Validation
-                    row[15] = "200"; // Expected Status (default)
-                    row[16] = ""; // Verify Response
-                    row[17] = name; // Test Description
+                    row[14] = ""; // Empty
+                    row[15] = ""; // SSL Validation
+                    row[16] = "200"; // Expected Status (default)
+                    row[17] = ""; // Verify Response
                 } else {
                     // For subsequent rows, leave shared fields blank
                     row[0] = ""; // Test ID blank
-                    row[1] = ""; // Request blank
-                    row[2] = ""; // End-Point blank
-                    row[7] = ""; // Payload blank
-                    row[8] = ""; // Payload Type blank
-                    row[9] = ""; // Response (key) Name
-                    row[10] = ""; // Capture (key) Value (env var)
-                    row[11] = ""; // Authorization blank
-                    row[12] = ""; // Empty
+                    row[1] = ""; // Test Description blank
+                    row[2] = ""; // Request blank
+                    row[3] = ""; // End-Point blank
+                    row[8] = ""; // Payload blank
+                    row[9] = ""; // Payload Type blank
+                    row[10] = ""; // Response (key) Name
+                    row[11] = ""; // Capture (key) Value (env var)
+                    row[12] = ""; // Authorization blank
                     row[13] = ""; // Empty
-                    row[14] = ""; // SSL Validation
-                    row[15] = ""; // Expected Status blank
-                    row[16] = ""; // Verify Response
-                    row[17] = ""; // Test Description blank
+                    row[14] = ""; // Empty
+                    row[15] = ""; // SSL Validation
+                    row[16] = ""; // Expected Status blank
+                    row[17] = ""; // Verify Response
                 }
 
                 // Set header if available for this row index
@@ -470,8 +470,8 @@ public class PostmanCollectionImporter {
                         Map.Entry<String, String>[] headerArray = request.headers.entrySet().toArray(new Map.Entry[0]);
                         if (headerIndex < headerArray.length) {
                             Map.Entry<String, String> header = headerArray[headerIndex];
-                            row[3] = header.getKey(); // Header (key)
-                            row[4] = header.getValue(); // Header (value)
+                            row[4] = header.getKey(); // Header (key)
+                            row[5] = header.getValue(); // Header (value)
                             headerIndex++;
                         }
                     } catch (Exception e) {
@@ -485,8 +485,8 @@ public class PostmanCollectionImporter {
                         Map.Entry<String, String>[] paramArray = request.queryParams.entrySet().toArray(new Map.Entry[0]);
                         if (paramIndex < paramArray.length) {
                             Map.Entry<String, String> param = paramArray[paramIndex];
-                            row[5] = param.getKey(); // Parameter (key)
-                            row[6] = param.getValue(); // Parameter (value)
+                            row[6] = param.getKey(); // Parameter (key)
+                            row[7] = param.getValue(); // Parameter (value)
                             paramIndex++;
                         }
                     } catch (Exception e) {

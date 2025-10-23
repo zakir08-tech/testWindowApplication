@@ -431,75 +431,36 @@ public class HtmlReportGeneratorApi {
             }
             html.append("<td>").append(verifyResponseContent).append("</td>\n");
 
-            html.append("<td class='failure-reason'>").append(formatFailureReason(failureReasonStr)).append("</td>\n");
+            String failureReasonContent = formatFailureReason(failureReasonStr);
+            html.append("<td class='failure-reason'>").append(failureReasonContent).append("</td>\n");
 
-            String captureIssues = safeToString(reportData.get("captureIssues"));
-            if (captureIssues == null || captureIssues.trim().isEmpty()) {
-                html.append("<td class='capture-issues'><span class='not-available'>None</span></td>\n");
-            } else {
-                html.append("<td class='capture-issues'><span>").append(escapeHtml(captureIssues)).append("</span></td>\n");
-            }
+            String captureSummaryContent = formatMap(reportData.get("captureSummary"), objectMapper, false);
+            html.append("<td class='capture-issues'><span>").append(captureSummaryContent.startsWith("<span") ? captureSummaryContent : "<pre class='map-content'>" + captureSummaryContent + "</pre>").append("</span></td>\n");
 
             html.append("</tr>\n");
             rowIndex++;
         }
 
-        html.append("</tbody>\n");
-        html.append("</table>\n");
-        html.append("</div>\n");
-        html.append("<div class='scroll-to-top'>\n");
-        html.append("<button id='scrollToTopBtn' class='btn btn-primary btn-sm'><i class='bi bi-arrow-up'></i></button>\n");
-        html.append("</div>\n");
-        html.append(BOOTSTRAP_JS);
-        html.append("<script>\n");
-        html.append("document.addEventListener('DOMContentLoaded', function() {\n");
-        html.append(" const tableContainer = document.getElementById('tableContainer');\n");
-        html.append(" const testReportTable = document.getElementById('testReportTable');\n");
-        html.append(" const filterAllBtn = document.getElementById('filterAllBtn');\n");
-        html.append(" const filterPassBtn = document.getElementById('filterPassBtn');\n");
-        html.append(" const filterFailBtn = document.getElementById('filterFailBtn');\n");
-        html.append(" const scrollToTopBtn = document.getElementById('scrollToTopBtn');\n");
-        html.append(" function wrapLongContent() {\n");
-        html.append(" if (!testReportTable) return;\n");
-        html.append(" document.querySelectorAll('#testReportTable tbody td.description').forEach(cell => {\n");
-        html.append(" const span = cell.querySelector('span');\n");
-        html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
-        html.append(" if (rawText.includes('{{')) {\n");
-        html.append(" const highlightedText = rawText.replace(/\\{\\{[^}]+\\}\\}/g, match => `<span style=\\\"color: #FF0000;\\\">${match}</span>`);\n");
-        html.append(" if (span) span.innerHTML = highlightedText;\n");
-        html.append(" else cell.innerHTML = `<span>${highlightedText}</span>`;\n");
-        html.append(" }\n");
-        html.append(" if (rawText.length > 150) {\n");
-        html.append(" cell.classList.add('wrap-long');\n");
-        html.append(" if (span) span.classList.add('wrap-long');\n");
-        html.append(" }\n");
-        html.append(" });\n");
-        html.append(" document.querySelectorAll('#testReportTable tbody td.capture-issues').forEach(cell => {\n");
-        html.append(" const span = cell.querySelector('span');\n");
-        html.append(" const rawText = span ? span.textContent.trim() : cell.textContent.trim();\n");
-        html.append(" if (rawText && rawText.length > 150) {\n");
-        html.append(" cell.classList.add('wrap-long');\n");
-        html.append(" if (span) span.classList.add('wrap-long');\n");
-        html.append(" }\n");
-        html.append(" });\n");
-        html.append(" }\n");
-        html.append(" if (filterAllBtn) {\n");
-        html.append(" filterAllBtn.addEventListener('click', function() {\n");
-        html.append(" filterTests('all');\n");
-        html.append(" });\n");
-        html.append(" }\n");
-        html.append(" if (filterPassBtn) {\n");
-        html.append(" filterPassBtn.addEventListener('click', function() {\n");
-        html.append(" filterTests('pass');\n");
-        html.append(" });\n");
-        html.append(" }\n");
-        html.append(" if (filterFailBtn) {\n");
-        html.append(" filterFailBtn.addEventListener('click', function() {\n");
-        html.append(" filterTests('fail');\n");
-        html.append(" });\n");
-        html.append(" }\n");
-        html.append(" if (scrollToTopBtn) {\n");
-        html.append(" scrollToTopBtn.addEventListener('click', function() {\n");
+        html.append("</tbody>\n")
+            .append("</table>\n")
+            .append("</div>\n")
+            .append("</div>\n")
+            .append("<div class='scroll-to-top' id='scrollToTop'>\n")
+            .append("<button id='scrollToTopBtn' title='Scroll to Top'><i class='bi bi-arrow-up'></i></button>\n")
+            .append("</div>\n")
+            .append(BOOTSTRAP_JS)
+            .append("<script>\n")
+            .append("document.addEventListener('DOMContentLoaded', function() {\n")
+            .append(" const allBtn = document.getElementById('filterAllBtn');\n")
+            .append(" const passBtn = document.getElementById('filterPassBtn');\n")
+            .append(" const failBtn = document.getElementById('filterFailBtn');\n")
+            .append(" const scrollToTopBtn = document.getElementById('scrollToTopBtn');\n")
+            .append(" const tableContainer = document.getElementById('tableContainer');\n")
+            .append(" if (allBtn && passBtn && failBtn && scrollToTopBtn && tableContainer) {\n")
+            .append(" allBtn.addEventListener('click', function() { filterTests('all'); });\n")
+            .append(" passBtn.addEventListener('click', function() { filterTests('pass'); });\n")
+            .append(" failBtn.addEventListener('click', function() { filterTests('fail'); });\n")
+            .append(" scrollToTopBtn.addEventListener('click', function() {\n");
         html.append(" scrollToTop();\n");
         html.append(" });\n");
         html.append(" }\n");
@@ -645,14 +606,14 @@ public class HtmlReportGeneratorApi {
             return false;
         }
         if (verifyJson instanceof Map && responseJson instanceof Map) {
-            Map<?, ?> verifyMap = (Map<?, ?>) verifyJson;
-            Map<?, ?> responseMap = (Map<?, ?>) responseJson;
+            Map<String, Object> verifyMap = (Map<String, Object>) verifyJson;
+            Map<String, Object> responseMap = (Map<String, Object>) responseJson;
             if (!verifyMap.keySet().containsAll(responseMap.keySet()) || !responseMap.keySet().containsAll(verifyMap.keySet())) {
                 System.out.println("Key set mismatch: Verify keys: " + verifyMap.keySet() + ", Response keys: " + responseMap.keySet());
                 return false;
             }
-            for (Map.Entry<?, ?> entry : verifyMap.entrySet()) {
-                String key = String.valueOf(entry.getKey());
+            for (Map.Entry<String, Object> entry : verifyMap.entrySet()) {
+                String key = entry.getKey();
                 Object verifyValue = entry.getValue();
                 Object responseValue = responseMap.get(key);
                 System.out.println("Comparing key: '" + key + "', Verify value: '" + verifyValue + "' (" + verifyValue.getClass().getSimpleName() + "), Response value: '" + responseValue + "' (" + (responseValue != null ? responseValue.getClass().getSimpleName() : "null") + ")");
@@ -706,13 +667,6 @@ public class HtmlReportGeneratorApi {
             } else {
                 Object json = objectMapper.readValue(content, Object.class);
                 String prettyJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
-                // NEW: For verify-response, replace JSON null with {{null}}
-                if (cssClass.startsWith("verify-response-")) {
-                    Pattern nullPattern = Pattern.compile(":\\s*null(?=\\s*[,}\\]])");
-                    Matcher nullMatcher = nullPattern.matcher(prettyJson);
-                    prettyJson = nullMatcher.replaceAll(": {{null}}");
-                    System.out.println("formatContent: Replaced null with {{null}} for verify-response class: " + cssClass);
-                }
                 formattedContent = prettyJson;
                 System.out.println("formatContent: Formatted JSON for class: " + cssClass + ", content: " + prettyJson);
             }

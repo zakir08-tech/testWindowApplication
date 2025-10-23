@@ -1,5 +1,24 @@
 package com.test.window.gui;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.test.window.app.UIConstants;
+
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
@@ -15,27 +34,10 @@ import javafx.scene.image.Image;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
-import javafx.stage.Stage;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.test.window.app.UIConstants;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.Optional;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.List;
-import java.util.ArrayList;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 
 /**
  * A JavaFX application for creating and editing API test cases.
@@ -53,8 +55,7 @@ public class CreateEditAPITest extends Application {
     private static final String[] COLUMN_NAMES = {
         "Test ID", "Test Description", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-        "Response (key) Name",
-        "Capture (key) Value (env var)", "Authorization", "", "",
+        "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
         "SSL Validation", "Expected Status", "Verify Response"
     };
 

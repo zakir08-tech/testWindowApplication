@@ -453,6 +453,7 @@ public class RunApiTest extends Application {
                         loadButton.setDisable(true);
                         refreshButton.setDisable(true);
                         stopButton.setDisable(false);
+                        testTypeField.setDisable(true);
                     });
 
                     ApiExecutor apiExecutor = new ApiExecutor();
@@ -840,6 +841,7 @@ public class RunApiTest extends Application {
                         loadButton.setDisable(false);
                         refreshButton.setDisable(false);
                         stopButton.setDisable(true);
+                        testTypeField.setDisable(!testCases.isEmpty());
                         updateRunButtonState();
 
                         try {
@@ -885,6 +887,7 @@ public class RunApiTest extends Application {
             loadButton.setDisable(false);
             refreshButton.setDisable(false);
             stopButton.setDisable(true);
+            testTypeField.setDisable(!testCases.isEmpty());
             updateRunButtonState();
         });
 

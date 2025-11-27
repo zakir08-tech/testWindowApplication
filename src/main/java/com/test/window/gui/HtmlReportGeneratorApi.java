@@ -436,28 +436,32 @@ public class HtmlReportGeneratorApi {
             System.out.println("DEBUG - Test ID: " + safeToString(reportData.get("testId")) + ", status: " + status + ", verifyResponse: " + verifyResponseStr + ", verificationPassed: " + reportData.get("verificationPassed") + ", failureReason: " + failureReasonStr + ", responseBody: " + responseBodyStr);
 
             if (verifyResponseStr.trim().isEmpty()) {
-                verifyCssClass = "not-available";
-                verifyResponseContent = "<span class='not-available'>None</span>";
-            } else if (isNonResponseFailure || isStatusMismatchFail) {
                 verifyCssClass = "verify-response-gray";
+                verifyResponseContent = "<span class='not-available'>None</span>";
+            } else if ("Pass".equalsIgnoreCase(status)) {
+                verifyCssClass = "verify-response-green";
+                verifyResponseContent = formatJsonContent(verifyResponseStr, objectMapper, verifyCssClass);
+            } else if ("Fail".equalsIgnoreCase(status) && !isStatusMismatchFail && !isNonResponseFailure) {
+                verifyCssClass = "verify-response-red";
                 verifyResponseContent = formatJsonContent(verifyResponseStr, objectMapper, verifyCssClass);
             } else {
-                boolean verificationPassed = reportData.containsKey("verificationPassed") ? (Boolean) reportData.get("verificationPassed") : false;
-                verifyCssClass = verificationPassed && status.equalsIgnoreCase("Pass") ? "verify-response-green" : "verify-response-red";
+                verifyCssClass = "verify-response-gray";
                 verifyResponseContent = formatJsonContent(verifyResponseStr, objectMapper, verifyCssClass);
             }
             html.append("<td>").append(verifyResponseContent).append("</td>\n");
 
-            String failureReasonContent = formatFailureReason(failureReasonStr);
-            html.append("<td class='failure-reason'>").append(failureReasonContent).append("</td>\n");
+            String failureReason = safeToString(reportData.get("failureReason"));
+            String formattedFailureReason = formatFailureReason(failureReason);
+            html.append("<td class='failure-reason'>").append(formattedFailureReason).append("</td>\n");
 
-            String captureSummaryContent = formatMap(reportData.get("captureSummary"), objectMapper, false);
-            html.append("<td class='capture-issues'><span>").append(captureSummaryContent.startsWith("<span") ? captureSummaryContent : "<pre class='map-content'>" + captureSummaryContent + "</pre>").append("</span></td>\n");
+            String captureIssues = safeToString(reportData.get("captureIssues"));
+            String captureIssuesEscaped = escapeHtml(captureIssues);
+            String wrappedCaptureIssues = wrapLongLines(captureIssuesEscaped, 100);
+            html.append("<td class='capture-issues'><span>").append(wrappedCaptureIssues.replace("\n", "<br>")).append("</span></td>\n");
 
             html.append("</tr>\n");
             rowIndex++;
         }
-
         html.append("</tbody>\n")
             .append("</table>\n")
             .append("</div>\n")
@@ -536,11 +540,13 @@ public class HtmlReportGeneratorApi {
         }
     }
 
-    // NEW: Format total time as mm:ss
+    // UPDATED: Format total time as mm:ss.SSS (including milliseconds)
     private String formatTotalTime(long millis) {
         long minutes = millis / 60000;
-        long seconds = (millis % 60000) / 1000;
-        return String.format("%02d:%02d", minutes, seconds);
+        long remainingMs = millis % 60000;
+        long seconds = remainingMs / 1000;
+        long ms = remainingMs % 1000;
+        return String.format("%02d:%02d.%03d", minutes, seconds, ms);
     }
 
     // All original helper methods below — unchanged

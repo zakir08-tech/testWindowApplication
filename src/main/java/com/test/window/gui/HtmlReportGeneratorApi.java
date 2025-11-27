@@ -344,7 +344,9 @@ public class HtmlReportGeneratorApi {
             .append("Total Tests: <button id='filterAllBtn' class='count-btn'>").append(totalTests).append("</button> | ")
             .append("Passed: <button id='filterPassBtn' class='count-btn'>").append(passCount).append("</button> | ")
             .append("Failed: <button id='filterFailBtn' class='count-btn'>").append(failCount).append("</button> | ")
-            .append("<span class='total-time'>Total Time: ").append(formatTotalTime(totalResponseTimeMs)).append("</span>\n")
+            .append("<span class='total-time'>Total Time: </span><span style=\"letter-spacing:-1px\">")
+            .append(formatTotalTime(totalResponseTimeMs))
+            .append("</span>\n")
             .append("</div>\n")
             .append("</div>\n")
             .append("<div class='table-container' id='tableContainer'>\n")
@@ -546,9 +548,14 @@ public class HtmlReportGeneratorApi {
         long remainingMs = millis % 60000;
         long seconds = remainingMs / 1000;
         long ms = remainingMs % 1000;
-        return String.format("%02d:%02d.%03d", minutes, seconds, ms);
-    }
 
+        return "<span style=\"color:#28a745;font-weight:bold\">" +
+               String.format("%02d", minutes) +
+               "</span>:<span style=\"color:#fd7e14;font-weight:bold\">" +
+               String.format("%02d.%03d", seconds, ms) +
+               "</span>";
+    }
+    
     // All original helper methods below — unchanged
     private String wrapLongValue(String text, int maxLength) {
         if (text == null || text.length() <= maxLength) {

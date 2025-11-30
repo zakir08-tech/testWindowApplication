@@ -70,7 +70,10 @@ public class UIComponentsManager {
         ColumnIndex(int index) { this.index = index; }
         public int getIndex() { return index; }
     }
-
+    
+    private static final ObservableList<String> SSL_VALIDATION_OPTIONS =
+            FXCollections.observableArrayList("", "Yes", "No");
+    
     /**
      * Observable list of authorization options for the auth combo box.
      */
@@ -1977,13 +1980,39 @@ public class UIComponentsManager {
             }
             updateButtonStates();
         });
+        
+        Button sslConfigButton = new Button("SSL Configuration");
+        sslConfigButton.setStyle(BUTTON_STYLE);
+        sslConfigButton.setTooltip(new Tooltip("Open SSL keystore and truststore configuration"));
+        sslConfigButton.setOnMouseEntered(e -> sslConfigButton.setStyle(BUTTON_HOVER_STYLE));
+        sslConfigButton.setOnMouseExited(e -> sslConfigButton.setStyle(BUTTON_STYLE));
+
+        sslConfigButton.setOnAction(e -> {
+            if (SSLConfigurationScreen.isShowing()) {
+                Platform.runLater(() -> SSLConfigurationScreen.instance.requestFocus());
+            } else {
+                try {
+                    Stage sslStage = new Stage();
+                    new SSLConfigurationScreen().start(sslStage);
+                } catch (Exception ex) {
+                    CreateEditAPITest.showError("Failed to open SSL Configuration window: " + ex.getMessage());
+                }
+            }
+        });
 
         // Add all buttons to the VBox
         buttonsVBox.getChildren().addAll(
-            addStepButton, addAboveButton, addBelowButton, moveUpButton, moveDownButton,
-            deleteStepButton, deleteTestCaseButton, saveTestButton, loadTestButton,
-            createNewTestButton, addEditEnvVarButton, importCollectionButton
-        );
+                addStepButton,
+                addAboveButton, addBelowButton,
+                moveUpButton, moveDownButton,
+                deleteStepButton, deleteTestCaseButton,
+                saveTestButton, loadTestButton,
+                createNewTestButton,
+                addEditEnvVarButton,
+                importCollectionButton,
+                sslConfigButton
+            );
+        
         return buttonsVBox;
     }
 

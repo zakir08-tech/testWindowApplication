@@ -2,62 +2,37 @@ package com.test.window.gui;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.http.HttpEntity;
-import org.apache.http.NameValuePair;
+import org.apache.http.*;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpDelete;
-import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.client.methods.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Utility class for executing HTTP requests to APIs. Supports various HTTP methods
- * (GET, POST, PUT, DELETE), authentication, different payload types (JSON, XML,
- * URL-encoded, multipart form data), and optional SSL validation disabling.
+ * Modern and robust API executor that accepts a pre-configured HttpClient
+ * (for mTLS, SSL bypass, etc.) while supporting all payload types and auth.
  */
 public class ApiExecutor {
 
-    /**
-     * Inner class representing authentication credentials. Supports Basic Auth
-     * (username/password) or Bearer Token.
-     */
+    // ====================== AUTH & RESPONSE CLASSES ======================
     public static class Auth {
-        private final String type;      // Authentication type: "Basic Auth" or "Bearer Token"
-        private final String username;  // Username for Basic Auth
-        private final String password;  // Password for Basic Auth
-        private final String token;     // Token for Bearer Auth
+        private final String type;
+        private final String username;
+        private final String password;
+        private final String token;
 
-        /**
-         * Constructor for Auth object.
-         *
-         * @param type     The type of authentication
-         * @param username The username (for Basic Auth)
-         * @param password The password (for Basic Auth)
-         * @param token    The bearer token (for Bearer Token auth)
-         */
         public Auth(String type, String username, String password, String token) {
             this.type = type;
             this.username = username;
@@ -65,291 +40,176 @@ public class ApiExecutor {
             this.token = token;
         }
 
-        public String getType() {
-            return type;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public String getPassword() {
-            return password;
-        }
-
-        public String getToken() {
-            return token;
-        }
+        public String getType() { return type; }
+        public String getUsername() { return username; }
+        public String getPassword() { return password; }
+        public String getToken() { return token; }
     }
 
-    /**
-     * Inner class representing the response from an HTTP request.
-     */
     public static class Response {
-        private final int statusCode;    // HTTP status code of the response
-        private final String body;       // Response body as a string
-        private final long responseTime; // Response time in milliseconds
+        private final int statusCode;
+        private final String body;
+        private final long responseTimeMs;
 
-        /**
-         * Constructor for Response object.
-         *
-         * @param statusCode   The HTTP status code
-         * @param body         The response body content
-         * @param responseTime The response time in milliseconds
-         */
-        public Response(int statusCode, String body, long responseTime) {
+        public Response(int statusCode, String body, long responseTimeMs) {
             this.statusCode = statusCode;
-            this.body = body;
-            this.responseTime = responseTime;
+            this.body = body != null ? body : "";
+            this.responseTimeMs = responseTimeMs;
         }
 
-        public int getStatusCode() {
-            return statusCode;
-        }
-
-        public String getBody() {
-            return body;
-        }
-
-        public long getResponseTime() {
-            return responseTime;
-        }
+        public int getStatusCode() { return statusCode; }
+        public String getBody() { return body; }
+        public long getResponseTimeMs() { return responseTimeMs; }
     }
+    // =====================================================================
 
     /**
-     * Wrapper method for executing API tests. Logs the incoming payload for debugging
-     * and delegates to executeRequest.
-     *
-     * @param method         HTTP method (GET, POST, PUT, DELETE)
-     * @param url            The target URL
-     * @param headers        Map of HTTP headers
-     * @param params         Map of URL query parameters
-     * @param payload        The request payload/body
-     * @param payloadType    Type of payload (json, xml, text, urlencoded, formdata, multipart)
-     * @param modifyPayload  Not used in current implementation (placeholder for future modifications)
-     * @param auth           Authentication details
-     * @param sslValidation  Flag to disable SSL certificate validation (for testing self-signed certs)
-     * @return Response object containing status code and body
-     * @throws Exception If any error occurs during execution
+     * Main method used by RunApiTest – accepts a pre-built HttpClient
+     * (with mTLS, SSL disabled, or normal HTTPS configured).
      */
-    public Response executeTest(
+    public Response execute(
             String method,
             String url,
-            HashMap<String, Object> headers,
-            HashMap<String, Object> params,
-            String payload,
-            String payloadType,
-            HashMap<String, Object> modifyPayload,
-            Auth auth,
-            boolean sslValidation) throws Exception {
-        System.out.println("Debug: Inside executeTest - Payload received: " + payload);
-        // Note: modifyPayload parameter is currently unused; it may be intended for runtime payload modifications
-        return executeRequest(method, url, headers, params, payload, payloadType, auth, sslValidation);
-    }
-
-    /**
-     * Parses a URL-encoded string into a list of NameValuePair objects.
-     * Handles decoding of keys and values from UTF-8.
-     *
-     * @param encodedPayload The URL-encoded payload string (e.g., "key1=value1&key2=value2")
-     * @return List of parsed NameValuePair objects
-     * @throws Exception If decoding fails
-     */
-    private List<NameValuePair> parseUrlEncodedString(String encodedPayload) throws Exception {
-        List<NameValuePair> params = new ArrayList<>();
-        if (encodedPayload == null || encodedPayload.trim().isEmpty()) {
-            return params;
-        }
-        String[] pairs = encodedPayload.split("&");
-        for (String pairStr : pairs) {
-            if (pairStr.isEmpty()) {
-                continue;
-            }
-            int idx = pairStr.indexOf('=');
-            if (idx == -1) {
-                // Key without value
-                params.add(new BasicNameValuePair(URLDecoder.decode(pairStr, "UTF-8"), ""));
-            } else {
-                String key = URLDecoder.decode(pairStr.substring(0, idx), "UTF-8");
-                String value = URLDecoder.decode(pairStr.substring(idx + 1), "UTF-8");
-                params.add(new BasicNameValuePair(key, value));
-            }
-        }
-        return params;
-    }
-
-    /**
-     * Core method to execute an HTTP request. Handles building the request, adding
-     * headers/auth/payload, and processing the response.
-     *
-     * @param method         HTTP method (GET, POST, PUT, DELETE)
-     * @param url            The target URL
-     * @param headers        Map of HTTP headers
-     * @param params         Map of URL query parameters
-     * @param payload        The request payload/body
-     * @param payloadType    Type of payload (json, xml, text, urlencoded, formdata, multipart)
-     * @param auth           Authentication details
-     * @param sslValidation  Flag to disable SSL certificate validation
-     * @return Response object containing status code and body
-     * @throws Exception If any error occurs during execution
-     */
-    public Response executeRequest(
-            String method,
-            String url,
-            HashMap<String, Object> headers,
-            HashMap<String, Object> params,
+            Map<String, Object> headers,
+            Map<String, Object> params,
             String payload,
             String payloadType,
             Auth auth,
-            boolean sslValidation) throws Exception {
-        System.out.println("Debug: Inside executeRequest - Payload being sent: " + payload);
+            CloseableHttpClient client) throws Exception {
 
-        // Create HTTP client, optionally disabling SSL validation for self-signed certificates
-        CloseableHttpClient client;
-        if (!sslValidation) {
-            // Disable SSL validation: Trust all certificates (use only for testing!)
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, new TrustManager[] {
-                new X509TrustManager() {
-                    public X509Certificate[] getAcceptedIssuers() {
-                        return new X509Certificate[0];
-                    }
-
-                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
-
-                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
-                }
-            }, new SecureRandom());
-            client = HttpClients.custom().setSSLContext(sslContext).build();
-        } else {
-            client = HttpClients.createDefault();
+        if (client == null) {
+            throw new IllegalArgumentException("HttpClient must not be null");
         }
 
-        // Append query parameters to the URL
-        StringBuilder urlWithParams = new StringBuilder(url);
-        if (params != null && !params.isEmpty()) {
-            urlWithParams.append("?");
-            for (Map.Entry<String, Object> param : params.entrySet()) {
-                String paramValue = param.getValue() != null ? param.getValue().toString() : "";
-                urlWithParams.append(param.getKey()).append("=").append(paramValue).append("&");
-            }
-            // Remove trailing '&'
-            if (urlWithParams.length() > 0) {
-                urlWithParams.deleteCharAt(urlWithParams.length() - 1);
-            }
-        }
+        String finalUrl = buildUrlWithParams(url, params);
+        HttpRequestBase request = createRequest(method, finalUrl);
 
-        // Create the appropriate HTTP request object based on method
-        HttpRequestBase request;
-        switch (method.toUpperCase()) {
-            case "GET":
-                request = new HttpGet(urlWithParams.toString());
-                break;
-            case "POST":
-                request = new HttpPost(urlWithParams.toString());
-                break;
-            case "PUT":
-                request = new HttpPut(urlWithParams.toString());
-                break;
-            case "DELETE":
-                request = new HttpDelete(urlWithParams.toString());
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported HTTP method: " + method);
-        }
-
-        // Add custom headers if provided
+        // Add headers
         if (headers != null) {
-            for (Map.Entry<String, Object> header : headers.entrySet()) {
-                String headerValue = header.getValue() != null ? header.getValue().toString() : "";
-                request.addHeader(header.getKey(), headerValue);
-            }
+            headers.forEach((k, v) -> {
+                if (v != null) request.addHeader(k, v.toString());
+            });
         }
 
-        // Add authentication headers if auth is provided
-        if (auth != null && auth.getType() != null) {
-            if (auth.getType().equalsIgnoreCase("Basic Auth")) {
-                String credentials = auth.getUsername() + ":" + auth.getPassword();
-                String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes());
-                request.addHeader("Authorization", "Basic " + encodedCredentials);
-            } else if (auth.getType().equalsIgnoreCase("Bearer Token")) {
+        // Add authentication
+        if (auth != null) {
+            if ("Basic Auth".equalsIgnoreCase(auth.getType())) {
+                String creds = auth.getUsername() + ":" + auth.getPassword();
+                String encoded = Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
+                request.addHeader("Authorization", "Basic " + encoded);
+            } else if ("Bearer Token".equalsIgnoreCase(auth.getType())) {
                 request.addHeader("Authorization", "Bearer " + auth.getToken());
             }
         }
 
-        // Handle payload for methods that support entities (POST, PUT)
-        if (payload != null && !payload.trim().isEmpty() && (request instanceof HttpEntityEnclosingRequestBase)) {
-            HttpEntityEnclosingRequestBase entityRequest = (HttpEntityEnclosingRequestBase) request;
-            String lowerPayloadType = payloadType != null ? payloadType.toLowerCase() : "";
-            if ("urlencoded".equals(lowerPayloadType)) {
-                // Set URL-encoded form entity
-                List<NameValuePair> formParams = parseUrlEncodedString(payload);
-                entityRequest.setEntity(new UrlEncodedFormEntity(formParams, "UTF-8"));
-                System.out.println("Debug: Set URL-encoded form entity with params: " + formParams);
-            } else if ("formdata".equals(lowerPayloadType) || "multipart".equals(lowerPayloadType)) {
-                // Set multipart form data entity
-                List<NameValuePair> formParams = parseUrlEncodedString(payload);
-                MultipartEntityBuilder builder = MultipartEntityBuilder.create();
-                for (NameValuePair nv : formParams) {
-                    builder.addTextBody(nv.getName(), nv.getValue(), ContentType.TEXT_PLAIN);
-                }
-                entityRequest.setEntity(builder.build());
-                System.out.println("Debug: Set multipart form entity with params: " + formParams);
-            } else {
-                // Set string entity for JSON, XML, or plain text
-                ContentType contentType;
-                switch (lowerPayloadType) {
-                    case "json":
-                        contentType = ContentType.APPLICATION_JSON;
-                        break;
-                    case "xml":
-                        contentType = ContentType.APPLICATION_XML;
-                        break;
-                    case "text":
-                        contentType = ContentType.TEXT_PLAIN;
-                        break;
-                    default:
-                        contentType = ContentType.APPLICATION_JSON; // Default to JSON
-                        break;
-                }
-                entityRequest.setEntity(new StringEntity(payload, contentType));
-                System.out.println("Debug: Set string entity with Content-Type: " + contentType + " for payload: " + payload);
-            }
-        } else {
-            System.out.println("Debug: No payload set in HTTP request (payload is null or empty, or method is not POST/PUT)");
+        // Set payload
+        if (payload != null && !payload.trim().isEmpty() && request instanceof HttpEntityEnclosingRequestBase) {
+            HttpEntity entity = buildEntity(payload, payloadType);
+            ((HttpEntityEnclosingRequestBase) request).setEntity(entity);
         }
 
-        // Execute the request and capture response
-        long startTime = System.currentTimeMillis();
-        try (CloseableHttpResponse response = client.execute(request)) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            HttpEntity entity = response.getEntity();
-            String responseBody = entity != null ? EntityUtils.toString(entity) : "";
-            long endTime = System.currentTimeMillis();
-            long responseTime = endTime - startTime;
-            return new Response(statusCode, responseBody, responseTime);
-        } finally {
-            // Ensure client is closed to release resources
-            client.close();
+        long start = System.currentTimeMillis();
+        try (CloseableHttpResponse httpResponse = client.execute(request)) {
+            int statusCode = httpResponse.getStatusLine().getStatusCode();
+            HttpEntity responseEntity = httpResponse.getEntity();
+            String body = responseEntity != null ? EntityUtils.toString(responseEntity, StandardCharsets.UTF_8) : "";
+            long time = System.currentTimeMillis() - start;
+            return new Response(statusCode, body, time);
         }
     }
 
-    /**
-     * Utility method to pretty-print JSON response bodies. Attempts to parse and
-     * reformat the body as pretty JSON; falls back to raw string if invalid JSON.
-     *
-     * @param response The Response object to format
-     * @return Pretty-printed JSON string or raw body if not JSON
-     * @throws IOException If Jackson processing fails unexpectedly
-     */
-    public static String toPrettyJson(Response response) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
+    private String buildUrlWithParams(String baseUrl, Map<String, Object> params) {
+        if (params == null || params.isEmpty()) return baseUrl;
+
+        StringBuilder url = new StringBuilder(baseUrl);
+        boolean first = !baseUrl.contains("?");
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
+            if (entry.getValue() == null) continue;
+            if (first) {
+                url.append("?");
+                first = false;
+            } else {
+                url.append("&");
+            }
+            url.append(urlEncode(entry.getKey()))
+               .append("=")
+               .append(urlEncode(entry.getValue().toString()));
+        }
+        return url.toString();
+    }
+
+    private String urlEncode(String value) {
         try {
+            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString());
+        } catch (Exception e) {
+            return value;
+        }
+    }
+
+    private HttpRequestBase createRequest(String method, String url) {
+        return switch (method.toUpperCase()) {
+            case "GET" -> new HttpGet(url);
+            case "POST" -> new HttpPost(url);
+            case "PUT" -> new HttpPut(url);
+            case "DELETE" -> new HttpDelete(url);
+            case "PATCH" -> new HttpPatch(url);
+            case "HEAD" -> new HttpHead(url);
+            case "OPTIONS" -> new HttpOptions(url);
+            default -> throw new IllegalArgumentException("Unsupported method: " + method);
+        };
+    }
+
+    private HttpEntity buildEntity(String payload, String payloadType) throws Exception {
+        String type = payloadType != null ? payloadType.toLowerCase().trim() : "";
+
+        return switch (type) {
+            case "urlencoded", "form" -> {
+                List<NameValuePair> pairs = new ArrayList<>();
+                for (String pair : payload.split("&")) {
+                    if (pair.isEmpty()) continue;
+                    String[] kv = pair.split("=", 2);
+                    String key = kv.length > 0 ? kv[0] : "";
+                    String value = kv.length > 1 ? kv[1] : "";
+                    pairs.add(new BasicNameValuePair(key, value));
+                }
+                yield new UrlEncodedFormEntity(pairs, StandardCharsets.UTF_8);
+            }
+
+            case "multipart", "formdata" -> {
+                MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+                for (String pair : payload.split("&")) {
+                    if (pair.isEmpty()) continue;
+                    String[] kv = pair.split("=", 2);
+                    String key = kv.length > 0 ? kv[0] : "";
+                    String value = kv.length > 1 ? kv[1] : "";
+                    builder.addTextBody(key, value, ContentType.TEXT_PLAIN);
+                }
+                yield builder.build();
+            }
+
+            default -> {
+                ContentType contentType = switch (type) {
+                    case "xml" -> ContentType.APPLICATION_XML;
+                    case "text", "plain" -> ContentType.TEXT_PLAIN;
+                    case "html" -> ContentType.TEXT_HTML;
+                    default -> ContentType.APPLICATION_JSON;
+                };
+                yield new StringEntity(payload, contentType.withCharset(StandardCharsets.UTF_8));
+            }
+        };
+    }
+
+    // Optional: Pretty print JSON response
+    public static String toPrettyJson(Response response) {
+        if (response == null || response.getBody() == null || response.getBody().trim().isEmpty()) {
+            return "";
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
             Object json = mapper.readValue(response.getBody(), Object.class);
             return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
         } catch (JsonProcessingException e) {
-            // If not valid JSON, return the raw body
-            return response.getBody();
+            return response.getBody(); // Not JSON, return raw
         }
     }
 }

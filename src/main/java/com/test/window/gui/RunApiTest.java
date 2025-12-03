@@ -22,22 +22,30 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.ssl.SSLContexts;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.test.window.app.UIConstants;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.KeyStore;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import javax.net.ssl.SSLContext;
 
 /**
  * Main application class for the API Test Runner GUI.
@@ -45,7 +53,115 @@ import java.util.stream.Collectors;
  * select and run tests, monitor status, and generate HTML reports.
  */
 public class RunApiTest extends Application {
+	
+	// ====================== SSL SUPPORT – YOUR EXACT FORMAT ======================
+    private static class SSLConfig {
+        String keystorePath;
+        String keystorePass;
+        String truststorePath;
+        String truststorePass;
+    }
 
+    private final Map<String, SSLConfig> sslProfiles = new HashMap<>();
+    private boolean sslProfilesLoaded = false;
+
+    private void loadSslProfiles() {
+        if (sslProfilesLoaded) return;
+
+        File sslFile = new File("ssl.json");
+        if (!sslFile.exists()) {
+            System.out.println("ssl.json not found in project root.");
+            sslProfilesLoaded = true;
+            return;
+        }
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Map<String, List<String>>> data = mapper.readValue(
+                sslFile, new TypeReference<Map<String, Map<String, List<String>>>>() {});
+
+            for (Map.Entry<String, Map<String, List<String>>> entry : data.entrySet()) {
+                String profileName = entry.getKey();
+                Map<String, List<String>> config = entry.getValue();
+
+                SSLConfig cfg = new SSLConfig();
+                List<String> ks = config.get("keystore");
+                List<String> ts = config.get("truststore");
+
+                if (ks != null && ks.size() == 2) {
+                    cfg.keystorePath = ks.get(0);
+                    cfg.keystorePass = ks.get(1);
+                }
+                if (ts != null && ts.size() == 2) {
+                    cfg.truststorePath = ts.get(0);
+                    cfg.truststorePass = ts.get(1);
+                }
+
+                sslProfiles.put(profileName, cfg);
+                System.out.println("Loaded SSL profile: " + profileName);
+            }
+            sslProfilesLoaded = true;
+        } catch (Exception e) {
+            System.err.println("Failed to load ssl.json: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private CloseableHttpClient createHttpClient(String sslValue) throws Exception {
+        loadSslProfiles();
+        HttpClientBuilder builder = HttpClientBuilder.create();
+
+        if (sslValue == null || sslValue.trim().isEmpty() || "None".equalsIgnoreCase(sslValue.trim())) {
+            return builder.build();
+        }
+
+        String val = sslValue.trim();
+
+        if ("Disable".equalsIgnoreCase(val)) {
+            SSLContext sslContext = SSLContexts.custom()
+                    .loadTrustMaterial(null, (chain, authType) -> true)
+                    .build();
+            builder.setSSLContext(sslContext);
+            builder.setSSLHostnameVerifier((hostname, session) -> true);
+            System.out.println("SSL validation disabled");
+            return builder.build();
+        }
+
+        SSLConfig config = sslProfiles.get(val);
+        if (config == null) {
+            System.err.println("SSL profile '" + val + "' not found in ssl.json – using default HTTPS");
+            return builder.build();
+        }
+
+        File ksFile = new File(config.keystorePath);
+        File tsFile = new File(config.truststorePath);
+
+        if (!ksFile.exists()) throw new Exception("Keystore not found: " + ksFile.getAbsolutePath());
+        if (!tsFile.exists()) throw new Exception("Truststore not found: " + tsFile.getAbsolutePath());
+
+        String ksType = ksFile.getName().endsWith(".p12") || ksFile.getName().endsWith(".pkcs12") ? "PKCS12" : "JKS";
+        String tsType = tsFile.getName().endsWith(".p12") || tsFile.getName().endsWith(".pkcs12") ? "PKCS12" : "JKS";
+
+        KeyStore keyStore = KeyStore.getInstance(ksType);
+        KeyStore trustStore = KeyStore.getInstance(tsType);
+
+        try (FileInputStream ksIn = new FileInputStream(ksFile)) {
+            keyStore.load(ksIn, config.keystorePass.toCharArray());
+        }
+        try (FileInputStream tsIn = new FileInputStream(tsFile)) {
+            trustStore.load(tsIn, config.truststorePass.toCharArray());
+        }
+
+        SSLContext sslContext = SSLContexts.custom()
+                .loadKeyMaterial(keyStore, config.keystorePass.toCharArray())
+                .loadTrustMaterial(trustStore, null)
+                .build();
+
+        builder.setSSLContext(sslContext);
+        System.out.println("mTLS enabled for profile: " + val);
+        return builder.build();
+    }
+    
     /**
      * CSS style for unfocused input fields, defining dark theme appearance.
      */
@@ -650,8 +766,8 @@ public class RunApiTest extends Application {
                             }
                             testData.put("Verify Response", processedVerifyResponse);
 
-                            boolean sslValidation = sslValidationStr != null && sslValidationStr.equalsIgnoreCase("true");
-
+                            //boolean sslValidation = sslValidationStr != null && sslValidationStr.equalsIgnoreCase("true");
+                           
                             int expectedStatus;
                             try {
                                 expectedStatus = processedExpectedStatusStr != null ?
@@ -661,162 +777,159 @@ public class RunApiTest extends Application {
                                     ": " + (processedExpectedStatusStr != null ? processedExpectedStatusStr : "null") +
                                     " (after placeholder replacement)", e);
                             }
+                            
+                            String sslValue = (String) testDataMap.get(testId).get("SSL Validation");
+                            try (CloseableHttpClient client = createHttpClient(sslValue)) {
+                            	long startTime = System.nanoTime();
+                                ApiExecutor.Response response = apiExecutor.execute(
+                                    method,
+                                    processedUrl,
+                                    processedHeaders,
+                                    processedParams,
+                                    modifiedPayload,
+                                    payloadType,
+                                    auth,
+                                    client
+                                );
+                                
+                                long endTime = System.nanoTime();
+                                responseTimeMs = (endTime - startTime) / 1_000_000;
+                                System.out.println("Debug: Response time for Test ID " + testId + ": " + responseTimeMs + " ms");
 
-                            System.out.println("Debug: Payload being sent to executeTest for Test ID " + testId + ": " + modifiedPayload);
-                            long startTime = System.nanoTime();
-                            ApiExecutor.Response response = apiExecutor.executeTest(
-                                method,
-                                processedUrl,
-                                processedHeaders,
-                                processedParams,
-                                modifiedPayload,
-                                payloadType,
-                                processedModifyPayload,
-                                auth,
-                                sslValidation
-                            );
-                            long endTime = System.nanoTime();
-                            responseTimeMs = (endTime - startTime) / 1_000_000;
-                            System.out.println("Debug: Response time for Test ID " + testId + ": " + responseTimeMs + " ms");
-
-                            reportData.put("responseStatus", String.valueOf(response.getStatusCode()));
-                            reportData.put("responseBody", response.getBody());
-                            reportData.put("responseTimeMs", responseTimeMs);
-
-                            if (response.getStatusCode() != expectedStatus) {
-                                throw new Exception("Status code mismatch for Test ID " + testId +
-                                    ": expected " + expectedStatus + ", got " + response.getStatusCode());
-                            }
-
-                            if (!responseCapture.isEmpty()) {
-                                System.out.println("Debug: Starting response capture for Test ID " + testId);
-                                Map<String, Object> responseObj;
-                                try {
-                                    responseObj = objectMapper.readValue(response.getBody(), HashMap.class);
-                                } catch (Exception ex) {
-                                    captureIssues.append("Failed to parse response body as JSON for capture: ").append(ex.getMessage()).append(". ");
-                                    System.err.println("Error parsing response body for capture in Test ID " + testId + ": " + ex.getMessage());
-                                    throw new Exception("Failed to parse response body as JSON for capture in Test ID " + testId + ": " + ex.getMessage(), ex);
+                                reportData.put("responseStatus", String.valueOf(response.getStatusCode()));
+                                reportData.put("responseBody", response.getBody());
+                                reportData.put("responseTimeMs", responseTimeMs);
+                                
+                                if (response.getStatusCode() != expectedStatus) {
+                                    throw new Exception("Status code mismatch for Test ID " + testId +
+                                        ": expected " + expectedStatus + ", got " + response.getStatusCode());
                                 }
-
-                                int captureCount = 0;
-                                Map<String, String> capturedValues = new HashMap<>();
-                                for (Map.Entry<String, Object> entry : responseCapture.entrySet()) {
-                                    String responsePath = entry.getKey();
-                                    String envVarName = entry.getValue() != null ? entry.getValue().toString() : "";
-                                    if (responsePath == null || responsePath.trim().isEmpty() || envVarName == null || envVarName.trim().isEmpty()) {
-                                        captureIssues.append("Invalid response capture entry: path='").append(responsePath)
-                                            .append("', envVar='").append(envVarName).append("'. ");
-                                        System.err.println("Warning: Invalid response capture entry for Test ID " + testId + ": path='" + responsePath + "', envVar='" + envVarName + "'");
-                                        continue;
+                                
+                                if (!responseCapture.isEmpty()) {
+                                    System.out.println("Debug: Starting response capture for Test ID " + testId);
+                                    Map<String, Object> responseObj;
+                                    try {
+                                        responseObj = objectMapper.readValue(response.getBody(), HashMap.class);
+                                    } catch (Exception ex) {
+                                        captureIssues.append("Failed to parse response body as JSON for capture: ").append(ex.getMessage()).append(". ");
+                                        System.err.println("Error parsing response body for capture in Test ID " + testId + ": " + ex.getMessage());
+                                        throw new Exception("Failed to parse response body as JSON for capture in Test ID " + testId + ": " + ex.getMessage(), ex);
                                     }
-                                    System.out.println("Debug: Attempting to capture value for path '" + responsePath + "' to env var '" + envVarName + "' for Test ID " + testId);
-                                    Object capturedValue = getNestedValue(responseObj, responsePath, testId);
-                                    if (capturedValue != null) {
-                                        String valueStr = capturedValue.toString();
-                                        String cleanedValue = valueStr.replaceAll("\\{\\{|}}", "");
-                                        if (!cleanedValue.equals(valueStr)) {
-                                            System.out.println("Debug: Removed braces from captured value '" + valueStr + "' to '" + cleanedValue + "' for env var '" + envVarName + "' in Test ID " + testId);
-                                        }
-                                        if (cleanedValue.contains("{{") || cleanedValue.contains("}}")) {
-                                            captureIssues.append("Captured value for '").append(envVarName)
-                                                .append("' contains invalid braces after cleaning: '").append(cleanedValue).append("'. ");
-                                            System.err.println("Warning: Captured value for env var '" + envVarName + "' in Test ID " + testId + " contains invalid braces after cleaning: '" + cleanedValue + "'");
+
+                                    int captureCount = 0;
+                                    Map<String, String> capturedValues = new HashMap<>();
+                                    for (Map.Entry<String, Object> entry : responseCapture.entrySet()) {
+                                        String responsePath = entry.getKey();
+                                        String envVarName = entry.getValue() != null ? entry.getValue().toString() : "";
+                                        if (responsePath == null || responsePath.trim().isEmpty() || envVarName == null || envVarName.trim().isEmpty()) {
+                                            captureIssues.append("Invalid response capture entry: path='").append(responsePath)
+                                                .append("', envVar='").append(envVarName).append("'. ");
+                                            System.err.println("Warning: Invalid response capture entry for Test ID " + testId + ": path='" + responsePath + "', envVar='" + envVarName + "'");
                                             continue;
                                         }
-                                        if (envVarName.contains("{{") || envVarName.contains("}}")) {
-                                            captureIssues.append("Environment variable name '").append(envVarName)
-                                                .append("' contains invalid braces. ");
-                                            System.err.println("Warning: Environment variable name '" + envVarName + "' for Test ID " + testId + " contains invalid braces");
-                                            continue;
+                                        System.out.println("Debug: Attempting to capture value for path '" + responsePath + "' to env var '" + envVarName + "' for Test ID " + testId);
+                                        Object capturedValue = getNestedValue(responseObj, responsePath, testId);
+                                        if (capturedValue != null) {
+                                            String valueStr = capturedValue.toString();
+                                            String cleanedValue = valueStr.replaceAll("\\{\\{|}}", "");
+                                            if (!cleanedValue.equals(valueStr)) {
+                                                System.out.println("Debug: Removed braces from captured value '" + valueStr + "' to '" + cleanedValue + "' for env var '" + envVarName + "' in Test ID " + testId);
+                                            }
+                                            if (cleanedValue.contains("{{") || cleanedValue.contains("}}")) {
+                                                captureIssues.append("Captured value for '").append(envVarName)
+                                                    .append("' contains invalid braces after cleaning: '").append(cleanedValue).append("'. ");
+                                                System.err.println("Warning: Captured value for env var '" + envVarName + "' in Test ID " + testId + " contains invalid braces after cleaning: '" + cleanedValue + "'");
+                                                continue;
+                                            }
+                                            if (envVarName.contains("{{") || envVarName.contains("}}")) {
+                                                captureIssues.append("Environment variable name '").append(envVarName)
+                                                    .append("' contains invalid braces. ");
+                                                System.err.println("Warning: Environment variable name '" + envVarName + "' for Test ID " + testId + " contains invalid braces");
+                                                continue;
+                                            }
+                                            if (!cleanedValue.equals("{{null}}")) {
+                                                envVars.put(envVarName, cleanedValue);
+                                                capturedValues.put(envVarName, cleanedValue);
+                                            }
+                                            captureCount++;
+                                            captureIssues.append("Captured key '").append(responsePath)
+                                                .append("' as env var '").append(envVarName).append("': ").append(cleanedValue).append(". ");
+                                            System.out.println("Debug: Captured value '" + cleanedValue + "' from path '" + responsePath + "' and saved to env var '" + envVarName + "' for Test ID " + testId);
+                                        } else {
+                                            captureIssues.append("Key '").append(responsePath)
+                                                .append("' not found in response for env var '").append(envVarName).append("'. ");
+                                            System.err.println("Warning: No value found at path '" + responsePath + "' in response for Test ID " + testId);
                                         }
-                                        // Avoid saving {{null}} to envVars
-                                        if (!cleanedValue.equals("{{null}}")) {
-                                            envVars.put(envVarName, cleanedValue);
-                                            capturedValues.put(envVarName, cleanedValue);
+                                    }
+                                    
+                                    Map<String, String> envVarsToSave = new HashMap<>();
+                                    for (Map.Entry<String, String> entry : envVars.entrySet()) {
+                                        String value = entry.getValue();
+                                        if (!"{{null}}".equals(value)) {
+                                            envVarsToSave.put(entry.getKey(), value);
                                         }
-                                        captureCount++;
-                                        captureIssues.append("Captured key '").append(responsePath)
-                                            .append("' as env var '").append(envVarName).append("': ").append(cleanedValue).append(". ");
-                                        System.out.println("Debug: Captured value '" + cleanedValue + "' from path '" + responsePath + "' and saved to env var '" + envVarName + "' for Test ID " + testId);
-                                    } else {
-                                        captureIssues.append("Key '").append(responsePath)
-                                            .append("' not found in response for env var '").append(envVarName).append("'. ");
-                                        System.err.println("Warning: No value found at path '" + responsePath + "' in response for Test ID " + testId);
+                                    }
+                                    for (Map.Entry<String, String> entry : originalEnvVars.entrySet()) {
+                                        if ("$timestamp".equals(entry.getValue()) || "$last-timestamp".equals(entry.getValue())) {
+                                            envVarsToSave.put(entry.getKey(), entry.getValue());
+                                        }
+                                    }
+                                    
+                                    try {
+                                        objectMapper.writerWithDefaultPrettyPrinter().writeValue(new FileOutputStream(envFile), envVarsToSave);
+                                        captureIssues.append("Successfully updated env.json with ").append(captureCount).append(" captured values. ");
+                                        System.out.println("Debug: Successfully updated env.json with " + captureCount + " captured values: " + capturedValues + " for Test ID " + testId);
+                                    } catch (IOException ex) {
+                                        captureIssues.append("Failed to save env.json: ").append(ex.getMessage()).append(". ");
+                                        System.err.println("Error writing to env.json for Test ID " + testId + ": " + ex.getMessage());
+                                        throw new Exception("Failed to write captured values to env.json for Test ID " + testId + ": " + ex.getMessage(), ex);
+                                    }
+                                } else {
+                                    captureIssues.append("No response capture defined. ");
+                                    System.out.println("Debug: No response capture entries defined for Test ID " + testId);
+                                }
+                                
+                                reportData.put("captureIssues", captureIssues.toString());
+
+                                boolean verificationPassed = true;
+                                String finalVerifyResponse = processedVerifyResponse != null ? processedVerifyResponse : "";
+
+                                if (processedVerifyResponse != null && !processedVerifyResponse.trim().isEmpty()) {
+                                    System.out.println("Debug: Verifying response for Test ID " + testId);
+                                    try {
+                                        finalVerifyResponse = processVerifyExpression(processedVerifyResponse, response.getBody(), testId);
+                                        Object actualJson = objectMapper.readValue(response.getBody(), Object.class);
+                                        Object expectedJson = objectMapper.readValue(finalVerifyResponse, Object.class);
+                                        compareJson(actualJson, expectedJson, "", testId);
+                                    } catch (Exception e) {
+                                        verificationPassed = false;
+                                        throw new Exception("Response verification failed for Test ID " + testId + ": " + e.getMessage(), e);
                                     }
                                 }
-                                System.out.println("Debug: Total values captured for Test ID " + testId + ": " + captureCount + " out of " + responseCapture.size() + " entries");
+                                
+                                reportData.put("verifyResponse", originalVerifyResponse != null ? originalVerifyResponse : "");
+                                reportData.put("verificationPassed", verificationPassed);
 
-                                Map<String, String> envVarsToSave = new HashMap<>();
-                                for (Map.Entry<String, String> entry : envVars.entrySet()) {
-                                    String value = entry.getValue();
-                                    // Skip saving {{null}} to env.json
-                                    if (!"{{null}}".equals(value)) {
-                                        envVarsToSave.put(entry.getKey(), value);
-                                    }
-                                }
-                                for (Map.Entry<String, String> entry : originalEnvVars.entrySet()) {
-                                    if ("$timestamp".equals(entry.getValue()) || "$last-timestamp".equals(entry.getValue())) {
-                                        envVarsToSave.put(entry.getKey(), entry.getValue());
-                                    }
-                                }
-
-                                try {
-                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(new FileOutputStream(envFile), envVarsToSave);
-                                    captureIssues.append("Successfully updated env.json with ").append(captureCount).append(" captured values. ");
-                                    System.out.println("Debug: Successfully updated env.json with " + captureCount + " captured values: " + capturedValues + " for Test ID " + testId);
-                                } catch (IOException ex) {
-                                    captureIssues.append("Failed to save env.json: ").append(ex.getMessage()).append(". ");
-                                    System.err.println("Error writing to env.json for Test ID " + testId + ": " + ex.getMessage());
-                                    throw new Exception("Failed to write captured values to env.json for Test ID " + testId + ": " + ex.getMessage(), ex);
-                                }
-                            } else {
-                                captureIssues.append("No response capture defined. ");
-                                System.out.println("Debug: No response capture entries defined for Test ID " + testId);
-                            }
-
-                            reportData.put("captureIssues", captureIssues.toString());
-
-                            boolean verificationPassed = true;
-                            String finalVerifyResponse = processedVerifyResponse != null ? processedVerifyResponse : "";
-
-                            if (processedVerifyResponse != null && !processedVerifyResponse.trim().isEmpty()) {
-                                System.out.println("Debug: Verifying response for Test ID " + testId);
-                                try {
-                                    finalVerifyResponse = processVerifyExpression(processedVerifyResponse, response.getBody(), testId);
-                                    Object actualJson = objectMapper.readValue(response.getBody(), Object.class);
-                                    Object expectedJson = objectMapper.readValue(finalVerifyResponse, Object.class);
-                                    compareJson(actualJson, expectedJson, "", testId);
-                                } catch (Exception e) {
-                                    verificationPassed = false;
-                                    throw new Exception("Response verification failed for Test ID " + testId + ": " + e.getMessage(), e);
-                                }
-                            }
-
-                            reportData.put("verifyResponse", originalVerifyResponse != null ? originalVerifyResponse : "");
-                            reportData.put("verificationPassed", verificationPassed);
-
-                            System.out.println("Test ID: " + testId);
-                            System.out.println("Test Data: " + testData);
-                            System.out.println("Headers: " + processedHeaders);
-                            System.out.println("Parameters: " + processedParams);
-                            System.out.println("Modified Payload: " + modifiedPayload);
-                            System.out.println("Modify Payload Map: " + processedModifyPayload);
-                            System.out.println("Response Capture: " + responseCapture);
-                            System.out.println("Authorization: " + processedAuthDetails);
-                            System.out.println("Expected Status: " + processedExpectedStatusStr);
-                            System.out.println("Response Time (ms): " + responseTimeMs);
-                            try {
+                                System.out.println("Test ID: " + testId);
+                                System.out.println("Test Data: " + testData);
+                                System.out.println("Headers: " + processedHeaders);
+                                System.out.println("Parameters: " + processedParams);
+                                System.out.println("Modified Payload: " + modifiedPayload);
+                                System.out.println("Modify Payload Map: " + processedModifyPayload);
+                                System.out.println("Response Capture: " + responseCapture);
+                                System.out.println("Authorization: " + processedAuthDetails);
+                                System.out.println("Expected Status: " + processedExpectedStatusStr);
+                                System.out.println("Response Time (ms): " + responseTimeMs);
                                 System.out.println("Response Body (Pretty JSON):\n" + ApiExecutor.toPrettyJson(response));
-                            } catch (IOException ex) {
-                                System.out.println("Response Body: " + response.getBody());
+
+                                Platform.runLater(() -> {
+                                    testCase.statusProperty().set("Pass");
+                                    reportData.put("status", "Pass");
+                                    reportData.put("failureReason", "");
+                                    reportDataList.add(reportData);
+                                });
                             }
-                            Platform.runLater(() -> {
-                                testCase.statusProperty().set("Pass");
-                                reportData.put("status", "Pass");
-                                reportData.put("failureReason", "");
-                                reportDataList.add(reportData);
-                            });
+                          
                         } catch (Exception ex) {
                             String failureReason = ex.getMessage() != null ? ex.getMessage() : "Unknown error";
                             System.err.println("Error executing Test ID " + testId + ": " + failureReason);

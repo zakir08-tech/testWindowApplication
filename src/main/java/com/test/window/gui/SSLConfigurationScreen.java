@@ -307,6 +307,7 @@ public class SSLConfigurationScreen extends Application {
                 alert.setContentText("SSL configurations saved successfully!");
                 alert.showAndWait();
                 hasUnsavedChanges = false;
+                UIComponentsManager.getInstance().loadSslProfilesIntoComboBox();
             } catch (IOException ex) {
                 showError("Save failed: " + ex.getMessage());
             }

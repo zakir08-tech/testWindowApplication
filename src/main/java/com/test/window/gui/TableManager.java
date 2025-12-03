@@ -127,6 +127,7 @@ public class TableManager {
                                  index == ColumnIndex.RESPONSE_KEY_NAME.getIndex() ||
                                  index == ColumnIndex.CAPTURE_VALUE.getIndex() ||
                                  index == ColumnIndex.AUTHORIZATION.getIndex() ||
+                                 index == ColumnIndex.SSL_VALIDATION.getIndex()||
                                  index == ColumnIndex.VERIFY_RESPONSE.getIndex()));
             
             // Use custom cell factory for enhanced editing

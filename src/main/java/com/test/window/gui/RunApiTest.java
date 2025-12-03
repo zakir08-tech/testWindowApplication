@@ -46,6 +46,12 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 
 /**
  * Main application class for the API Test Runner GUI.
@@ -111,22 +117,37 @@ public class RunApiTest extends Application {
         loadSslProfiles();
         HttpClientBuilder builder = HttpClientBuilder.create();
 
+        // Blank or "None" → normal HTTPS (default trust)
         if (sslValue == null || sslValue.trim().isEmpty() || "None".equalsIgnoreCase(sslValue.trim())) {
             return builder.build();
         }
 
         String val = sslValue.trim();
 
+        // === "Disable" → Your exact old trust-all code (fixed for compilation) ===
         if ("Disable".equalsIgnoreCase(val)) {
-            SSLContext sslContext = SSLContexts.custom()
-                    .loadTrustMaterial(null, (chain, authType) -> true)
-                    .build();
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, new TrustManager[]{
+                new X509TrustManager() {
+                    @Override
+                    public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+
+                    @Override
+                    public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+
+                    @Override
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return new X509Certificate[0];
+                    }
+                }
+            }, new SecureRandom());
+
             builder.setSSLContext(sslContext);
-            builder.setSSLHostnameVerifier((hostname, session) -> true);
-            System.out.println("SSL validation disabled");
+            System.out.println("SSL validation disabled (trust-all mode)");
             return builder.build();
         }
 
+        // === Custom profile (KingM_SSL, Kong_SSL, etc.) → mTLS from ssl.json ===
         SSLConfig config = sslProfiles.get(val);
         if (config == null) {
             System.err.println("SSL profile '" + val + "' not found in ssl.json – using default HTTPS");
@@ -158,7 +179,7 @@ public class RunApiTest extends Application {
                 .build();
 
         builder.setSSLContext(sslContext);
-        System.out.println("mTLS enabled for profile: " + val);
+        System.out.println("mTLS enabled with profile: " + val);
         return builder.build();
     }
     

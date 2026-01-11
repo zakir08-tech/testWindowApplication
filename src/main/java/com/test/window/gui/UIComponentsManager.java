@@ -31,6 +31,7 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -69,17 +70,24 @@ public class UIComponentsManager {
         TEST_ID(0), TEST_DESCRIPTION(1), REQUEST(2), END_POINT(3), HEADER_KEY(4), HEADER_VALUE(5),
         PARAM_KEY(6), PARAM_VALUE(7), PAYLOAD(8), PAYLOAD_TYPE(9),
         RESPONSE_KEY_NAME(10), CAPTURE_VALUE(11), AUTHORIZATION(12),
-        AUTH_FIELD1(13), AUTH_FIELD2(14), SSL_VALIDATION(15), EXPECTED_STATUS(16),
-        VERIFY_RESPONSE(17);
+        AUTH_FIELD1(13), AUTH_FIELD2(14), PROXY(15), SSL_VALIDATION(16), EXPECTED_STATUS(17),
+        VERIFY_RESPONSE(18);
+    	
         private final int index;
         ColumnIndex(int index) { this.index = index; }
         public int getIndex() { return index; }
     }
     
+    //private static final double LABEL_MIN_WIDTH = 45;
+    
     private static UIComponentsManager instance;
     private static final ObservableList<String> SSL_VALIDATION_OPTIONS =
             FXCollections.observableArrayList("");
     private ComboBox<String> sslValidationComboBox;
+    
+    private ComboBox<String> proxyComboBox;
+    private static final ObservableList<String> PROXY_OPTIONS =
+            FXCollections.observableArrayList("");
     
     /**
      * Observable list of authorization options for the auth combo box.
@@ -127,54 +135,68 @@ public class UIComponentsManager {
      * CSS style for unfocused centered text fields.
      */
     private static final String FIELD_STYLE_UNFOCUSED_CENTERED =
-        FIELD_STYLE_UNFOCUSED + " -fx-alignment: center;";
+        FIELD_STYLE_UNFOCUSED + " -fx-alignment: center-left;-fx-font-size: 11px;";
 
     /**
      * CSS style for focused centered text fields.
      */
     private static final String FIELD_STYLE_FOCUSED_CENTERED =
-        FIELD_STYLE_FOCUSED + " -fx-alignment: center;";
+        FIELD_STYLE_FOCUSED + " -fx-alignment: center-left;-fx-font-size: 11px;";
 
     /**
      * CSS style for disabled centered text fields.
      */
     private static final String FIELD_STYLE_DISABLED_CENTERED =
-        FIELD_STYLE_DISABLED + " -fx-alignment: center;";
+        FIELD_STYLE_DISABLED + " -fx-alignment: center-left;-fx-font-size: 11px;";
 
     /**
      * CSS style for unfocused left-centered (vertical center, horizontal left) text fields.
      */
     private static final String FIELD_STYLE_UNFOCUSED_LEFT_CENTERED =
-        FIELD_STYLE_UNFOCUSED + " -fx-alignment: center-left;";
+        FIELD_STYLE_UNFOCUSED + " -fx-alignment: center-left;-fx-font-size: 11px;";
 
     /**
      * CSS style for focused left-centered text fields.
      */
     private static final String FIELD_STYLE_FOCUSED_LEFT_CENTERED =
-        FIELD_STYLE_FOCUSED + " -fx-alignment: center-left;";
+        FIELD_STYLE_FOCUSED + " -fx-alignment: center-left;-fx-font-size: 11px;";
 
     /**
      * CSS style for disabled left-centered text fields.
      */
     private static final String FIELD_STYLE_DISABLED_LEFT_CENTERED =
-        FIELD_STYLE_DISABLED + " -fx-alignment: center-left;";
+        FIELD_STYLE_DISABLED + " -fx-alignment: center-left;-fx-font-size: 11px;";
 
     /**
      * CSS style for buttons in their default state.
      */
     private static final String BUTTON_STYLE =
-        "-fx-background-color: #4A90E2; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
+            "-fx-background-color: #4A90E2; " +
+                    "-fx-text-fill: white; " +
+                    "-fx-border-radius: 5px; " +
+                    "-fx-min-width: 100px; " +        
+                    "-fx-pref-width: 100px; " +       
+                    "-fx-max-width: 100px; " +        
+                    "-fx-font-size: 10px; " +         
+                    "-fx-alignment: center-left;";
 
     /**
      * CSS style for buttons on hover.
      */
     private static final String BUTTON_HOVER_STYLE =
-        "-fx-background-color: #6AB0FF; -fx-text-fill: white; -fx-border-radius: 5px; -fx-min-width: 100px;";
+            "-fx-background-color: #6AB0FF; " +
+                    "-fx-text-fill: white; " +
+                    "-fx-border-radius: 5px; " +
+                    "-fx-min-width: 100px; " +
+                    "-fx-pref-width: 100px; " +
+                    "-fx-max-width: 100px; " +
+                    "-fx-font-size: 10px; " +
+                    "-fx-alignment: center-left;";
 
     /**
      * Standard height for text fields.
      */
-    private static final double TEXT_FIELD_HEIGHT = 35.0;
+    private static final double TEXT_FIELD_HEIGHT = 33.0;
 
     /**
      * CSS for caret in styled text areas.
@@ -182,7 +204,52 @@ public class UIComponentsManager {
     private static final String CARET_CSS = ".styled-text-area .caret { -fx-fill: white; -fx-stroke: white; } " +
         ".styled-text-area:focused .caret { -fx-fill: white; -fx-stroke: white; } " +
         ".styled-text-area:disabled .caret { -fx-fill: #888888; -fx-stroke: #888888; }";
+    
+    private static final String COMBOBOX_CSS = "data:text/css," +
+            ".combo-box {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-prompt-text-fill: #BBBBBB;" +
+            "}" +
+            ".combo-box > .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-alignment: baseline-left;" +
+            "    -fx-padding: 0 8 0 12;" +
+            "}" +
+            ".combo-box .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "}" +
+            ".combo-box-popup .list-view {" +
+            "    -fx-font-size: 11px;" +
+            "    -fx-background-color: #2E2E2E;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #2E2E2E;" +
+            "    -fx-padding: 4 8 4 8;" +
+            "    -fx-alignment: center-left;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:hover {" +
+            "    -fx-background-color: #4A90E2;" +
+            "}" +
+            ".combo-box-popup .list-view .list-cell:selected {" +
+            "    -fx-text-fill: white;" +
+            "    -fx-background-color: #4A90E2;" +
+            "}" +
+            ".combo-box .arrow-button {" +
+            "    -fx-background-color: transparent;" +
+            "    -fx-padding: 0 6 0 6;" +
+            "}" +
+            ".combo-box .arrow {" +
+            "    -fx-background-color: white;" +
+            "    -fx-padding: 0;" +
+            "}";
 
+    private static final String HPC_CSS = "-fx-background-color: #2E2E2E; "
+            + "-fx-border-color: #3C3F41; "
+            + "-fx-border-width: 1px; "
+            + "-fx-border-radius: 5px;"
+            + "-fx-font-size: 10px";
+    
     /**
      * Reference to the main table view displaying test steps.
      */
@@ -239,8 +306,8 @@ public class UIComponentsManager {
      */
     private static Stage envVarStage; // Track single EnvVarList window
 
-    private final String endpointPrompt = "End-Point";
-    private final String statusPrompt = "Status";
+    private final String endpointPrompt = "";
+    private final String statusPrompt = "";
     private String usernamePrompt = "Username/Token";
     private final String passwordPrompt = "Password";
 
@@ -278,29 +345,20 @@ public class UIComponentsManager {
      * @return HBox containing the input fields
      */
     public HBox createTextFieldsBox() {
-        // Create combo box for HTTP request methods
+        HBox textFieldsBox = new HBox(20);  // Spacing between the 4 groups
+        textFieldsBox.setStyle("-fx-background-color: #2E2E2E;");
+        textFieldsBox.setAlignment(Pos.CENTER_LEFT);
+
+        // ===================== Request Group =====================
+        Label requestLabel = new Label("Request");
+        requestLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 11px; -fx-font-weight: bold;");
+        requestLabel.setMinWidth(85);
+        requestLabel.setPrefWidth(85);
+        requestLabel.setMaxWidth(85);
+        requestLabel.setAlignment(Pos.CENTER_LEFT);
+
         ComboBox<String> requestComboBox = new ComboBox<>(HTTP_METHODS);
-        requestComboBox.setPromptText("Request");
-
-        // Add CSS for dark theme text visibility
-        requestComboBox.getStylesheets().add("data:text/css," +
-            ".combo-box .list-cell {" +
-            "    -fx-text-fill: white;" +
-            "}" +
-            ".combo-box-popup .list-view .list-cell {" +
-            "    -fx-text-fill: white;" +
-            "    -fx-background-color: #2E2E2E;" +
-            "}" +
-            ".combo-box-popup .list-view .list-cell:selected {" +
-            "    -fx-text-fill: white;" +
-            "    -fx-background-color: #4A90E2;" +
-            "}" +
-            ".combo-box-popup .list-view .list-cell:focused {" +
-            "    -fx-text-fill: white;" +
-            "    -fx-background-color: #4A90E2;" +
-            "}"
-        );
-
+        requestComboBox.getStylesheets().add(COMBOBOX_CSS);
         requestComboBox.setCellFactory(lv -> new ListCell<String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -313,48 +371,57 @@ public class UIComponentsManager {
                 setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
             }
         });
-
         requestComboBox.setConverter(new StringConverter<String>() {
-            @Override
-            public String toString(String object) {
-                if (object == null || object.isEmpty()) {
-                    return "";
-                }
-                return object;
-            }
-
-            @Override
-            public String fromString(String string) {
-                return string;
-            }
+            @Override public String toString(String object) { return object == null || object.isEmpty() ? "" : object; }
+            @Override public String fromString(String string) { return string; }
         });
+        
         requestComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
-        requestComboBox.setPrefHeight(38.0);
-        requestComboBox.setMinHeight(38.0);
-        requestComboBox.setMaxHeight(38.0);
+        requestComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+        requestComboBox.setMinHeight(TEXT_FIELD_HEIGHT);
+        requestComboBox.setMaxHeight(TEXT_FIELD_HEIGHT);
+        
         requestComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            if (!requestComboBox.isDisable()) {
+            if (!requestComboBox.isDisabled()) {
                 requestComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
             }
         });
+        
         requestComboBox.setDisable(true);
-        requestComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.08));
-        requestComboBox.maxWidthProperty().bind(requestComboBox.prefWidthProperty());
-        requestComboBox.minWidthProperty().bind(requestComboBox.prefWidthProperty());
+        requestComboBox.setPrefWidth(110);
+        requestComboBox.setMinWidth(110);
+        requestComboBox.setMaxWidth(110);
 
-        // Create text area for endpoint URL with highlighting support
+        HBox requestGroup = new HBox(-32, requestLabel, requestComboBox);
+        requestGroup.setAlignment(Pos.CENTER_LEFT);
+
+        // ===================== End-Point Group =====================
+        Label endpointLabel = new Label("End-Point");
+        endpointLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 11px; -fx-font-weight: bold;");
+        endpointLabel.setMinWidth(85);
+        endpointLabel.setPrefWidth(85);
+        endpointLabel.setMaxWidth(85);
+        endpointLabel.setAlignment(Pos.CENTER_LEFT);
+
         endpointField = new InlineCssTextArea();
         endpointField.setStyle(FIELD_STYLE_UNFOCUSED);
-        endpointField.setPrefHeight(35.0);
-        endpointField.setMinHeight(35.0);
-        endpointField.setMaxHeight(35.0);
+        endpointField.setPrefHeight(TEXT_FIELD_HEIGHT);
+        endpointField.setMinHeight(TEXT_FIELD_HEIGHT);
+        endpointField.setMaxHeight(TEXT_FIELD_HEIGHT);
         endpointField.setWrapText(true);
         endpointField.setEditable(true);
         endpointField.replaceText(0, endpointField.getLength(), "");
         endpointField.getStylesheets().add("data:text/css," + CARET_CSS);
         updateFieldStyle(endpointField, endpointPrompt, "center-left");
+        
+        endpointField.setPrefWidth(600);
+        //endpointField.setMinWidth(350);
 
-        // Listener for endpoint field changes to update table
+        HBox endpointGroup = new HBox(-22, endpointLabel, endpointField);
+        endpointGroup.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(endpointField, Priority.ALWAYS);
+
+        // End-Point listeners
         endpointField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0 && endpointField.isEditable() && !settingPlaceholder) {
@@ -365,10 +432,9 @@ public class UIComponentsManager {
             updateFieldStyle(endpointField, endpointPrompt, "center-left");
         });
 
-        // Handle TAB key in endpoint field for focus traversal (no tab insertion)
         endpointField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
-                event.consume(); // Prevent tab character insertion
+                event.consume();
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0 && endpointField.isEditable()) {
                     String rawText = endpointField.getText();
@@ -376,11 +442,10 @@ public class UIComponentsManager {
                     table.refresh();
                     app.setModified(true);
                 }
-                moveFocus(endpointField, !event.isShiftDown()); // Move focus forward or backward
+                moveFocus(endpointField, !event.isShiftDown());
             }
         });
 
-        // Focused listener for endpoint
         endpointField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal) {
                 if (endpointField.getText().equals(endpointPrompt)) {
@@ -396,11 +461,15 @@ public class UIComponentsManager {
             updateFieldStyle(endpointField, endpointPrompt, "center-left");
             endpointField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
-        endpointField.prefWidthProperty().bind(table.widthProperty().multiply(0.500));
-        endpointField.maxWidthProperty().bind(endpointField.prefWidthProperty());
-        endpointField.minWidthProperty().bind(endpointField.prefWidthProperty());
 
-        // Create text area for expected status code with highlighting support
+        // ===================== Status Group =====================
+        Label statusLabelField = new Label("Status");
+        statusLabelField.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 11px; -fx-font-weight: bold;");
+        statusLabelField.setMinWidth(85);
+        statusLabelField.setPrefWidth(85);
+        statusLabelField.setMaxWidth(85);
+        statusLabelField.setAlignment(Pos.CENTER_LEFT);
+
         InlineCssTextArea statusField = new InlineCssTextArea();
         statusField.setStyle(FIELD_STYLE_UNFOCUSED);
         statusField.setPrefHeight(TEXT_FIELD_HEIGHT);
@@ -412,7 +481,14 @@ public class UIComponentsManager {
         statusField.getStylesheets().add("data:text/css," + CARET_CSS);
         updateFieldStyle(statusField, statusPrompt, "center");
 
-        // Listener for status field changes to update table
+        statusField.setPrefWidth(80);
+        statusField.setMinWidth(80);
+        statusField.setMaxWidth(80);
+
+        HBox statusGroup = new HBox(-42, statusLabelField, statusField);
+        statusGroup.setAlignment(Pos.CENTER_LEFT);
+
+        // Status listeners
         statusField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0 && statusField.isEditable() && !settingPlaceholder) {
@@ -423,10 +499,9 @@ public class UIComponentsManager {
             updateFieldStyle(statusField, statusPrompt, "center");
         });
 
-        // Handle TAB key in status field for focus traversal (no tab insertion)
         statusField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
-                event.consume(); // Prevent tab character insertion
+                event.consume();
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0 && statusField.isEditable()) {
                     String rawText = statusField.getText();
@@ -434,11 +509,10 @@ public class UIComponentsManager {
                     table.refresh();
                     app.setModified(true);
                 }
-                moveFocus(statusField, !event.isShiftDown()); // Move focus forward or backward
+                moveFocus(statusField, !event.isShiftDown());
             }
         });
 
-        // Focused listener for status
         statusField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal) {
                 if (statusField.getText().equals(statusPrompt)) {
@@ -455,33 +529,17 @@ public class UIComponentsManager {
             statusField.setStyle(newVal ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
         });
         statusField.setEditable(false);
-        statusField.prefWidthProperty().bind(table.widthProperty().multiply(0.05));
-        statusField.maxWidthProperty().bind(statusField.prefWidthProperty());
-        statusField.minWidthProperty().bind(statusField.prefWidthProperty());
 
-        // Create combo box for authorization types
+        // ===================== Authorization Group =====================
+        Label authLabel = new Label("Authorization");
+        authLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 11px; -fx-font-weight: bold;");
+        authLabel.setMinWidth(85);
+        authLabel.setPrefWidth(85);
+        authLabel.setMaxWidth(85);
+        authLabel.setAlignment(Pos.CENTER_LEFT);
+
         ComboBox<String> authComboBox = new ComboBox<>(AUTH_OPTIONS);
-        authComboBox.setPromptText("Authorization");
-
-        // Add CSS for dark theme text visibility
-        authComboBox.getStylesheets().add("data:text/css," +
-            ".combo-box .list-cell {" +
-            "    -fx-text-fill: white;" +
-            "}" +
-            ".combo-box-popup .list-view .list-cell {" +
-            "    -fx-text-fill: white;" +
-            "    -fx-background-color: #2E2E2E;" +
-            "}" +
-            ".combo-box-popup .list-view .list-cell:selected {" +
-            "    -fx-text-fill: white;" +
-            "    -fx-background-color: #4A90E2;" +
-            "}" +
-            ".combo-box-popup .list-view .list-cell:focused {" +
-            "    -fx-text-fill: white;" +
-            "    -fx-background-color: #4A90E2;" +
-            "}"
-        );
-
+        authComboBox.getStylesheets().add(COMBOBOX_CSS);
         authComboBox.setCellFactory(lv -> new ListCell<String>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -494,7 +552,6 @@ public class UIComponentsManager {
                 setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
             }
         });
-
         authComboBox.setConverter(new StringConverter<String>() {
             @Override
             public String toString(String object) {
@@ -503,27 +560,26 @@ public class UIComponentsManager {
                 }
                 return object;
             }
-
             @Override
             public String fromString(String string) {
                 return string;
             }
         });
         authComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
-        authComboBox.setPrefHeight(38.0);
-        authComboBox.setMinHeight(38.0);
-        authComboBox.setMaxHeight(38.0);
+        authComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+        authComboBox.setMinHeight(TEXT_FIELD_HEIGHT);
+        authComboBox.setMaxHeight(TEXT_FIELD_HEIGHT);
         authComboBox.focusedProperty().addListener((obs, oldVal, newVal) -> {
-            if (!authComboBox.isDisable()) {
+            if (!authComboBox.isDisabled()) {
                 authComboBox.setStyle(newVal ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
             }
         });
         authComboBox.setDisable(true);
-        authComboBox.prefWidthProperty().bind(table.widthProperty().multiply(0.0950));
-        authComboBox.maxWidthProperty().bind(authComboBox.prefWidthProperty());
-        authComboBox.minWidthProperty().bind(authComboBox.prefWidthProperty());
+        authComboBox.setPrefWidth(130);
+        authComboBox.setMinWidth(130);
+        authComboBox.setMaxWidth(130);
 
-        // Create text area for username or token (depending on auth type)
+        // Username/Token field
         InlineCssTextArea usernameTokenField = new InlineCssTextArea();
         usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
         usernameTokenField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -535,7 +591,6 @@ public class UIComponentsManager {
         usernameTokenField.getStylesheets().add("data:text/css," + CARET_CSS);
         updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
 
-        // Listener for username/token field changes to update table
         usernameTokenField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0 && usernameTokenField.isEditable() && !settingPlaceholder) {
@@ -546,10 +601,9 @@ public class UIComponentsManager {
             updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
         });
 
-        // Handle TAB key in username/token field for focus traversal (no tab insertion)
         usernameTokenField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
-                event.consume(); // Prevent tab character insertion
+                event.consume();
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0 && usernameTokenField.isEditable()) {
                     String rawText = usernameTokenField.getText();
@@ -557,11 +611,10 @@ public class UIComponentsManager {
                     table.refresh();
                     app.setModified(true);
                 }
-                moveFocus(usernameTokenField, !event.isShiftDown()); // Move focus forward or backward
+                moveFocus(usernameTokenField, !event.isShiftDown());
             }
         });
 
-        // Focused listener for username/token
         usernameTokenField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal) {
                 if (usernameTokenField.getText().equals(usernamePrompt)) {
@@ -579,11 +632,11 @@ public class UIComponentsManager {
         });
         usernameTokenField.setEditable(false);
         usernameTokenField.setVisible(false);
-        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+        usernameTokenField.setPrefWidth(250);
+        usernameTokenField.setMinWidth(250);
+        usernameTokenField.setMaxWidth(250);
 
-        // Create text area for password (for Basic Auth)
+        // Password field
         InlineCssTextArea passwordField = new InlineCssTextArea();
         passwordField.replaceText(0, passwordField.getLength(), "");
         passwordField.setStyle(FIELD_STYLE_UNFOCUSED);
@@ -595,7 +648,6 @@ public class UIComponentsManager {
         passwordField.getStylesheets().add("data:text/css," + CARET_CSS);
         updateFieldStyle(passwordField, passwordPrompt, "center-left");
 
-        // Listener for password field changes to update table
         passwordField.textProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0 && passwordField.isEditable() && !settingPlaceholder) {
@@ -606,10 +658,9 @@ public class UIComponentsManager {
             updateFieldStyle(passwordField, passwordPrompt, "center-left");
         });
 
-        // Handle TAB key in password field for focus traversal (no tab insertion)
         passwordField.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.getCode() == KeyCode.TAB) {
-                event.consume(); // Prevent tab character insertion
+                event.consume();
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
                 if (selectedIndex >= 0 && passwordField.isEditable()) {
                     String rawText = passwordField.getText();
@@ -617,11 +668,10 @@ public class UIComponentsManager {
                     table.refresh();
                     app.setModified(true);
                 }
-                moveFocus(passwordField, !event.isShiftDown()); // Move focus forward or backward
+                moveFocus(passwordField, !event.isShiftDown());
             }
         });
 
-        // Focused listener for password
         passwordField.focusedProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal) {
                 if (passwordField.getText().equals(passwordPrompt)) {
@@ -639,22 +689,19 @@ public class UIComponentsManager {
         });
         passwordField.setEditable(false);
         passwordField.setVisible(false);
-        passwordField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-        passwordField.maxWidthProperty().bind(passwordField.prefWidthProperty());
-        passwordField.minWidthProperty().bind(passwordField.prefWidthProperty());
+        passwordField.setPrefWidth(150);
+        passwordField.setMinWidth(150);
+        passwordField.setMaxWidth(150);
 
-        // Create HBox to hold all fields with spacing
-        HBox textFieldsBox = new HBox(10);
-        textFieldsBox.setStyle("-fx-background-color: #2E2E2E;");
-        textFieldsBox.getChildren().addAll(requestComboBox, endpointField, statusField, authComboBox, usernameTokenField, passwordField);
-        HBox.setHgrow(requestComboBox, Priority.NEVER);
-        HBox.setHgrow(endpointField, Priority.ALWAYS);
-        HBox.setHgrow(statusField, Priority.NEVER);
-        HBox.setHgrow(authComboBox, Priority.NEVER);
-        HBox.setHgrow(usernameTokenField, Priority.NEVER);
-        HBox.setHgrow(passwordField, Priority.NEVER);
+        HBox authGroup = new HBox(2, authLabel, authComboBox, usernameTokenField, passwordField);
+        authGroup.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(usernameTokenField, Priority.ALWAYS);
+        HBox.setHgrow(passwordField, Priority.ALWAYS);
 
-        // Listener for table selection changes to populate and enable/disable fields based on valid Test ID
+        // ===================== Add groups to main HBox =====================
+        textFieldsBox.getChildren().addAll(requestGroup, endpointGroup, statusGroup, authGroup);
+
+        // ===================== Table selection listener (your original code) =====================
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldItem, newItem) -> {
             if (newItem != null) {
                 int selectedIndex = table.getSelectionModel().getSelectedIndex();
@@ -667,31 +714,37 @@ public class UIComponentsManager {
                     }
                 }
                 boolean isValidTestId = CreateEditAPITest.isValidTestId(testId, testIds, testId);
-                // Set editable and disabled states first
+
                 requestComboBox.setDisable(!isValidTestId);
                 endpointField.setEditable(isValidTestId);
                 statusField.setEditable(isValidTestId);
                 authComboBox.setDisable(!isValidTestId);
                 usernameTokenField.setEditable(isValidTestId);
                 passwordField.setEditable(isValidTestId);
-                // Now set values
-                requestComboBox.setValue(row[ColumnIndex.REQUEST.getIndex()]);
+
+                String requestVal = row[ColumnIndex.REQUEST.getIndex()];
+                requestComboBox.setValue((requestVal == null || requestVal.isEmpty()) ? null : requestVal);
+
                 String endpointText = row[ColumnIndex.END_POINT.getIndex()] != null ? row[ColumnIndex.END_POINT.getIndex()] : "";
                 endpointField.replaceText(0, endpointField.getLength(), endpointText);
+
                 String statusText = row[ColumnIndex.EXPECTED_STATUS.getIndex()] != null ? row[ColumnIndex.EXPECTED_STATUS.getIndex()] : "";
                 statusField.replaceText(0, statusField.getLength(), statusText);
-                authComboBox.setValue(row[ColumnIndex.AUTHORIZATION.getIndex()]);
+
+                String authVal = row[ColumnIndex.AUTHORIZATION.getIndex()];
+                authComboBox.setValue((authVal == null || authVal.isEmpty()) ? null : authVal);
+
                 String authField1Text = row[ColumnIndex.AUTH_FIELD1.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD1.getIndex()] : "";
                 usernameTokenField.replaceText(0, usernameTokenField.getLength(), authField1Text);
+
                 String authField2Text = row[ColumnIndex.AUTH_FIELD2.getIndex()] != null ? row[ColumnIndex.AUTH_FIELD2.getIndex()] : "";
                 passwordField.replaceText(0, passwordField.getLength(), authField2Text);
+
                 if (!isValidTestId) {
                     requestComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
                     endpointField.setStyle(FIELD_STYLE_DISABLED);
                     statusField.setStyle(FIELD_STYLE_DISABLED);
                     authComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
-                    requestComboBox.setPromptText("Request");
-                    authComboBox.setPromptText("Authorization");
                     requestComboBox.setValue(null);
                     requestComboBox.getSelectionModel().clearSelection();
                     authComboBox.setValue(null);
@@ -702,36 +755,41 @@ public class UIComponentsManager {
                     statusField.setStyle(statusField.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                     authComboBox.setStyle(authComboBox.isFocused() ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
                 }
+
                 updateFieldStyle(endpointField, endpointPrompt, "center-left");
                 updateFieldStyle(statusField, statusPrompt, "center");
                 updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
                 updateFieldStyle(passwordField, passwordPrompt, "center-left");
+
                 if (isValidTestId && authComboBox.getValue() != null) {
                     if ("Basic Auth".equals(authComboBox.getValue())) {
                         usernamePrompt = "Username";
                         usernameTokenField.setVisible(true);
                         usernameTokenField.setEditable(true);
-                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.setPrefWidth(150);
+                        usernameTokenField.setMinWidth(150);
+                        usernameTokenField.setMaxWidth(150);
+
                         passwordField.setVisible(true);
                         passwordField.setEditable(true);
                     } else if ("Bearer Token".equals(authComboBox.getValue())) {
                         usernamePrompt = "Token";
                         usernameTokenField.setVisible(true);
                         usernameTokenField.setEditable(true);
-                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.21));
-                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.setPrefWidth(250);
+                        usernameTokenField.setMinWidth(250);
+                        usernameTokenField.setMaxWidth(250);
+
                         passwordField.setVisible(false);
                         passwordField.setEditable(false);
                     } else {
                         usernamePrompt = "Username/Token";
                         usernameTokenField.setVisible(false);
                         usernameTokenField.setEditable(false);
-                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.setPrefWidth(150);
+                        usernameTokenField.setMinWidth(150);
+                        usernameTokenField.setMaxWidth(150);
+
                         passwordField.setVisible(false);
                         passwordField.setEditable(false);
                     }
@@ -739,26 +797,20 @@ public class UIComponentsManager {
                     usernamePrompt = "Username/Token";
                     usernameTokenField.setVisible(false);
                     usernameTokenField.setEditable(false);
-                    usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-                    usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                    usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
                     passwordField.setVisible(false);
                     passwordField.setEditable(false);
                 }
                 updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
                 updateFieldStyle(passwordField, passwordPrompt, "center-left");
             } else {
-                // Clear fields when no selection
                 requestComboBox.setValue(null);
                 requestComboBox.getSelectionModel().clearSelection();
                 requestComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
-                requestComboBox.setPromptText("Request");
                 endpointField.replaceText(0, endpointField.getLength(), "");
                 statusField.replaceText(0, statusField.getLength(), "");
                 authComboBox.setValue(null);
                 authComboBox.getSelectionModel().clearSelection();
                 authComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
-                authComboBox.setPromptText("Authorization");
                 usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
                 usernameTokenField.setVisible(false);
                 usernameTokenField.setEditable(false);
@@ -779,7 +831,7 @@ public class UIComponentsManager {
             updateButtonStates();
         });
 
-        // Listener for auth combo box changes to update auth fields visibility and update table
+        // ===================== Auth combo listener (your original code) =====================
         authComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -801,32 +853,35 @@ public class UIComponentsManager {
                         usernamePrompt = "Username";
                         usernameTokenField.setVisible(true);
                         usernameTokenField.setEditable(true);
-                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.setPrefWidth(150);
+                        usernameTokenField.setMinWidth(150);
+                        usernameTokenField.setMaxWidth(150);
+
                         passwordField.setVisible(true);
                         passwordField.setEditable(true);
-                        usernameTokenField.replaceText(0, usernameTokenField.getLength(), ""); // Clear previous content
+                        usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
                     } else if ("Bearer Token".equals(newVal)) {
                         usernamePrompt = "Token";
                         usernameTokenField.setVisible(true);
                         usernameTokenField.setEditable(true);
-                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.21));
-                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.setPrefWidth(250);
+                        usernameTokenField.setMinWidth(250);
+                        usernameTokenField.setMaxWidth(250);
+
                         passwordField.setVisible(false);
                         passwordField.setEditable(false);
-                        usernameTokenField.replaceText(0, usernameTokenField.getLength(), ""); // Clear previous content
+                        usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
                     } else {
                         usernamePrompt = "Username/Token";
                         usernameTokenField.setVisible(false);
                         usernameTokenField.setEditable(false);
-                        usernameTokenField.prefWidthProperty().bind(table.widthProperty().multiply(0.14));
-                        usernameTokenField.maxWidthProperty().bind(usernameTokenField.prefWidthProperty());
-                        usernameTokenField.minWidthProperty().bind(usernameTokenField.prefWidthProperty());
+                        usernameTokenField.setPrefWidth(150);
+                        usernameTokenField.setMinWidth(150);
+                        usernameTokenField.setMaxWidth(150);
+
                         passwordField.setVisible(false);
                         passwordField.setEditable(false);
-                        usernameTokenField.replaceText(0, usernameTokenField.getLength(), ""); // Clear previous content
+                        usernameTokenField.replaceText(0, usernameTokenField.getLength(), "");
                     }
                 }
                 updateFieldStyle(usernameTokenField, usernamePrompt, "center-left");
@@ -834,7 +889,7 @@ public class UIComponentsManager {
             }
         });
 
-        // Listener for request combo box changes to update table
+        // ===================== Request combo listener =====================
         requestComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             int selectedIndex = table.getSelectionModel().getSelectedIndex();
             if (selectedIndex >= 0) {
@@ -843,6 +898,7 @@ public class UIComponentsManager {
                 app.setModified(true);
             }
         });
+
         return textFieldsBox;
     }
 
@@ -858,16 +914,14 @@ public class UIComponentsManager {
         additionalContent.setAlignment(Pos.CENTER_LEFT);
 
         // ========================= SSL VALIDATION — BELOW THE TOP BAR =========================
+        Label sslLabel = new Label("SSL ");
+        sslLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 11px;-fx-font-weight: bold;");
+
         sslValidationComboBox = new ComboBox<>(SSL_VALIDATION_OPTIONS);
-        sslValidationComboBox.setPromptText("SSL");
+        // No prompt text — we use the external label instead
+        // sslValidationComboBox.setPromptText("SSL");  // ← REMOVE THIS LINE
 
-        sslValidationComboBox.getStylesheets().add("data:text/css," +
-            ".combo-box .list-cell { -fx-text-fill: white; }" +
-            ".combo-box-popup .list-view .list-cell { -fx-text-fill: white; -fx-background-color: #2E2E2E; }" +
-            ".combo-box-popup .list-view .list-cell:selected { -fx-text-fill: white; -fx-background-color: #4A90E2; }" +
-            ".combo-box-popup .list-view .list-cell:focused { -fx-text-fill: white; -fx-background-color: #4A90E2; }"
-        );
-
+        sslValidationComboBox.getStylesheets().add(COMBOBOX_CSS);
         sslValidationComboBox.setCellFactory(lv -> new ListCell<String>() {
             @Override protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
@@ -875,24 +929,21 @@ public class UIComponentsManager {
                 setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
             }
         });
-
         sslValidationComboBox.setConverter(new StringConverter<String>() {
             @Override public String toString(String o) { return o == null || o.isEmpty() ? "" : o; }
             @Override public String fromString(String s) { return s; }
         });
-
         sslValidationComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
-        sslValidationComboBox.setPrefHeight(25.0);
+        sslValidationComboBox.setPrefHeight(32.0);
+        sslValidationComboBox.setMinHeight(32.0);
+        sslValidationComboBox.setMaxHeight(32.0);
         sslValidationComboBox.focusedProperty().addListener((obs, o, n) ->
             sslValidationComboBox.setStyle(n ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED));
-
         sslValidationComboBox.setDisable(true);
-        sslValidationComboBox.setPrefWidth(120);
-        sslValidationComboBox.setMaxWidth(140);
-        
-        // Load profiles from ssl.json
+        sslValidationComboBox.setPrefWidth(140);  // Slightly wider for better look
+
         loadSslProfilesIntoComboBox();
-        
+
         sslValidationComboBox.valueProperty().addListener((obs, old, newVal) -> {
             int idx = table.getSelectionModel().getSelectedIndex();
             if (idx >= 0) {
@@ -902,22 +953,71 @@ public class UIComponentsManager {
             }
         });
 
-        HBox sslRow = new HBox(sslValidationComboBox);
-        sslRow.setAlignment(Pos.CENTER_LEFT);
-        sslRow.setPadding(new javafx.geometry.Insets(0, 0, 0, 0)); // aligns with End-Point
-        sslRow.setStyle("-fx-background-color: #2E2E2E;");
+        HBox sslBox = new HBox(2, sslLabel, sslValidationComboBox);
+        sslBox.setAlignment(Pos.CENTER_LEFT);
 
-        additionalContent.getChildren().add(0, sslRow); // Right under the top bar
+
+        // Proxy Label + ComboBox
+        Label proxyLabel = new Label("Proxy ");
+        proxyLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 11px;-fx-font-weight: bold;");
+
+        proxyComboBox = new ComboBox<>(PROXY_OPTIONS);
+        // No prompt text — external label is the heading
+        // proxyComboBox.setPromptText("Proxy");  // ← REMOVE THIS LINE
+
+        proxyComboBox.getStylesheets().add(COMBOBOX_CSS);
+        proxyComboBox.setCellFactory(lv -> new ListCell<String>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : (item.isEmpty() ? "" : item));
+                setStyle("-fx-background-color: #2E2E2E; -fx-text-fill: white;");
+            }
+        });
+        proxyComboBox.setConverter(new StringConverter<String>() {
+            @Override public String toString(String o) { return o == null || o.isEmpty() ? "" : o; }
+            @Override public String fromString(String s) { return s; }
+        });
+        proxyComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
+        proxyComboBox.setPrefHeight(32.0);
+        proxyComboBox.setMinHeight(32.0);
+        proxyComboBox.setMaxHeight(32.0);
+        proxyComboBox.focusedProperty().addListener((obs, o, n) ->
+            proxyComboBox.setStyle(n ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED));
+        proxyComboBox.setDisable(true);
+        proxyComboBox.setPrefWidth(140);
+
+        loadProxyProfilesIntoComboBox();
+
+        proxyComboBox.valueProperty().addListener((obs, old, newVal) -> {
+            int idx = table.getSelectionModel().getSelectedIndex();
+            if (idx >= 0) {
+                table.getItems().get(idx)[ColumnIndex.PROXY.getIndex()] = newVal != null ? newVal : "";
+                table.refresh();
+                app.setModified(true);
+            }
+        });
+
+        HBox proxyBox = new HBox(5, proxyLabel, proxyComboBox);
+        proxyBox.setAlignment(Pos.CENTER_LEFT);
+
+
+        // Main row containing both SSL and Proxy
+        HBox sslProxyRow = new HBox(40, sslBox, proxyBox);
+        sslProxyRow.setAlignment(Pos.CENTER_LEFT);
+        sslProxyRow.setPadding(new javafx.geometry.Insets(8, 0, 8, 10)); // Top, right, bottom, left padding
+        sslProxyRow.setStyle("-fx-background-color: #2E2E2E;");
+
+        additionalContent.getChildren().add(0, sslProxyRow);
         // ===================================================================================
 
         // Add "Headers" heading above headerFieldsScroll
         Label headersLabel = new Label("Headers");
-        headersLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
+        headersLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 10px; -fx-padding: 5px 0px 5px 5px;-fx-font-weight: bold;");
 
         VBox headerFieldsVBox = new VBox(5);
         headerFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         headerFieldsScroll = new ScrollPane(headerFieldsVBox);
-        headerFieldsScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
+        headerFieldsScroll.setStyle(HPC_CSS);
         headerFieldsScroll.setFitToWidth(true);
         headerFieldsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         headerFieldsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
@@ -930,12 +1030,12 @@ public class UIComponentsManager {
 
         // Add "Params" heading above paramScroll
         Label paramsLabel = new Label("Params");
-        paramsLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
+        paramsLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 10px; -fx-padding: 5px 0px 5px 5px;-fx-font-weight: bold;");
 
         VBox paramFieldsVBox = new VBox(5);
         paramFieldsVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         ScrollPane paramScroll = new ScrollPane(paramFieldsVBox);
-        paramScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
+        paramScroll.setStyle(HPC_CSS);
         paramScroll.setFitToWidth(true);
         paramScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         paramScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
@@ -953,12 +1053,12 @@ public class UIComponentsManager {
 
         // Capture Response Data
         Label responseCaptureLabel = new Label("Capture Response Data");
-        responseCaptureLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
+        responseCaptureLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 10px; -fx-padding: 5px 0px 5px 5px;-fx-font-weight: bold;");
 
         VBox responseCaptureVBox = new VBox(5);
         responseCaptureVBox.setStyle("-fx-background-color: #2E2E2E; -fx-padding: 5px;");
         ScrollPane responseCaptureScroll = new ScrollPane(responseCaptureVBox);
-        responseCaptureScroll.setStyle("-fx-background-color: #2E2E2E; -fx-border-color: #3C3F41; -fx-border-width: 1px; -fx-border-radius: 5px;");
+        responseCaptureScroll.setStyle(HPC_CSS);
         responseCaptureScroll.setFitToWidth(true);
         responseCaptureScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         responseCaptureScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
@@ -985,12 +1085,9 @@ public class UIComponentsManager {
 
         // Payload Type ComboBox
         ComboBox<String> payloadTypeComboBox = new ComboBox<>(PAYLOAD_TYPES);
-        payloadTypeComboBox.setPromptText("Payload Type");
-        payloadTypeComboBox.getStylesheets().add("data:text/css," +
-            ".combo-box .list-cell { -fx-text-fill: white; }" +
-            ".combo-box-popup .list-view .list-cell { -fx-text-fill: white; -fx-background-color: #2E2E2E; }" +
-            ".combo-box-popup .list-view .list-cell:selected { -fx-text-fill: white; -fx-background-color: #4A90E2; }"
-        );
+        //payloadTypeComboBox.setPromptText("Payload Type");
+        payloadTypeComboBox.getStylesheets().add(COMBOBOX_CSS);
+        
         payloadTypeComboBox.setCellFactory(lv -> new ListCell<String>() {
             @Override protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
@@ -999,7 +1096,9 @@ public class UIComponentsManager {
             }
         });
         payloadTypeComboBox.setStyle(FIELD_STYLE_UNFOCUSED_CENTERED);
-        payloadTypeComboBox.setPrefHeight(38.0);
+        payloadTypeComboBox.setPrefHeight(TEXT_FIELD_HEIGHT);
+        payloadTypeComboBox.setMinHeight(TEXT_FIELD_HEIGHT);
+        payloadTypeComboBox.setMaxHeight(TEXT_FIELD_HEIGHT);
         payloadTypeComboBox.focusedProperty().addListener((o, ov, nv) ->
             payloadTypeComboBox.setStyle(nv ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED));
         payloadTypeComboBox.setDisable(true);
@@ -1090,10 +1189,10 @@ public class UIComponentsManager {
         });
 
         Label payloadLabel = new Label("Payload");
-        payloadLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
+        payloadLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 10px; -fx-padding: 5px 0px 5px 5px;-fx-font-weight: bold;");
 
         Label verifyResponseLabel = new Label("Verify Response");
-        verifyResponseLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 14px; -fx-padding: 5px 0px 5px 5px;");
+        verifyResponseLabel.setStyle("-fx-text-fill: #4A90E2; -fx-font-size: 10px; -fx-padding: 5px 0px 5px 5px;-fx-font-weight: bold;");
 
         HBox payloadOptionsBox = new HBox(10, payloadTypeComboBox);
         payloadOptionsBox.setAlignment(Pos.CENTER_LEFT);
@@ -1148,6 +1247,10 @@ public class UIComponentsManager {
                     sslValidationComboBox.setValue(null);
                     sslValidationComboBox.setDisable(true);
                     sslValidationComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
+                    proxyComboBox.setValue(null);
+                    proxyComboBox.setDisable(true);
+                    proxyComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
+                    
                     return;
                 }
 
@@ -1167,15 +1270,23 @@ public class UIComponentsManager {
                 payloadField.setStyle(payloadField.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
                 verifyResponseField.setStyle(verifyResponseField.isFocused() ? FIELD_STYLE_FOCUSED : FIELD_STYLE_UNFOCUSED);
 
-                payloadTypeComboBox.setValue(newItem[ColumnIndex.PAYLOAD_TYPE.getIndex()] != null ? newItem[ColumnIndex.PAYLOAD_TYPE.getIndex()] : "");
+                // Show prompt when table cell is empty
+                String payloadTypeVal = newItem[ColumnIndex.PAYLOAD_TYPE.getIndex()];
+                payloadTypeComboBox.setValue((payloadTypeVal == null || payloadTypeVal.isEmpty()) ? null : payloadTypeVal);
                 payloadTypeComboBox.setDisable(false);
                 payloadTypeComboBox.setStyle(payloadTypeComboBox.isFocused() ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
 
+                // Show prompt when table cell is empty
                 String sslVal = newItem[ColumnIndex.SSL_VALIDATION.getIndex()];
-                sslValidationComboBox.setValue(sslVal != null && !sslVal.isEmpty() ? sslVal : "");
+                sslValidationComboBox.setValue((sslVal == null || sslVal.isEmpty()) ? null : sslVal);
                 sslValidationComboBox.setDisable(false);
                 sslValidationComboBox.setStyle(sslValidationComboBox.isFocused() ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
-
+                
+                String proxyVal = newItem[ColumnIndex.PROXY.getIndex()];
+                proxyComboBox.setValue((proxyVal == null || proxyVal.isEmpty()) ? null : proxyVal);
+                proxyComboBox.setDisable(false);
+                proxyComboBox.setStyle(proxyComboBox.isFocused() ? FIELD_STYLE_FOCUSED_CENTERED : FIELD_STYLE_UNFOCUSED_CENTERED);
+                
                 // Find start of current test case block
                 int start = selectedIndex;
                 while (start >= 0 && (table.getItems().get(start)[ColumnIndex.TEST_ID.getIndex()] == null ||
@@ -1474,10 +1585,40 @@ public class UIComponentsManager {
                 sslValidationComboBox.setValue(null);
                 sslValidationComboBox.setDisable(true);
                 sslValidationComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
+                proxyComboBox.setValue(null);
+                proxyComboBox.setDisable(true);
+                proxyComboBox.setStyle(FIELD_STYLE_DISABLED_CENTERED);
             }
         });
 
         return additionalContent;
+    }
+    
+    void loadProxyProfilesIntoComboBox() {
+        ObservableList<String> proxyItems = FXCollections.observableArrayList();
+        proxyItems.add(""); // Always add empty option first
+
+        File proxyFile = new File("proxy.json");
+        if (!proxyFile.exists()) {
+            System.out.println("proxy.json not found. Only empty option available.");
+            proxyComboBox.setItems(proxyItems);
+            return;
+        }
+
+        try (FileReader reader = new FileReader(proxyFile)) {
+            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+
+            List<String> keys = new ArrayList<>(json.keySet());
+            Collections.sort(keys); // Optional: sort alphabetically
+
+            proxyItems.addAll(keys);
+            System.out.println("Loaded Proxy profiles: " + keys);
+        } catch (Exception e) {
+            System.err.println("Failed to read proxy.json: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        proxyComboBox.setItems(proxyItems);
     }
     
     void loadSslProfilesIntoComboBox() {
@@ -1991,6 +2132,26 @@ public class UIComponentsManager {
                 }
             }
         });
+        
+        // Button to open proxy configuration
+        Button proxyConfigButton = new Button("Proxy Configuration");
+        proxyConfigButton.setStyle(BUTTON_STYLE);
+        proxyConfigButton.setTooltip(new Tooltip("Open proxy settings (host, port, authentication)"));
+        proxyConfigButton.setOnMouseEntered(e -> proxyConfigButton.setStyle(BUTTON_HOVER_STYLE));
+        proxyConfigButton.setOnMouseExited(e -> proxyConfigButton.setStyle(BUTTON_STYLE));
+
+        proxyConfigButton.setOnAction(e -> {
+            if (ProxyConfigurationScreen.isShowing()) {
+                Platform.runLater(() -> ProxyConfigurationScreen.instance.requestFocus());
+            } else {
+                try {
+                    Stage proxyStage = new Stage();
+                    new ProxyConfigurationScreen().start(proxyStage);
+                } catch (Exception ex) {
+                    CreateEditAPITest.showError("Failed to open Proxy Configuration window: " + ex.getMessage());
+                }
+            }
+        });
 
         // Add all buttons to the VBox
         buttonsVBox.getChildren().addAll(
@@ -2002,7 +2163,8 @@ public class UIComponentsManager {
                 createNewTestButton,
                 addEditEnvVarButton,
                 importCollectionButton,
-                sslConfigButton
+                sslConfigButton,
+                proxyConfigButton
             );
         
         return buttonsVBox;

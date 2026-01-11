@@ -117,15 +117,9 @@ public class RunApiTest extends Application {
         loadSslProfiles();
         HttpClientBuilder builder = HttpClientBuilder.create();
 
-        // Blank or "None" → normal HTTPS (default trust)
-        if (sslValue == null || sslValue.trim().isEmpty() || "None".equalsIgnoreCase(sslValue.trim())) {
-            return builder.build();
-        }
-
         String val = sslValue.trim();
 
-        // === "Disable" → Your exact old trust-all code (fixed for compilation) ===
-        if ("Disable".equalsIgnoreCase(val)) {
+        if (sslValue.trim().isEmpty() || "None".equalsIgnoreCase(sslValue.trim())) {
             SSLContext sslContext = SSLContext.getInstance("TLS");
             sslContext.init(null, new TrustManager[]{
                 new X509TrustManager() {
@@ -147,7 +141,6 @@ public class RunApiTest extends Application {
             return builder.build();
         }
 
-        // === Custom profile (KingM_SSL, Kong_SSL, etc.) → mTLS from ssl.json ===
         SSLConfig config = sslProfiles.get(val);
         if (config == null) {
             System.err.println("SSL profile '" + val + "' not found in ssl.json – using default HTTPS");
@@ -1257,7 +1250,6 @@ public class RunApiTest extends Application {
                     continue;
                 }
             } else {
-                // Simple escape handling: check for \"
                 if (c == '"' && (i == 0 || jsonStr.charAt(i - 1) != '\\')) {
                     inString = false;
                 }

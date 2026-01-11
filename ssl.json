@@ -1,0 +1,10 @@
+{
+  "KingKong_SSL" : {
+    "keystore" : [ "./keystore/kingkeystore.pk12", "kingpass12345" ],
+    "truststore" : [ "./keystore/KINGkeystore.pk12", "KINGpass541321" ]
+  },
+  "KongKing_SSL" : {
+    "keystore" : [ "./keystore/KONGkeystore.pk12", "kongpass12345" ],
+    "truststore" : [ "./keystore/KONGkeystore.pk12", "KONGpass541321" ]
+  }
+}

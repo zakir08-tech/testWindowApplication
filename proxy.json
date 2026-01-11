@@ -1,0 +1,20 @@
+{
+  "MMM" : {
+    "server" : "userproxy.rbsgrp.net",
+    "port" : "8080",
+    "username" : "qureszd",
+    "password" : "password12345"
+  },
+  "XYZ" : {
+    "server" : "userproxy.rbsgrp.net",
+    "port" : "4040",
+    "username" : "qureszd",
+    "password" : "password1234"
+  },
+  "asd_agsg_zakir_qureshi" : {
+    "server" : "",
+    "port" : "",
+    "username" : "",
+    "password" : ""
+  }
+}

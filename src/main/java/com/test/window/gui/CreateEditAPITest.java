@@ -55,10 +55,10 @@ public class CreateEditAPITest extends Application {
     private static final String[] COLUMN_NAMES = {
         "Test ID", "Test Description", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-        "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
+        "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "        ", "        ", "Proxy",
         "SSL Validation", "Expected Status", "Verify Response"
     };
-
+    
     /**
      * CSS style for unfocused text fields and areas.
      * Defines a dark theme with white text, subtle borders, and rounded corners.

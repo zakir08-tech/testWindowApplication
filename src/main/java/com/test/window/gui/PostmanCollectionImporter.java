@@ -349,7 +349,7 @@ public class PostmanCollectionImporter {
         String[] columns = {
             "Test ID", "Request", "End-Point", "Header (key)", "Header (value)",
             "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-            "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
+            "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "", "Proxy",
             "SSL Validation", "Expected Status", "Verify Response", "Test Description"
         };
 
@@ -459,9 +459,10 @@ public class PostmanCollectionImporter {
                     row[12] = ""; // Authorization blank
                     row[13] = ""; // Empty
                     row[14] = ""; // Empty
-                    row[15] = ""; // SSL Validation
-                    row[16] = ""; // Expected Status blank
-                    row[17] = ""; // Verify Response
+                    row[15] = ""; // Proxy
+                    row[16] = ""; // SSL Validation
+                    row[17] = ""; // Expected Status blank
+                    row[18] = ""; // Verify Response
                 }
 
                 // Set header if available for this row index

@@ -443,9 +443,10 @@ public class PostmanCollectionImporter {
                     row[12] = authValue; // Authorization
                     row[13] = ""; // Empty
                     row[14] = ""; // Empty
-                    row[15] = ""; // SSL Validation
-                    row[16] = "200"; // Expected Status (default)
-                    row[17] = ""; // Verify Response
+                    row[15] = ""; // Proxy
+                    row[16] = ""; // SSL Validation
+                    row[17] = "200"; // Expected Status (default)
+                    row[18] = ""; // Verify Response
                 } else {
                     // For subsequent rows, leave shared fields blank
                     row[0] = ""; // Test ID blank

@@ -23,8 +23,13 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import org.apache.http.HttpHost;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -53,12 +58,73 @@ import javax.net.ssl.X509TrustManager;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 
+
 /**
  * Main application class for the API Test Runner GUI.
  * This JavaFX application allows users to load API test cases from an Excel file,
  * select and run tests, monitor status, and generate HTML reports.
  */
 public class RunApiTest extends Application {
+	
+	private final Map<String, ProxyConfig> proxyProfiles = new HashMap<>();
+	private boolean proxyProfilesLoaded = false;
+	
+	private static class ProxyConfig {
+	    String server;
+	    String port;
+	    String username;
+	    String password;
+
+	    boolean isEmpty() {
+	        return server == null || server.trim().isEmpty();
+	    }
+
+	    HttpHost getHttpHost() {
+	        if (isEmpty()) return null;
+	        try {
+	            int portNum = Integer.parseInt(port.trim());
+	            return new HttpHost(server.trim(), portNum);
+	        } catch (NumberFormatException e) {
+	            System.err.println("Invalid proxy port: " + port);
+	            return null;
+	        }
+	    }
+	}
+	
+	private void loadProxyProfiles() {
+	    if (proxyProfilesLoaded) return;
+
+	    File proxyFile = new File("proxy.json");
+	    if (!proxyFile.exists()) {
+	        System.out.println("proxy.json not found in project root. Proxy support disabled.");
+	        proxyProfilesLoaded = true;
+	        return;
+	    }
+
+	    try {
+	        ObjectMapper mapper = new ObjectMapper();
+	        Map<String, Map<String, String>> data = mapper.readValue(
+	            proxyFile, new TypeReference<Map<String, Map<String, String>>>() {});
+
+	        for (Map.Entry<String, Map<String, String>> entry : data.entrySet()) {
+	            String profileName = entry.getKey().trim();
+	            Map<String, String> config = entry.getValue();
+
+	            ProxyConfig pc = new ProxyConfig();
+	            pc.server   = config.get("server");
+	            pc.port     = config.get("port");
+	            pc.username = config.get("username");
+	            pc.password = config.get("password");
+
+	            proxyProfiles.put(profileName, pc);
+	            System.out.println("Loaded proxy profile: " + profileName);
+	        }
+	        proxyProfilesLoaded = true;
+	    } catch (Exception e) {
+	        System.err.println("Failed to load proxy.json: " + e.getMessage());
+	        e.printStackTrace();
+	    }
+	}
 	
 	// ====================== SSL SUPPORT – YOUR EXACT FORMAT ======================
     private static class SSLConfig {
@@ -113,10 +179,39 @@ public class RunApiTest extends Application {
         }
     }
 
-    private CloseableHttpClient createHttpClient(String sslValue) throws Exception {
+    private CloseableHttpClient createHttpClient(String sslValue, String proxyName) throws Exception {
         loadSslProfiles();
+        loadProxyProfiles();
+        
         HttpClientBuilder builder = HttpClientBuilder.create();
+        
+     // ------------------ Proxy Configuration ------------------
+        if (proxyName != null && !proxyName.trim().isEmpty()) {
+            ProxyConfig proxyCfg = proxyProfiles.get(proxyName.trim());
+            if (proxyCfg != null && !proxyCfg.isEmpty()) {
+                HttpHost proxyHost = proxyCfg.getHttpHost();
+                if (proxyHost != null) {
+                    builder.setProxy(proxyHost);
+                    System.out.println("Using proxy: " + proxyHost + " for profile '" + proxyName + "'");
 
+                    // If proxy requires authentication
+                    if (proxyCfg.username != null && !proxyCfg.username.trim().isEmpty() &&
+                        proxyCfg.password != null) {
+                        
+                        CredentialsProvider credsProvider = new BasicCredentialsProvider();
+                        credsProvider.setCredentials(
+                            new AuthScope(proxyHost),
+                            new UsernamePasswordCredentials(proxyCfg.username, proxyCfg.password)
+                        );
+                        builder.setDefaultCredentialsProvider(credsProvider);
+                        System.out.println("Proxy authentication enabled for user: " + proxyCfg.username);
+                    }
+                }
+            } else {
+                System.out.println("Proxy profile '" + proxyName + "' not found or empty → no proxy used");
+            }
+        }
+        
         String val = sslValue.trim();
 
         if (sslValue.trim().isEmpty() || "None".equalsIgnoreCase(sslValue.trim())) {
@@ -341,7 +436,7 @@ public class RunApiTest extends Application {
     private static final Set<String> REQUIRED_HEADERS = new HashSet<>(Arrays.asList(
         "Test ID", "Test Description", "Request", "End-Point", "Header (key)", "Header (value)",
         "Parameter (key)", "Parameter (value)", "Payload", "Payload Type",
-        "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "",
+        "Response (key) Name", "Capture (key) Value (env var)", "Authorization", "", "","Proxy",
         "SSL Validation", "Expected Status", "Verify Response"
     ));
 
@@ -637,6 +732,7 @@ public class RunApiTest extends Application {
 
                         ApiExecutor.Auth auth = new ApiExecutor.Auth("NONE", null, null, null);
                         String sslValidationStr = null;
+                        String proxyValidationStr = null;
                         HashMap<String, Object> testData = testDataMap.get(testId);
                         String method = (String) testData.get("Request");
                         String url = (String) testData.get("End-Point");
@@ -645,6 +741,7 @@ public class RunApiTest extends Application {
                         String expectedStatusStr = (String) testData.get("Expected Status");
                         String verifyResponse = (String) testData.get("Verify Response");
                         sslValidationStr = (String) testData.get("SSL Validation");
+                        proxyValidationStr = (String) testData.get("Proxy");
                         String modifiedPayload = payload;
                         String processedVerifyResponse = null;
                         StringBuilder captureIssues = new StringBuilder();
@@ -793,7 +890,9 @@ public class RunApiTest extends Application {
                             }
                             
                             String sslValue = (String) testDataMap.get(testId).get("SSL Validation");
-                            try (CloseableHttpClient client = createHttpClient(sslValue)) {
+                            String proxyValue = (String) testDataMap.get(testId).get("Proxy");
+                            
+                            try (CloseableHttpClient client = createHttpClient(sslValue, proxyValue)) {
                             	long startTime = System.nanoTime();
                                 ApiExecutor.Response response = apiExecutor.execute(
                                     method,
@@ -1137,7 +1236,8 @@ public class RunApiTest extends Application {
                         currentTestData.put("Expected Status", getCellValue(row, headerMap.get("Expected Status")));
                         currentTestData.put("Verify Response", getCellValue(row, headerMap.get("Verify Response")));
                         currentTestData.put("SSL Validation", getCellValue(row, headerMap.get("SSL Validation")));
-
+                        currentTestData.put("Proxy", getCellValue(row, headerMap.get("Proxy")));
+                        
                         currentHeaders = new HashMap<>();
                         currentParams = new HashMap<>();
                         currentModifyPayload = new HashMap<>();
